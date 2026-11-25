@@ -110,13 +110,8 @@ export function LiveView() {
   const [stats, setStats] = useState<LiveStats | null>(null)
   const [summary, setSummary] = useState<{
     percent: number | null
-    note: string | null
-    tracking: string
-  }>({
-    percent: null,
-    note: null,
-    tracking: 'none',
-  })
+    outline: PreviewSnapshot['outlineState']
+  }>({ percent: null, outline: 'none' })
 
   useEffect(() => {
     const native = bridge()
@@ -128,32 +123,31 @@ export function LiveView() {
     const send = (message: LiveWorkerIn, transfer: Transferable[] = []) =>
       worker.postMessage(message, transfer)
     let requestCount = 0
-    let preferred: 'port' | 'ws' = 'port'
+    // One open request at a time: a `ready` from the phone while one is pending must not open a second port.
+    let opening = false
 
     const open = () => {
+      if (opening) return
+      opening = true
       requestCount += 1
       native.postMessage(
         JSON.stringify({
           v: 1,
           id: `open-${requestCount}`,
           method: 'live.open',
-          params: { transport: preferred },
+          params: { transport: 'port' },
         }),
       )
     }
 
     worker.onmessage = (event: MessageEvent<LiveWorkerOut>) => {
       const message = event.data
-      if (message.type === 'status') {
-        if (message.state === 'error') setPhase('failed')
-        return
-      }
+      if (message.type === 'status') return
       snapshot.current = message.snapshot
       setStats(message.stats)
       setSummary({
         percent: message.snapshot.coverage?.percent ?? null,
-        note: message.snapshot.outlineNote,
-        tracking: message.snapshot.tracking,
+        outline: message.snapshot.outlineState,
       })
       if (canvas.current) draw(canvas.current, message.snapshot)
     }
@@ -162,19 +156,14 @@ export function LiveView() {
     const onWindowMessage = (event: MessageEvent) => {
       if (event.data !== PORT_MESSAGE || event.ports.length !== 1) return
       send({ kind: 'port', port: event.ports[0]! }, [event.ports[0]!])
+      opening = false
       setPhase('open')
     }
     window.addEventListener('message', onWindowMessage)
 
     const onNative = (event: { data: unknown }) => {
       if (typeof event.data !== 'string') return
-      let message: {
-        ok?: boolean
-        error?: { code?: string }
-        result?: { transport?: string; url?: string }
-        event?: string
-        data?: { state?: string }
-      }
+      let message: { ok?: boolean; event?: string; data?: { state?: string } }
       try {
         message = JSON.parse(event.data)
       } catch {
@@ -184,23 +173,14 @@ export function LiveView() {
         if (message.data?.state === 'ready') open()
         if (message.data?.state === 'closed') {
           send({ kind: 'stop' })
+          opening = false
           setPhase('paused')
         }
         return
       }
       if (message.ok === false) {
-        // A WebView without binary messages falls back to the loopback socket, once.
-        if (preferred === 'port' && message.error?.code === 'unsupported') {
-          preferred = 'ws'
-          open()
-        } else {
-          setPhase('failed')
-        }
-        return
-      }
-      if (message.ok === true && message.result?.transport === 'ws' && message.result.url) {
-        send({ kind: 'ws', url: message.result.url })
-        setPhase('open')
+        opening = false
+        setPhase('failed')
       }
     }
     native.addEventListener('message', onNative)
@@ -242,14 +222,18 @@ export function LiveView() {
       </div>
       <canvas className="min-h-0 w-full flex-1" ref={canvas} />
       <p className="min-h-4 text-white/70">
-        {summary.note ??
-          (stats
+        {summary.outline === 'unclear'
+          ? i18n._({
+              id: 'app.scan.live.outlineUnclear',
+              message: 'No room outline yet. Keep moving around the room.',
+            })
+          : stats
             ? i18n._({
                 id: 'app.scan.live.stats',
                 message: '{frames} frames, {kb} KB',
                 values: { frames: stats.frames, kb: Math.round(stats.bytes / 1024) },
               })
-            : '')}
+            : ''}
       </p>
     </main>
   )

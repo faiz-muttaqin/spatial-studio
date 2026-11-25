@@ -26,7 +26,8 @@ export type PreviewSnapshot = {
   tracking: string
   coverage: { cellMetres: number; cells: Int32Array; percent: number | null } | null
   outline: Array<[number, number]> | null
-  outlineNote: string | null
+  /** `none` before the first pass, `ready` with an outline, `unclear` when a pass found none. Never core's English notes. */
+  outlineState: 'none' | 'ready' | 'unclear'
   depthFrames: number
   ringSize: number
 }
@@ -131,7 +132,7 @@ export class LivePreviewState {
           }
         : null,
       outline: this.outline?.polygon ? this.outline.polygon.map(([x, z]) => [x, z]) : null,
-      outlineNote: this.outline ? (this.outline.notes[0] ?? null) : null,
+      outlineState: !this.outline ? 'none' : this.outline.polygon ? 'ready' : 'unclear',
       depthFrames: this.depthFrames,
       ringSize: this.ring.length,
     }

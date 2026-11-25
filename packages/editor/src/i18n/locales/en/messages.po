@@ -736,6 +736,10 @@ msgid "app.scan.live.open"
 msgstr "Live preview"
 
 #: apps/editor/app/scan/live/live-view.tsx
+msgid "app.scan.live.outlineUnclear"
+msgstr "No room outline yet. Keep moving around the room."
+
+#: apps/editor/app/scan/live/live-view.tsx
 msgid "app.scan.live.paused"
 msgstr "Paused"
 

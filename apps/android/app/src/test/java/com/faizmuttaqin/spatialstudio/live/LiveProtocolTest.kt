@@ -13,7 +13,8 @@ class LiveProtocolTest {
         val open = LiveProtocol.parse("""{"v":1,"id":"a1","method":"live.open","params":{"transport":"port"}}""") as LiveProtocol.Parsed.Open
         assertEquals("a1", open.id)
         assertEquals("port", open.transport)
-        assertEquals("ws", (LiveProtocol.parse("""{"v":1,"id":"a2","method":"live.open","params":{"transport":"ws"}}""") as LiveProtocol.Parsed.Open).transport)
+        // The loopback socket is a debug-build benchmark; release refuses it.
+        assertEquals(BridgeErrorCode.INVALID_REQUEST, err("""{"v":1,"id":"a2","method":"live.open","params":{"transport":"ws"}}""").code)
         assertTrue(LiveProtocol.parse("""{"v":1,"id":"a3","method":"live.close"}""") is LiveProtocol.Parsed.Close)
     }
 

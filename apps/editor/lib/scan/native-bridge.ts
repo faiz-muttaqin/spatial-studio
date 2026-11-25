@@ -118,6 +118,8 @@ export type ScanStartOptions = {
   location?: boolean
   /** P2N.3: show the live preview panel on the scan screen. Off unless set. The recording does not depend on it. */
   livePreview?: boolean
+  /** Page language (BCP 47) for the live preview panel, so it speaks the page's language. Not saved with the scan. */
+  locale?: string
 }
 
 const ReplySchema = z.union([

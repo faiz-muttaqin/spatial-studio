@@ -75,6 +75,15 @@ class ScanParamsTest {
     }
 
     @Test
+    fun localeMustBeALanguageTag() {
+        assertNull(ScanParams.start(params("{}")).options.locale)
+        assertEquals("zh-CN", ScanParams.start(params("""{"options":{"locale":"zh-CN"}}""")).options.locale)
+        invalid { ScanParams.start(params("""{"options":{"locale":"en&x=1"}}""")) }
+        invalid { ScanParams.start(params("""{"options":{"locale":"../../"}}""")) }
+        invalid { ScanParams.start(params("""{"options":{"locale":5}}""")) }
+    }
+
+    @Test
     fun livePreviewIsOffByDefaultAndMustBeABoolean() {
         assertFalse(ScanParams.start(params("{}")).options.livePreview)
         assertTrue(ScanParams.start(params("""{"options":{"livePreview":true}}""")).options.livePreview)

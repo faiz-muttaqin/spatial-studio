@@ -670,7 +670,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
     private fun setUpLivePreview() {
         if (!scan.options.livePreview) return
         val origin = AppConfig.allowlist.match(scan.liveOrigin) ?: return
-        livePanel = LivePanel(liveContainer, AppConfig.allowlist, origin, liveStream).also {
+        livePanel = LivePanel(liveContainer, AppConfig.allowlist, origin, liveStream, scan.options.locale).also {
             liveContainer.visibility = View.VISIBLE
             it.show(this)
         }

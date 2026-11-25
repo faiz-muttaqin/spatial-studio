@@ -35,7 +35,7 @@ object LiveFrames {
     const val MAX_PAYLOAD_BYTES = 128 * 1024
     const val MAX_FRAME_BYTES = HEADER_BYTES + MAX_PAYLOAD_BYTES
     const val MAX_DEPTH_PIXELS = 40_000
-    const val MAX_COVERAGE_CELLS = 4_096
+    const val MAX_COVERAGE_CELLS = 8_192
     const val MAX_PLANES = 32
 
     const val FLAG_HAS_CONFIDENCE = 1
@@ -116,7 +116,7 @@ object LiveFrames {
 
     /**
      * Covered floor cells: cell size f32, floor y f32 (NaN when unknown), covered percent i16 (-1 unknown),
-     * cell count u16, then count x (cx i32, cz i32) in cell units. Cells past [MAX_COVERAGE_CELLS] are dropped.
+     * cell count u16, then count x (cx i32, cz i32) in cell units. Callers pass at most [MAX_COVERAGE_CELLS]; use [fitCoverage] first.
      */
     fun coverage(seq: Long, timestampNs: Long, cellMetres: Float, floorY: Float, percent: Int, cells: LongArray, cellCount: Int): ByteArray {
         val n = minOf(cellCount, cells.size, MAX_COVERAGE_CELLS)
@@ -124,6 +124,33 @@ object LiveFrames {
         b.putFloat(cellMetres).putFloat(floorY).putShort(percent.toShort()).putShort(n.toShort())
         for (i in 0 until n) b.putInt((cells[i] shr 32).toInt()).putInt(cells[i].toInt())
         return b.array()
+    }
+
+    /** Covered cells with the cell size they are in; [cells] holds [count] valid entries. */
+    class CoverageCells(val cellMetres: Float, val cells: LongArray, val count: Int)
+
+    /**
+     * Fits [cells] under [MAX_COVERAGE_CELLS] by doubling the cell size (merging 2 x 2 blocks) as often as it
+     * takes, so a large floor keeps its whole extent at a coarser grain instead of losing an arbitrary part.
+     */
+    fun fitCoverage(cellMetres: Float, cells: LongArray, count: Int): CoverageCells {
+        var size = cellMetres
+        var current = cells
+        var n = minOf(count, cells.size)
+        var rounds = 0
+        while (n > MAX_COVERAGE_CELLS && rounds < 8) {
+            val merged = HashSet<Long>(n)
+            for (i in 0 until n) {
+                val cx = Math.floorDiv((current[i] shr 32).toInt(), 2)
+                val cz = Math.floorDiv(current[i].toInt(), 2)
+                merged.add((cx.toLong() shl 32) or (cz.toLong() and 0xffffffffL))
+            }
+            current = merged.toLongArray()
+            n = current.size
+            size *= 2
+            rounds++
+        }
+        return CoverageCells(size, current, minOf(n, MAX_COVERAGE_CELLS))
     }
 
     class PlaneInput(val orientation: PlaneOrientation, val centerPose: FloatArray, val extentX: Float, val extentZ: Float)

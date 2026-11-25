@@ -3,14 +3,11 @@ import { LivePreviewState, type PreviewSnapshot } from '@/lib/scan/live-preview'
 
 /**
  * Runs the live scan preview off the main thread: it owns the stream (the message port the companion
- * handed over, or a loopback WebSocket), decodes frames, folds them into [LivePreviewState] and posts a
+ * handed over), decodes frames, folds them into [LivePreviewState] and posts a
  * snapshot about five times a second. The capture library's carving re-runs about once a second.
  */
 
-export type LiveWorkerIn =
-  | { kind: 'port'; port: MessagePort }
-  | { kind: 'ws'; url: string }
-  | { kind: 'stop' }
+export type LiveWorkerIn = { kind: 'port'; port: MessagePort } | { kind: 'stop' }
 
 export type LiveStats = {
   frames: number
@@ -21,7 +18,7 @@ export type LiveStats = {
 
 export type LiveWorkerOut =
   | { type: 'snapshot'; snapshot: PreviewSnapshot; stats: LiveStats }
-  | { type: 'status'; state: 'open' | 'closed' | 'error' }
+  | { type: 'status'; state: 'open' | 'closed' }
 
 const scope = globalThis as unknown as {
   onmessage: ((event: MessageEvent<LiveWorkerIn>) => void) | null
@@ -38,7 +35,14 @@ let snapshotTimer: ReturnType<typeof setInterval> | null = null
 let carveTimer: ReturnType<typeof setTimeout> | null = null
 let changed = false
 
+/** Tells the phone how many frames this worker has processed, so it stops sending while a pass runs. */
+const ACK_EVERY = 2
+let processed = 0
+let ackPort: MessagePort | null = null
+
 function onData(data: unknown) {
+  processed += 1
+  if (processed % ACK_EVERY === 0) ackPort?.postMessage(`ack:${processed}`)
   const frame = parseLiveFrame(data)
   if (!frame) {
     stats.bad += 1
@@ -51,6 +55,8 @@ function onData(data: unknown) {
 }
 
 function stop() {
+  ackPort = null
+  processed = 0
   source?.close()
   source = null
   if (snapshotTimer) clearInterval(snapshotTimer)
@@ -95,22 +101,9 @@ scope.onmessage = (event) => {
   stats.bytes = 0
   stats.carveMs = null
   startTimers()
-  if (message.kind === 'port') {
-    const port = message.port
-    port.onmessage = (frame) => onData(frame.data)
-    source = { close: () => port.close() }
-    scope.postMessage({ type: 'status', state: 'open' })
-    return
-  }
-  try {
-    const socket = new WebSocket(message.url)
-    socket.binaryType = 'arraybuffer'
-    socket.onopen = () => scope.postMessage({ type: 'status', state: 'open' })
-    socket.onerror = () => scope.postMessage({ type: 'status', state: 'error' })
-    socket.onclose = () => scope.postMessage({ type: 'status', state: 'closed' })
-    socket.onmessage = (frame) => onData(frame.data)
-    source = { close: () => socket.close() }
-  } catch {
-    scope.postMessage({ type: 'status', state: 'error' })
-  }
+  const port = message.port
+  ackPort = port
+  port.onmessage = (frame) => onData(frame.data)
+  source = { close: () => port.close() }
+  scope.postMessage({ type: 'status', state: 'open' })
 }

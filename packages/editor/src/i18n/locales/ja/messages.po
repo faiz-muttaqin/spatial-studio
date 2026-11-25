@@ -1826,6 +1826,14 @@ msgstr "ライブプレビューは、スキャン中にコンパニオンアプ
 msgid "app.scan.live.open"
 msgstr "ライブプレビュー"
 
+# English: "No room outline yet. Keep moving around the room."
+# Source-Hash: 0c36b1b7902a20a9
+# Review: required
+#: apps/editor/app/scan/live/live-view.tsx
+#, fuzzy
+msgid "app.scan.live.outlineUnclear"
+msgstr "部屋の輪郭はまだありません。部屋の中を動き続けてください。"
+
 # Source-Hash: b0c0000eeb008e92
 # Review: required
 # English: "Paused"

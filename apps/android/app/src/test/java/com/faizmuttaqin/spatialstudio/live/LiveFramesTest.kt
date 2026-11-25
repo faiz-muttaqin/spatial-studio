@@ -87,6 +87,30 @@ class LiveFramesTest {
     }
 
     @Test
+    fun aLargeFloorIsCoarsenedNotCut() {
+        // 200 x 100 cells = 20,000, over the cap; the extent must survive at a doubled cell size.
+        val cells = LongArray(20_000) { ((it % 200).toLong() shl 32) or ((it / 200).toLong() and 0xffffffffL) }
+        val fit = LiveFrames.fitCoverage(0.25f, cells, cells.size)
+        assertEquals(0.5f, fit.cellMetres, 0f)
+        assertTrue(fit.count <= LiveFrames.MAX_COVERAGE_CELLS)
+        assertEquals(100 * 50, fit.count)
+        val maxCx = (0 until fit.count).maxOf { (fit.cells[it] shr 32).toInt() }
+        assertEquals(99, maxCx)
+        // Negative cells merge by floor division, not truncation.
+        val negative = LiveFrames.fitCoverage(0.25f, LongArray(9_000) { ((-1L - it) shl 32) or (0L) }, 9_000)
+        assertEquals(0.5f, negative.cellMetres, 0f)
+        assertTrue((negative.cells[0] shr 32).toInt() < 0)
+    }
+
+    @Test
+    fun aSmallFloorIsLeftAlone() {
+        val cells = LongArray(100) { it.toLong() shl 32 }
+        val fit = LiveFrames.fitCoverage(0.25f, cells, 100)
+        assertEquals(0.25f, fit.cellMetres, 0f)
+        assertEquals(100, fit.count)
+    }
+
+    @Test
     fun emptyCoverageIsValid() {
         val frame = LiveFrames.coverage(0, 0, 0.25f, 0f, 0, LongArray(0), 0)
         assertEquals(LiveFrames.HEADER_BYTES + 12, frame.size)

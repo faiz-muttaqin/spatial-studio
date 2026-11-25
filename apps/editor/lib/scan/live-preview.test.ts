@@ -68,6 +68,7 @@ describe('LivePreviewState', () => {
     state.ingest(depthFrame(0, 2, 1.5, 0))
     expect(state.needsCarve).toBe(false)
     expect(state.snapshot().outline).toBeNull()
+    expect(state.snapshot().outlineState).toBe('none')
   })
 
   it('carves the room outline from streamed depth while the phone walks a loop', () => {
@@ -90,6 +91,7 @@ describe('LivePreviewState', () => {
     const outline = state.carve()
     expect(state.needsCarve).toBe(false)
     expect(outline.polygon).not.toBeNull()
+    expect(state.snapshot().outlineState).toBe('ready')
     const polygon = state.snapshot().outline!
     // 4 x 3 = 12 m2, within what the carving's 5 cm grid and edge squaring give.
     expect(area(polygon)).toBeGreaterThan(10)

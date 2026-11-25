@@ -1826,6 +1826,14 @@ msgstr "La vista previa en vivo se muestra dentro de la aplicación complementar
 msgid "app.scan.live.open"
 msgstr "Vista previa en vivo"
 
+# English: "No room outline yet. Keep moving around the room."
+# Source-Hash: 0c36b1b7902a20a9
+# Review: required
+#: apps/editor/app/scan/live/live-view.tsx
+#, fuzzy
+msgid "app.scan.live.outlineUnclear"
+msgstr "Aún no hay contorno de la sala. Sigue moviéndote por la sala."
+
 # Source-Hash: b0c0000eeb008e92
 # Review: required
 # English: "Paused"

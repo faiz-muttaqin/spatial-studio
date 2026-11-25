@@ -27,6 +27,9 @@ class LoopbackSocketServer(private val allowedOrigins: Set<String>) : LiveTransp
     @Volatile private var client: Socket? = null
     private val outbox = ArrayBlockingQueue<ByteArray>(MAX_QUEUED_FRAMES)
 
+    /** The writer thread, the pong reply and the close frame share one socket: one writer at a time. */
+    private val writeLock = Any()
+
     fun start(): Endpoint {
         val token = ByteArray(16).also(SecureRandom()::nextBytes).joinToString("") { "%02x".format(it) }
         val socket = ServerSocket(0, 1, InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1)))
@@ -86,8 +89,10 @@ class LoopbackSocketServer(private val allowedOrigins: Set<String>) : LiveTransp
             val out = connection.getOutputStream()
             while (!closed && !connection.isClosed) {
                 val frame = outbox.poll(200, TimeUnit.MILLISECONDS) ?: continue
-                out.write(WebSocketFraming.frame(WebSocketFraming.OP_BINARY, frame))
-                out.flush()
+                synchronized(writeLock) {
+                    out.write(WebSocketFraming.frame(WebSocketFraming.OP_BINARY, frame))
+                    out.flush()
+                }
             }
         } catch (e: IOException) {
             runCatching { connection.close() }
@@ -101,11 +106,11 @@ class LoopbackSocketServer(private val allowedOrigins: Set<String>) : LiveTransp
         val out = connection.getOutputStream()
         while (!closed) {
             val frame = WebSocketFraming.readClientFrame(input) ?: run {
-                synchronized(out) { out.write(WebSocketFraming.closeFrame(1008)) }
+                synchronized(writeLock) { out.write(WebSocketFraming.closeFrame(1008)) }
                 return
             }
             when (frame.opcode) {
-                WebSocketFraming.OP_PING -> synchronized(out) { out.write(WebSocketFraming.frame(WebSocketFraming.OP_PONG, frame.payload)) }
+                WebSocketFraming.OP_PING -> synchronized(writeLock) { out.write(WebSocketFraming.frame(WebSocketFraming.OP_PONG, frame.payload)) }
                 WebSocketFraming.OP_CLOSE -> return
             }
         }
@@ -120,10 +125,16 @@ class LoopbackSocketServer(private val allowedOrigins: Set<String>) : LiveTransp
     override fun close() {
         if (closed) return
         closed = true
-        runCatching { client?.getOutputStream()?.write(WebSocketFraming.closeFrame(1001)) }
-        runCatching { client?.close() }
-        runCatching { server?.close() }
         outbox.clear()
+        runCatching { server?.close() }
+        // Callers run on the main thread; a write to a stuck peer must not block it.
+        val peer = client
+        if (peer != null) {
+            Thread({
+                runCatching { synchronized(writeLock) { peer.soTimeout = 0; peer.getOutputStream().write(WebSocketFraming.closeFrame(1001)) } }
+                runCatching { peer.close() }
+            }, "live-ws-close").apply { isDaemon = true }.start()
+        }
     }
 
     private companion object {

@@ -271,13 +271,14 @@ class ScanRecorder(
             }
             if (stream.wants(LiveFrameType.DEPTH, timestamp)) liveDepth(stream, frame, camera, timestamp)
             if (stream.wants(LiveFrameType.COVERAGE, timestamp)) {
-                val (keys, _) = coverage.cells(LiveFrames.MAX_COVERAGE_CELLS)
-                val cells = LongArray(keys.size) { keys[it] }
+                val (keys, _) = coverage.cells(Int.MAX_VALUE)
+                // Past the frame's cap the grid is coarsened, not cut: the whole floor stays in view.
+                val fit = LiveFrames.fitCoverage(coverage.cellMetres, LongArray(keys.size) { keys[it] }, keys.size)
                 val percent = guidance.floorPercent ?: -1
                 stream.submit(
                     LiveFrameType.COVERAGE,
                     timestamp,
-                    LiveFrames.coverage(stream.nextSeq(), timestamp, coverage.cellMetres, coverage.floorY ?: LiveFrames.NO_FLOOR, percent, cells, cells.size),
+                    LiveFrames.coverage(stream.nextSeq(), timestamp, fit.cellMetres, coverage.floorY ?: LiveFrames.NO_FLOOR, percent, fit.cells, fit.count),
                 )
             }
             if (stream.wants(LiveFrameType.PLANES, timestamp)) {
@@ -287,9 +288,15 @@ class ScanRecorder(
                 stream.submit(LiveFrameType.PLANES, timestamp, LiveFrames.planes(stream.nextSeq(), timestamp, planes))
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Live preview frame dropped", e)
+            // At most one line every 10 s, class name only: this runs at the stream's rate.
+            if (timestamp - lastLiveWarnNs > LIVE_WARN_INTERVAL_NS || lastLiveWarnNs == 0L) {
+                lastLiveWarnNs = timestamp
+                Log.w(TAG, "Live preview frames dropped: ${e.javaClass.simpleName}")
+            }
         }
     }
+
+    private var lastLiveWarnNs = 0L
 
     private fun liveDepth(stream: LiveStream, frame: Frame, camera: Camera, timestamp: Long) {
         val kind = depthKind ?: return
@@ -314,6 +321,8 @@ class ScanRecorder(
             )
         } catch (e: NotYetAvailableException) {
             // No depth yet: the next due frame tries again.
+        } catch (e: IllegalStateException) {
+            // Depth not available in this configuration; the next frames fail the same way, quietly.
         }
     }
 
@@ -687,6 +696,7 @@ class ScanRecorder(
         /** Feature points farther than this from the camera, or below this confidence, are dropped at acquisition. */
         const val POINT_MAX_DISTANCE_M = 8f
         const val POINT_MIN_CONFIDENCE = 0.5f
+        private const val LIVE_WARN_INTERVAL_NS = 10_000_000_000L
         const val DEPTH_RAW = "raw"
         const val DEPTH_SMOOTHED = "smoothed"
         const val WARNING_KEYFRAME_LIMIT = "keyframe-limit-reached"

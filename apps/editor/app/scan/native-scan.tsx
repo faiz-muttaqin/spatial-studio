@@ -1,6 +1,6 @@
 'use client'
 
-import { usePascalI18n } from '@pascal-app/core/i18n'
+import { useLocale, usePascalI18n } from '@pascal-app/core/i18n'
 import { ScanLine, Trash2, Upload } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { PRIMARY_PILL, SECONDARY_PILL } from '@/components/app-shell'
@@ -58,6 +58,7 @@ export function NativeScan({
   onUploaded: (result: ScanUploadResult & { projectId?: string | null }) => Promise<void>
 }) {
   const i18n = usePascalI18n()
+  const locale = useLocale()
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [events, setEvents] = useState<Partial<Record<BridgeEvent['event'], string>>>({})
   const [earlier, setEarlier] = useState<ScanListEntry[]>([])
@@ -124,7 +125,7 @@ export function NativeScan({
       try {
         const result = await client.startScan({
           projectId,
-          options: { depth, location, livePreview },
+          options: { depth, location, livePreview, locale },
         })
         setSessionId(result.sessionId)
         onStarted(result.sessionId)

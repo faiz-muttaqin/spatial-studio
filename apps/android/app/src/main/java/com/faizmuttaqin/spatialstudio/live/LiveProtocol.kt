@@ -17,7 +17,8 @@ object LiveProtocol {
     const val OBJECT_NAME = "SpatialStudioLive"
     const val MAX_MESSAGE_BYTES = 1024
     val METHODS = setOf("live.open", "live.close")
-    val TRANSPORTS = setOf("port", "ws")
+    /** The loopback socket only exists in debug builds, for the benchmark; release refuses it. */
+    val TRANSPORTS = setOf("port")
     private val ID_PATTERN = Regex("^[A-Za-z0-9._:-]{1,128}$")
     private val json = Json { prettyPrint = false }
 
@@ -39,7 +40,7 @@ object LiveProtocol {
             "live.close" -> Parsed.Close(id)
             "live.open" -> {
                 val transport = ((obj["params"] as? JsonObject)?.get("transport") as? JsonPrimitive)?.takeIf { it.isString }?.content
-                if (transport !in TRANSPORTS) Parsed.Error(id, BridgeErrorCode.INVALID_REQUEST, "transport must be port or ws") else Parsed.Open(id, transport!!)
+                if (transport !in TRANSPORTS) Parsed.Error(id, BridgeErrorCode.INVALID_REQUEST, "transport must be port") else Parsed.Open(id, transport!!)
             }
             else -> Parsed.Error(id, BridgeErrorCode.UNKNOWN_METHOD, "Unknown method")
         }

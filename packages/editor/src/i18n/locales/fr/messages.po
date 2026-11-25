@@ -1826,6 +1826,14 @@ msgstr "L'aperçu en direct s'affiche dans l'application compagnon pendant le sc
 msgid "app.scan.live.open"
 msgstr "Aperçu en direct"
 
+# English: "No room outline yet. Keep moving around the room."
+# Source-Hash: 0c36b1b7902a20a9
+# Review: required
+#: apps/editor/app/scan/live/live-view.tsx
+#, fuzzy
+msgid "app.scan.live.outlineUnclear"
+msgstr "Pas encore de contour de la pièce. Continuez à vous déplacer dans la pièce."
+
 # Source-Hash: b0c0000eeb008e92
 # Review: required
 # English: "Paused"

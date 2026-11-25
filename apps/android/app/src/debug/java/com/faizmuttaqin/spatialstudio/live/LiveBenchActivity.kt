@@ -88,7 +88,7 @@ class LiveBenchActivity : ComponentActivity() {
             val frame = android.widget.FrameLayout(this)
             setContentView(frame)
             val origin = AppConfig.allowlist.match(Uri.parse(url).let { "${it.scheme}://${it.authority}" }) ?: return
-            livePanel = LivePanel(frame, AppConfig.allowlist, origin, stream).also { it.show(this) }
+            livePanel = LivePanel(frame, AppConfig.allowlist, origin, stream, intent.getStringExtra("lang")).also { it.show(this) }
             startFeeder(seconds)
             return
         }
@@ -232,7 +232,8 @@ class LiveBenchActivity : ComponentActivity() {
       window.addEventListener('message', function(e){
         if (e.data !== 'live.port' || !e.ports.length) return;
         console.log('LIVEBENCH port received origin=' + e.origin);
-        e.ports[0].onmessage = function(m){ onFrame(m.data); };
+        var port = e.ports[0], n = 0;
+        port.onmessage = function(m){ onFrame(m.data); n++; if (n % 2 === 0) port.postMessage('ack:' + n); };
       });
     },
     ws: function(url){

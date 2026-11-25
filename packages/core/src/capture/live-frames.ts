@@ -12,7 +12,7 @@ export const LIVE_HEADER_BYTES = 24
 export const LIVE_MAX_PAYLOAD_BYTES = 128 * 1024
 export const LIVE_MAX_FRAME_BYTES = LIVE_HEADER_BYTES + LIVE_MAX_PAYLOAD_BYTES
 export const LIVE_MAX_DEPTH_PIXELS = 40_000
-export const LIVE_MAX_COVERAGE_CELLS = 4_096
+export const LIVE_MAX_COVERAGE_CELLS = 8_192
 export const LIVE_MAX_PLANES = 32
 
 const FLAG_HAS_CONFIDENCE = 1
@@ -54,7 +54,7 @@ export type LiveCoverageFrame = Common & {
   floorY: number | null
   /** Covered share of the known floor, 0 to 100, or null. */
   percent: number | null
-  /** `cx, cz` pairs in cell units. */
+  /** `cx, cz` pairs in `cellMetres` units. The phone coarsens the grid, doubling the cell, past the cap. */
   cells: Int32Array
 }
 

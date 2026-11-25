@@ -89,4 +89,5 @@
     <string name="mark_confirm">Confirm</string>
     <string name="mark_to_ceiling">Height to ceiling (otherwise type it)</string>
     <string name="mark_nothing_to_undo">Nothing to undo.</string>
+    <string name="scan_live_unavailable">The live preview is not available. Sign in again in the app to see it.</string>
 </resources>

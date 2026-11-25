@@ -1826,6 +1826,14 @@ msgstr "扫描时，实时预览会显示在配套应用内。"
 msgid "app.scan.live.open"
 msgstr "实时预览"
 
+# English: "No room outline yet. Keep moving around the room."
+# Source-Hash: 0c36b1b7902a20a9
+# Review: required
+#: apps/editor/app/scan/live/live-view.tsx
+#, fuzzy
+msgid "app.scan.live.outlineUnclear"
+msgstr "暂无房间轮廓。请继续在房间里移动。"
+
 # Source-Hash: b0c0000eeb008e92
 # Review: required
 # English: "Paused"
