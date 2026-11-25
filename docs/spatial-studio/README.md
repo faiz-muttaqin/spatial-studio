@@ -11,6 +11,7 @@ P1–P4 are the MVP. P5–P6 are optional. Costing/RAB, procurement, marketplace
 - [UPSTREAM_AUDIT.md](UPSTREAM_AUDIT.md): reuse map and license gates.
 - [ARCHITECTURE.md](ARCHITECTURE.md): data, geometry, permissions, MCP.
 - [MOBILE.md](MOBILE.md): browser and optional native bridge.
+- [CAPTURE_CONTRACT.md](CAPTURE_CONTRACT.md): scan bundle, providers and Android bridge protocol v1.
 - [DEPLOYMENT.md](DEPLOYMENT.md): VM, HTTPS, CI/release safeguards.
 - [ROADMAP.md](ROADMAP.md): phases, tests and acceptance criteria.
 - [STATUS.md](STATUS.md): handoff and next task.

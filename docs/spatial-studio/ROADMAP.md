@@ -8,7 +8,7 @@
 ## P2 — mobile browser capture
 - P2.1 Lightweight same-origin scanner route, device capability probe, permissions, capture lifecycle, mobile fallback UX.
 - P2.2 WebXR pose/depth where supported, optional synchronized RGB if allowed, otherwise separate photos; manual corner/dimension/opening/lamp marking. Bounded V2 evidence artifacts and reference layer preview; record tracking loss and confidence.
-- P2.3 Import/export scan bundle, authenticated transfer to desktop, actual Android test and manual fallback. Gate: real room capture and photos + manual dimensions fallback both persisted. Browser-only is required; native companion conditional, same repo. P2N spike: if browser gaps matter, compare native ARCore provider on same room; no dependency for web deployment.
+- P2.3 Import/export scan bundle, authenticated transfer to desktop, actual Android test and manual fallback. Gate: real room capture and photos + manual dimensions fallback both persisted. Browser-only is required; native companion conditional, same repo. P2N (active, owner priority): Android companion in `apps/android` with native ARCore capture (pose, planes, point cloud, depth, intrinsics, sensors) producing the same bundle as the browser ([CAPTURE_CONTRACT.md](CAPTURE_CONTRACT.md)); compare against Chrome WebXR on the same measured room; never a dependency for web deployment.
 - No automatic RGB-only AI reconstruction in MVP; explicitly assisted workflow.
 
 ## P3 — recreate space
@@ -28,7 +28,7 @@ Multi-view AI (MapAnything or alternatives), metric scale checks, automatic open
 Daylight preview, quantitative Radiance if justified, complex roofs, performance profiling and WASM/WebGPU only if measured bottleneck. Visual lighting not lux. Costing remains out of scope.
 
 ## Parallel work
-P1 -> P2, P3a, P4a(read only). P2 -> P3b; P3a + P3b -> P3c; P3 + P4a -> P4b/c. P2N after browser evidence, not blocking. P5/P6 after MVP. Separate downstream PRs, keep shared contracts stable. Integrator handles schema/merge and updates STATUS. Never merge unverified code.
+P1 -> P2, P3a, P4a(read only). P2 -> P3b; P3a + P3b -> P3c; P3 + P4a -> P4b/c. P2N runs in parallel with P2.1 on the shared contract, not blocking web. P5/P6 after MVP. Separate downstream PRs, keep shared contracts stable. Integrator handles schema/merge and updates STATUS. Never merge unverified code.
 
 ## Tests and targets
 Use upstream bun run ci (check, i18n, skills, types, tests, build, render bundle, smoke), focused tests and real-device acceptance. Synthetic rooms rectangle, L, oblique, occlusion/blank walls, openings, connected rooms and varying ceiling. Private real captures stay outside Git. Proposed targets only: simple-room wall lengths <=5% raw and <=2% after measured correction, ceiling/opening error <=10cm, valid closed boundaries, zero locked edits, unchanged baseline, semantic save/load and deterministic undo, no mandatory GPU. Record device/OS/browser, sample counts, failed cases and raw vs corrected accuracy.
