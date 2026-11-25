@@ -459,6 +459,174 @@ msgstr "Shed"
 msgid "app.lib.buildTabState.wall"
 msgstr "Wall"
 
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.details"
+msgstr "Technical details"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.empty.body"
+msgstr "Scan a room with a phone and attach it to see its top-down map here."
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.empty.title"
+msgstr "No capture scans in this project"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.failed"
+msgstr "The map could not be built: {reason}"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.fit"
+msgstr "Fit"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.layer"
+msgstr "Layer"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.layer.floor"
+msgstr "Floor only"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.layer.top"
+msgstr "Top surfaces"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.north"
+msgstr "North"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.north.magnetic"
+msgstr "This is magnetic north, not true north."
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.north.scan"
+msgstr "Compass north from the scan."
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.north.site"
+msgstr "The site north rotation is {degrees} degrees and is not shown here."
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.northLetter"
+msgstr "N"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.note.frameCoordinates"
+msgstr "{kind}: its coordinate frame is not usable, so it is read as the capture world."
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.note.fuseTimeBudget"
+msgstr "Fusing stopped at the time budget after {frames} frames."
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.note.memoryBudget"
+msgstr "Reading stopped at the memory limit after {frames} frames; later keyframes were left out."
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.note.outlineFailed"
+msgstr "The room outline could not be computed, so none is available."
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.note.outlineSkipped"
+msgstr "The room outline was skipped at the time budget."
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.note.photosUnused"
+msgstr "Photos that could not be used: {count}. Their frames add shape but no colour."
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.note.streamsUnreadable"
+msgstr "Some scan streams could not be read; the technical details say which."
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.note.timeBudgetReading"
+msgstr "Reading stopped at the time budget; later keyframes were left out."
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.notes"
+msgstr "Notes"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.opacity"
+msgstr "Map opacity"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.rebuild"
+msgstr "Rebuild"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.refusal.failed"
+msgstr "Something went wrong while building it."
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.refusal.manifestInvalid"
+msgstr "The scan manifest does not match the capture contract."
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.refusal.manifestUnreadable"
+msgstr "The scan manifest could not be read."
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.refusal.noDepth"
+msgstr "This scan has no depth keyframes with photo keyframes."
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.refusal.noFrames"
+msgstr "No depth frame could be read with a tracked pose."
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.refusal.noMap"
+msgstr "No points lie between the floor and the ceiling."
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.refusal.noSurface"
+msgstr "No surface was seen in two or more depth frames."
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.refusal.timeout"
+msgstr "Reading the scan took too long."
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.restart"
+msgstr "Restart"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.rotationHint"
+msgstr "Turned with the building, like the 2D plan. A turn set by hand in the 2D plan is not followed."
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.scaleBar"
+msgstr "{metres} m"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.scan"
+msgstr "Scan"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.toggle.map"
+msgstr "Map"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.toggle.path"
+msgstr "Walked path"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.toggle.proposal"
+msgstr "Room proposal"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.toggle.rooms"
+msgstr "Rooms"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.toggle.walls"
+msgstr "Walls"
+
+#: apps/editor/lib/bootstrap.ts
+msgid "app.mapping.view"
+msgstr "Mapping"
+
 #: apps/editor/app/scan/scan-app.tsx
 msgid "app.scan.attach.retry"
 msgstr "Retry attaching"
