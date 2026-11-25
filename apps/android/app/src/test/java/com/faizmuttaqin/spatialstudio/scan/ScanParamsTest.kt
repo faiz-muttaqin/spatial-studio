@@ -35,6 +35,15 @@ class ScanParamsTest {
     }
 
     @Test
+    fun torchIsOffByDefaultAndMustBeABoolean() {
+        assertFalse(ScanParams.start(params("{}")).options.torch)
+        assertTrue(ScanParams.start(params("""{"options":{"torch":true}}""")).options.torch)
+        org.junit.Assert.assertThrows(com.faizmuttaqin.spatialstudio.bridge.BridgeException::class.java) {
+            ScanParams.start(params("""{"options":{"torch":"yes"}}"""))
+        }
+    }
+
+    @Test
     fun locationIsOffByDefaultAndSensorsAreOn() {
         val options = ScanParams.start(params("{}")).options
         assertFalse(options.location)

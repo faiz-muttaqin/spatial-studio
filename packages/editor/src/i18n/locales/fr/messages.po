@@ -2273,6 +2273,30 @@ msgstr "Fenêtre {number}"
 msgid "app.scan.native.attach"
 msgstr "Rattacher"
 
+# Source-Hash: 875e8b17daace2b3
+# Review: required
+# English: "Check again"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.checkAgain"
+msgstr "Revérifier"
+
+# Source-Hash: fa798a178c7c3128
+# Review: required
+# English: "Checking…"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.checking"
+msgstr "Vérification…"
+
+# Source-Hash: 1700facb2f015fed
+# Review: required
+# English: "Delete from phone"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.deleteFromPhone"
+msgstr "Supprimer du téléphone"
+
 # Source-Hash: f89744026cb4ffb5
 # Review: required
 # AI-Provider: claude-code
@@ -2292,6 +2316,14 @@ msgstr "Supprimer le relevé"
 #, fuzzy
 msgid "app.scan.native.earlier"
 msgstr "Relevés pas encore envoyés"
+
+# Source-Hash: 5d808f2f9d15a3d7
+# Review: required
+# English: "Uploaded to another server. It is not on this site."
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.elsewhere"
+msgstr "Envoyé vers un autre serveur. Absent de ce site."
 
 # Source-Hash: 81e1405f801de1e7
 # Review: required
@@ -2313,6 +2345,14 @@ msgstr "{keyframes, plural, one {# image clé} many {# images clés} other {# im
 msgid "app.scan.native.failed"
 msgstr "L’application compagnon a signalé une erreur : {code}"
 
+# Source-Hash: 591087ea83a48ead
+# Review: required
+# English: "Hide"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.hide"
+msgstr "Masquer"
+
 # Source-Hash: 6270972be99e74e0
 # Review: required
 # AI-Provider: claude-code
@@ -2322,6 +2362,14 @@ msgstr "L’application compagnon a signalé une erreur : {code}"
 #, fuzzy
 msgid "app.scan.native.hint"
 msgstr "L’application compagnon enregistre la pose, les plans, la profondeur et les images clés avec ARCore, puis les envoie à ce site."
+
+# Source-Hash: 238406df01367d8d
+# Review: required
+# English: "Already in {project}"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.inProject"
+msgstr "Déjà dans {project}"
 
 # Source-Hash: 3177d0e4a4ca7c04
 # Review: required
@@ -2343,6 +2391,30 @@ msgstr "Enregistrer la position approximative"
 msgid "app.scan.native.locationHint"
 msgstr "Désactivé par défaut. La position est enregistrée avec le scan et sert à corriger la boussole vers le nord vrai lors du traitement du scan. Le téléphone demande d’abord l’autorisation."
 
+# Source-Hash: c36f40587389e367
+# Review: required
+# English: "Mark attached"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.markAttached"
+msgstr "Marquer comme rattaché"
+
+# Source-Hash: aba25fa394039e44
+# Review: required
+# English: "Project: {project}"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.projectLabel"
+msgstr "Projet : {project}"
+
+# Source-Hash: 1ca91cd28528f704
+# Review: required
+# English: "Delete this scan from the phone? It is not on this site, so this cannot be undone."
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.removeConfirm"
+msgstr "Supprimer ce scan du téléphone ? Il n'est pas sur ce site, cette action est irréversible."
+
 # Source-Hash: e4e15da3db73b81d
 # Review: required
 # AI-Provider: claude-code
@@ -2363,6 +2435,30 @@ msgstr "Démarrer le relevé avec l’application"
 msgid "app.scan.native.starting"
 msgstr "Ouverture du scanner…"
 
+# Source-Hash: fc1817e763d15c74
+# Review: required
+# English: "Use the torch (experiment)"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.torch"
+msgstr "Utiliser la torche (expérience)"
+
+# Source-Hash: f21d72fefa946b08
+# Review: required
+# English: "Set before the scan and kept on throughout. Tracking may be less reliable with the torch on."
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.torchHint"
+msgstr "Choisi avant le scan et maintenu tout du long. Le suivi peut être moins fiable avec la torche allumée."
+
+# Source-Hash: 7b4c9586b0ee1fe3
+# Review: required
+# English: "Could not check this scan. Try again."
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.unknown"
+msgstr "Impossible de vérifier ce scan. Réessayez."
+
 # Source-Hash: ceedca8a2b02b006
 # Review: required
 # AI-Provider: claude-code
@@ -2373,13 +2469,21 @@ msgstr "Ouverture du scanner…"
 msgid "app.scan.native.upload"
 msgstr "Envoyer ce relevé"
 
-# Source-Hash: 3eb37861f2f38005
+# Source-Hash: 2187770cce6dcd76
 # Review: required
-# English: "Uploaded, not attached yet"
+# English: "Scans uploaded from the phone"
 #: apps/editor/app/scan/native-scan.tsx
 #, fuzzy
-msgid "app.scan.native.uploadedList"
-msgstr "Envoyé, pas encore rattaché"
+msgid "app.scan.native.uploadedHeading"
+msgstr "Scans envoyés depuis le téléphone"
+
+# Source-Hash: e3bf9221d58e34e5
+# Review: required
+# English: "{when} · {keyframes, plural, one {# photo} other {# photos}} · {size} MB"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.uploadedMeta"
+msgstr "{when} · {keyframes, plural, one {# photo} many {# photos} other {# photos}} · {size} Mo"
 
 # Source-Hash: 756844bbc7a4b1cf
 # Review: required

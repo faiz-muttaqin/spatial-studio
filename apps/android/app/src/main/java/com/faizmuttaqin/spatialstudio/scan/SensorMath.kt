@@ -165,6 +165,11 @@ class TrueNorthResult(
     val declinationDeg: Double?,
     /** False when the offsets of separate tracking segments disagree (a world-frame jump or a bent field). */
     val segmentsAgree: Boolean = true,
+    /** True when the segments disagreed and this is the best supported segment alone. */
+    val fromSegment: Boolean = false,
+    /** Frame timestamps (ns) of the first and last sample of the segment [fromSegment] used; null otherwise. */
+    val segmentStartNs: Long? = null,
+    val segmentEndNs: Long? = null,
 ) {
     val method: String get() = if (trueReference) "compass-median-true" else "compass-median-magnetic"
     val reference: String get() = if (trueReference) "true" else "magnetic"
@@ -233,10 +238,44 @@ object NorthEstimator {
         val withDeclination = usable.filter { it.azimuthTrueDeg != null && it.declinationDeg != null }
         if (withDeclination.size >= MIN_SAMPLES) {
             val declination = withDeclination.sumOf { it.declinationDeg!! } / withDeclination.size
-            return result(withDeclination, true, declination)
+            return bySegments(withDeclination, true, declination)
         }
-        if (usable.size >= MIN_SAMPLES) return result(usable, false, null)
+        if (usable.size >= MIN_SAMPLES) return bySegments(usable, false, null)
         return null
+    }
+
+    /**
+     * When the tracking segments agree, all samples are used. When they disagree (a world-frame jump
+     * between segments), each segment with enough samples is estimated alone and the best supported one
+     * is returned, flagged `segmentsAgree = false` and with [TrueNorthResult.fromSegment] set, instead of
+     * one low-confidence figure across segments that do not share a frame.
+     */
+    private fun bySegments(samples: List<HeadingData>, trueReference: Boolean, declination: Double?): TrueNorthResult {
+        val overall = result(samples, trueReference, declination)
+        if (overall.segmentsAgree) return overall
+        // The same minimum as the agreement test, so a segment that made the overall estimate disagree can be chosen.
+        val candidates = splitSegments(samples).filter { it.size >= MIN_SEGMENT_SAMPLES }
+        val best = candidates
+            .map { it to result(it, trueReference, declination) }
+            .maxWithOrNull(compareBy<Pair<List<HeadingData>, TrueNorthResult>> { it.second.confidence }.thenBy { it.second.sampleCount })
+            ?: return overall
+        val (segment, r) = best
+        return TrueNorthResult(
+            r.worldYawDeg, r.confidence, r.trueReference, r.spreadDeg, r.sampleCount,
+            r.declinationDeg, segmentsAgree = false, fromSegment = true,
+            segmentStartNs = segment.first().timestampNs, segmentEndNs = segment.last().timestampNs,
+        )
+    }
+
+    private fun splitSegments(samples: List<HeadingData>): List<List<HeadingData>> {
+        val segments = ArrayList<MutableList<HeadingData>>()
+        var previous = Long.MIN_VALUE
+        for (s in samples) {
+            if (previous == Long.MIN_VALUE || s.timestampNs - previous > SEGMENT_GAP_NS) segments.add(ArrayList())
+            segments.last().add(s)
+            previous = s.timestampNs
+        }
+        return segments
     }
 
     private fun offset(s: HeadingData, trueReference: Boolean): Double =
@@ -309,12 +348,23 @@ object NorthEstimator {
  * Checks that a clock reported by a callback (ARCore frame timestamps, sensor events) is the boot-time
  * clock, by comparing each reading with `SystemClock.elapsedRealtimeNanos()` taken as it arrives. On the
  * same clock the difference is the delivery delay: small, non-negative and steady.
+ *
+ * With [rolling] the check goes on after the first verdict, because a camera reconfigure can shift the
+ * frame timestamps' base mid-scan:
+ * - one late reading (a GC pause, a stall) is ignored: a shift needs [shiftReadings] consecutive readings
+ *   more than [shiftToleranceNs] away from the verified delay;
+ * - after a shift the state is [State.MISMATCH] (consumers do not pair) until [required] consecutive
+ *   readings share a steady delay again; that delay is then adopted as the new base and [offsetNs] says
+ *   how far it is from the first one, so frame times can be mapped back onto the boot clock.
  */
 class ClockCalibrator(
     private val required: Int = 30,
     private val minDeltaNs: Long = -5_000_000L,
     private val maxDeltaNs: Long = 250_000_000L,
     private val maxSpreadNs: Long = 100_000_000L,
+    private val rolling: Boolean = false,
+    private val shiftReadings: Int = 5,
+    private val shiftToleranceNs: Long = 250_000_000L,
 ) {
     enum class State { PENDING, COMPARABLE, MISMATCH }
 
@@ -326,19 +376,81 @@ class ClockCalibrator(
     private var lowest = Long.MAX_VALUE
     private var highest = Long.MIN_VALUE
 
+    /** The verified delivery delay of the current base (median of the window that passed). */
+    private var baseDeltaNs = 0L
+    private var firstBaseDeltaNs = 0L
+    private var consecutiveBad = 0
+    private val recent = ArrayDeque<Long>()
+
+    /** True once a window passed, even if the clock shifted later. */
+    @Volatile
+    var everComparable = false
+        private set
+
+    /** How many real base shifts were detected (not single late readings). */
+    @Volatile
+    var resets = 0
+        private set
+
+    /** Add this to a frame timestamp to put it on the clock that was first verified. Zero until a shift is adopted. */
+    @Volatile
+    var offsetNs = 0L
+        private set
+
     /** [readingNs] is the callback's timestamp, [elapsedNs] the boot-time clock on arrival. */
     fun add(readingNs: Long, elapsedNs: Long) {
-        if (state != State.PENDING || readingNs <= 0L) return
+        if (readingNs <= 0L) return
         val delta = elapsedNs - readingNs
-        if (delta < minDeltaNs || delta > maxDeltaNs) {
-            state = State.MISMATCH
+        if (!everComparable) {
+            if (state != State.PENDING) return
+            if (delta < minDeltaNs || delta > maxDeltaNs) {
+                state = State.MISMATCH
+                return
+            }
+            recent.addLast(delta)
+            lowest = min(lowest, delta)
+            highest = max(highest, delta)
+            count++
+            if (count >= required) {
+                if (highest - lowest <= maxSpreadNs) {
+                    baseDeltaNs = median(recent)
+                    firstBaseDeltaNs = baseDeltaNs
+                    everComparable = true
+                    state = State.COMPARABLE
+                    recent.clear()
+                } else {
+                    state = State.MISMATCH
+                }
+            }
             return
         }
-        lowest = min(lowest, delta)
-        highest = max(highest, delta)
-        count++
-        if (count >= required) state = if (highest - lowest <= maxSpreadNs) State.COMPARABLE else State.MISMATCH
+        if (!rolling) return
+        if (state == State.COMPARABLE) {
+            if (abs(delta - baseDeltaNs) <= shiftToleranceNs) {
+                consecutiveBad = 0
+                return
+            }
+            consecutiveBad++
+            if (consecutiveBad >= shiftReadings) {
+                state = State.MISMATCH
+                resets++
+                recent.clear()
+            }
+            return
+        }
+        // Shifted: wait for a steady delay, then adopt it as the new base.
+        recent.addLast(delta)
+        if (recent.size > required) recent.removeFirst()
+        if (recent.size == required && recent.max() - recent.min() <= maxSpreadNs) {
+            baseDeltaNs = median(recent)
+            offsetNs = baseDeltaNs - firstBaseDeltaNs
+            consecutiveBad = 0
+            recent.clear()
+            state = State.COMPARABLE
+        }
     }
+
+    private fun median(values: Collection<Long>): Long = values.sorted()[values.size / 2]
 }
 
 /**

@@ -343,6 +343,13 @@ object ScanBundle {
         put("sampleCount", result.sampleCount)
         put("declinationDeg", nullable(result.declinationDeg, 2))
         put("segmentsAgree", result.segmentsAgree)
+        // v1.3: set when the segments disagreed and this is one segment's estimate: it holds only in that time span.
+        if (result.fromSegment && result.segmentStartNs != null && result.segmentEndNs != null) {
+            putJsonObject("segment") {
+                put("startTimestampNs", result.segmentStartNs)
+                put("endTimestampNs", result.segmentEndNs)
+            }
+        }
     }
 
     /** Planes the contract can represent: at least three boundary points, finite values. */
