@@ -8,6 +8,26 @@ import {
 } from '@pascal-app/core/capture'
 import { register } from './scan-tools'
 
+type Residual = ReturnType<typeof solveRoomOutline>['residuals'][number]
+
+/** Names the edge, corner or tape a conflict is about, with edges numbered from 0 as the input is. */
+function describeConflict(entry: Residual): string {
+  const c = entry.detail
+  const amount = Math.abs(entry.error).toFixed(3)
+  switch (c.type) {
+    case 'distance':
+      return `The tape ${c.value} m between corners ${c.a} and ${c.b} is off by ${amount} m in the fit; it conflicts with the other tapes or angles.`
+    case 'rightAngle':
+      return `The right angle at corner ${c.corner} is off by ${amount} degrees; the tapes do not allow it.`
+    case 'parallel':
+      return `Edges ${c.edgeA} and ${c.edgeB} are ${amount} degrees from parallel.`
+    case 'equalLength':
+      return `Edges ${c.edgeA} and ${c.edgeB} differ by ${amount} m instead of being equal.`
+    case 'fixed':
+      return `Corner ${c.corner} moved ${amount} m although it was fixed.`
+  }
+}
+
 const round = (value: number, places = 3) => {
   const factor = 10 ** places
   return Math.round(value * factor) / factor
@@ -46,6 +66,7 @@ export function registerRoomOutlineTool(server: McpServer): void {
       })),
       conflicts: solution.conflicts.map((entry) => ({
         ...entry,
+        message: describeConflict(entry),
         error: round(entry.error),
         sigmas: round(entry.sigmas, 1),
       })),

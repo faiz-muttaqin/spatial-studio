@@ -1574,6 +1574,16 @@ msgstr "映射"
 msgid "app.review.build"
 msgstr "生成墙体"
 
+# Source-Hash: a2032d86a72e4128
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Build anyway"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.buildAnyway"
+msgstr "仍然生成"
+
 # Source-Hash: 083fd91471c923e6
 # Review: required
 # AI-Provider: claude-code
@@ -1583,6 +1593,16 @@ msgstr "生成墙体"
 #, fuzzy
 msgid "app.review.buildFailed"
 msgstr "未能生成墙体：{reason}"
+
+# Source-Hash: fbf9ff28acc64691
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The outline still has problems shown above. Press again to build it as it is, or fix them first."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.buildWarning"
+msgstr "轮廓仍存在上方所示的问题。再次点击将按现状生成，也可以先修正。"
 
 # Source-Hash: d7cf5045c01b2eb9
 # Review: required
@@ -1594,25 +1614,45 @@ msgstr "未能生成墙体：{reason}"
 msgid "app.review.close"
 msgstr "关闭"
 
-# Source-Hash: f7026d7447d155bb
+# Source-Hash: 74b254183bfa0183
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-sonnet-5-5
-# English: "A right angle is off by {value}°. The tapes do not allow it."
+# English: "The right angle at corner {corner} is {value}° off. The tapes do not allow it."
 #: apps/editor/components/scan-review-panel.tsx
 #, fuzzy
-msgid "app.review.conflictAngle"
-msgstr "某个直角偏差 {value}°。卷尺测量值不允许这样。"
+msgid "app.review.conflictCorner"
+msgstr "转角 {corner} 的直角偏差 {value}°。卷尺测量值不允许这样。"
 
-# Source-Hash: 2c421e18197c539a
+# Source-Hash: 836dfaa9823c2f82
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-sonnet-5-5
-# English: "A tape length is off by {value} m. Check the tapes against each other."
+# English: "Walls {a} and {b} differ by {value} m."
 #: apps/editor/components/scan-review-panel.tsx
 #, fuzzy
-msgid "app.review.conflictDistance"
-msgstr "某个卷尺测量值偏差 {value} 米。请核对各测量值是否相互一致。"
+msgid "app.review.conflictEqual"
+msgstr "墙体 {a} 与墙体 {b} 相差 {value} 米。"
+
+# Source-Hash: 9c04ed2590199226
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Corner {corner} moved {value} m although it was fixed."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.conflictFixed"
+msgstr "已固定的转角 {corner} 移动了 {value} 米。"
+
+# Source-Hash: 8f2bb26708a50e57
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Walls {a} and {b} are {value}° from parallel."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.conflictParallel"
+msgstr "墙体 {a} 与墙体 {b} 偏离平行 {value}°。"
 
 # Source-Hash: c57e13ed1ed24a98
 # Review: required
@@ -1623,6 +1663,16 @@ msgstr "某个卷尺测量值偏差 {value} 米。请核对各测量值是否相
 #, fuzzy
 msgid "app.review.conflicts"
 msgstr "以下内容相互矛盾："
+
+# Source-Hash: 7d1482cba891419e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The tape of {tape} m between corners {a} and {b} comes out {value} m off. It disagrees with the other tapes or right angles."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.conflictTape"
+msgstr "转角 {a} 与转角 {b} 之间 {tape} 米的卷尺测量值偏差 {value} 米，与其他测量值或直角不一致。"
 
 # Source-Hash: 3ce6a6a1bdee7189
 # Review: required
@@ -1693,6 +1743,16 @@ msgstr "天花板高度（米）"
 #, fuzzy
 msgid "app.review.heightFrom"
 msgstr "来自扫描：{value} 米（估计值）。"
+
+# Source-Hash: 040dba126c0523fd
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The ceiling height must be between {min} m and {max} m."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.heightInvalid"
+msgstr "天花板高度必须在 {min} 米到 {max} 米之间。"
 
 # Source-Hash: d69304d8ba2e6547
 # Review: required
@@ -1765,6 +1825,16 @@ msgstr "房间名称"
 msgid "app.review.noProposal"
 msgstr "无法根据此扫描提出轮廓，因此暂无可审核的内容。"
 
+# Source-Hash: 848ffd2285f63a56
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The fit did not settle, so these lengths may be off. Remove a tape or a right angle and try again."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.notConverged"
+msgstr "拟合未收敛，这些长度可能不准确。请移除一个卷尺测量值或直角后重试。"
+
 # Source-Hash: c0bdcd412e7c9dac
 # Review: required
 # AI-Provider: claude-code
@@ -1785,6 +1855,16 @@ msgstr "审核扫描"
 msgid "app.review.reset"
 msgstr "重新开始"
 
+# Source-Hash: 8f71ff5faff1b5f4
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The fit scaled the outline by {percent}%. The scan itself is not rescaled, so its picture and the walls can differ by that much."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.scale"
+msgstr "拟合将轮廓缩放了 {percent}%。扫描本身不会被缩放，因此其画面与墙体可能存在同等程度的差异。"
+
 # Source-Hash: 86d25bde4d323e64
 # Review: required
 # AI-Provider: claude-code
@@ -1794,6 +1874,16 @@ msgstr "重新开始"
 #, fuzzy
 msgid "app.review.sigma"
 msgstr "± {value} 米"
+
+# Source-Hash: d243d67d3f4123d6
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Enter a length in metres, more than 0 and at most 200."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.tapeInvalid"
+msgstr "请输入大于 0 且不超过 200 的长度（米）。"
 
 # Source-Hash: 277dd231dd8a7864
 # Review: required

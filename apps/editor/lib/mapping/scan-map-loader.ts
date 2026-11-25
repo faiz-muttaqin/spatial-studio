@@ -100,6 +100,12 @@ export type ProposalReview = {
     floorBasis: 'plane' | 'depth-histogram'
   } | null
   unknowns: string[]
+  /** The scan transform the proposal was computed with; the suggested one is relative to it. */
+  scanTransform: {
+    position: [number, number, number]
+    rotation: [number, number, number]
+    scale: number
+  }
 }
 
 export type ScanMapResult = {
@@ -507,6 +513,11 @@ export async function loadScanMap(
               }
             : null,
           unknowns: proposal.unknowns,
+          scanTransform: {
+            position: [...request.transform.position],
+            rotation: [...request.transform.rotation],
+            scale: request.transform.scale,
+          },
         }
       }
     } catch {

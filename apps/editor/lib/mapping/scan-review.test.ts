@@ -1,11 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 import type { ProposalReview } from './scan-map-loader'
 import {
+  beginDrag,
   cornerAt,
+  dragTo,
   edgeAt,
   edgeTone,
+  endDrag,
   moveCorner,
   parseMetres,
+  scanPlacementNow,
   setRightAngle,
   setTape,
   solveReview,
@@ -28,6 +32,7 @@ const proposal: ProposalReview = {
   height: { value: 2.6, basis: 'depth-estimate' },
   suggestedScanTransform: null,
   unknowns: [],
+  scanTransform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: 1 },
 }
 
 describe('scan review state', () => {
@@ -52,6 +57,51 @@ describe('scan review state', () => {
     expect(state.placed).toEqual([false, false, true, false])
     const solved = solveReview(state)
     expect(solved.polygon[2]![0]).toBeGreaterThan(5.3)
+  })
+
+  test('a dragged corner stays on the cursor and the outline does not turn', () => {
+    const start = startReview(proposal)
+    let state = beginDrag(start, solveReview(start).polygon, 2)
+    state = dragTo(state, [5.4, 4.3])
+    const solved = solveReview(state)
+    expect(solved.polygon[2]![0]).toBeCloseTo(5.4, 2)
+    expect(solved.polygon[2]![1]).toBeCloseTo(4.3, 2)
+    // the rest of the outline stays near where it was and does not turn
+    expect(Math.hypot(solved.polygon[0]![0], solved.polygon[0]![1])).toBeLessThan(0.25)
+    const turn = Math.atan2(
+      solved.polygon[1]![1] - solved.polygon[0]![1],
+      solved.polygon[1]![0] - solved.polygon[0]![0],
+    )
+    expect(Math.abs(turn)).toBeLessThan(0.02)
+    const dropped = endDrag(state)
+    expect(dropped.drag).toBeNull()
+    expect(dropped.base[2]).toEqual([5.4, 4.3])
+    expect(dropped.placed[2]).toBe(true)
+  })
+
+  test('the scan placement is taken from the scan as it is now', () => {
+    const review = {
+      ...proposal,
+      scanTransform: {
+        position: [1, 0.5, 2] as [number, number, number],
+        rotation: [0, 0, 0] as [number, number, number],
+        scale: 1,
+      },
+      suggestedScanTransform: {
+        position: [1, 0.2, 2] as [number, number, number],
+        rotation: [0, 0, 0] as [number, number, number],
+        scale: 1,
+        confidence: 'medium' as const,
+        floorBasis: 'plane' as const,
+      },
+    }
+    const moved = scanPlacementNow(review, { position: [3, 0.5, 4], rotation: [0, 1, 0], scale: 1 })
+    expect(moved?.position[0]).toBe(3)
+    expect(moved?.position[1]).toBeCloseTo(0.2, 6)
+    expect(moved?.rotation).toEqual([0, 1, 0])
+    expect(
+      scanPlacementNow(proposal, { position: [0, 0, 0], rotation: [0, 0, 0], scale: 1 }),
+    ).toBeNull()
   })
 
   test('a right angle squares a skewed corner', () => {

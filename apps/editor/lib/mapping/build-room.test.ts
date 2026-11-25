@@ -42,18 +42,50 @@ describe('buildRoomFromOutline', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.wallCount).toBe(4)
+    expect(result.slabId).not.toBeNull()
+    expect(result.ceilingId).not.toBeNull()
     expect(result.areaSqMeters).toBeCloseTo(12, 1)
     const nodes = Object.values(useScene.getState().nodes)
     const walls = nodes.filter((node) => node.type === 'wall')
     expect(walls).toHaveLength(4)
+    expect(nodes.filter((node) => node.type === 'slab')).toHaveLength(1)
+    expect(nodes.filter((node) => node.type === 'ceiling')).toHaveLength(1)
+    expect(nodes.filter((node) => node.type === 'zone')).toHaveLength(1)
     expect(walls.every((wall) => wall.parentId === 'level_t1')).toBe(true)
     expect(walls.every((wall) => (wall as { height?: number }).height === 2.7)).toBe(true)
     expect((useScene.getState().nodes['scan_t1' as AnyNodeId] as ScanNode).position[1]).toBe(-0.2)
     useScene.temporal.getState().undo()
+    expect(Object.values(useScene.getState().nodes).filter((n) => n.type === 'zone')).toHaveLength(
+      0,
+    )
+    expect(Object.values(useScene.getState().nodes).filter((n) => n.type === 'slab')).toHaveLength(
+      0,
+    )
     expect(Object.values(useScene.getState().nodes).filter((n) => n.type === 'wall')).toHaveLength(
       0,
     )
     expect((useScene.getState().nodes['scan_t1' as AnyNodeId] as ScanNode).position[1]).toBe(0)
+  })
+
+  test('a second build over the same walls is refused and adds no second room', () => {
+    const first = buildRoomFromOutline({
+      levelId: 'level_t1',
+      name: 'Room',
+      polygon: SQUARE,
+      height: 2.7,
+    })
+    expect(first.ok).toBe(true)
+    const second = buildRoomFromOutline({
+      levelId: 'level_t1',
+      name: 'Room',
+      polygon: SQUARE,
+      height: 2.7,
+    })
+    expect(second.ok).toBe(false)
+    if (!second.ok) expect(second.code).toBe('room_named_by_person')
+    expect(Object.values(useScene.getState().nodes).filter((n) => n.type === 'zone')).toHaveLength(
+      1,
+    )
   })
 
   test('refuses a polygon that is not a room and writes nothing', () => {

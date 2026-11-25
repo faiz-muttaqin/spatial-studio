@@ -16,6 +16,116 @@ const rect = (w: number, d: number): OutlinePoint[] => [
 const len = (a: readonly number[], b: readonly number[]) => Math.hypot(b[0]! - a[0]!, b[1]! - a[1]!)
 const medium = { confidence: 'medium' as const }
 
+describe('outline checks', () => {
+  const crossesFor = (polygon: OutlinePoint[]) => solveRoomOutline({ polygon }).selfIntersecting
+  it('flags a bow tie, a corner touching another edge, a collinear overlap and a fold back', () => {
+    expect(
+      crossesFor([
+        [0, 0],
+        [4, 4],
+        [4, 0],
+        [0, 4],
+      ]),
+    ).toBe(true)
+    expect(
+      crossesFor([
+        [0, 0],
+        [4, 0],
+        [4, 4],
+        [2, 0],
+        [0, 4],
+      ]),
+    ).toBe(true)
+    expect(
+      crossesFor([
+        [0, 0],
+        [4, 0],
+        [4, 2],
+        [2, 0],
+        [1, 0],
+        [0, 2],
+      ]),
+    ).toBe(true)
+    expect(
+      crossesFor([
+        [0, 0],
+        [4, 0],
+        [2, 0],
+        [2, 3],
+      ]),
+    ).toBe(true)
+  })
+  it('does not flag simple outlines', () => {
+    expect(crossesFor(rect(5, 4))).toBe(false)
+    expect(
+      crossesFor([
+        [0, 0],
+        [6, 0],
+        [6, 2],
+        [3, 2],
+        [3, 5],
+        [0, 5],
+      ]),
+    ).toBe(false)
+  })
+  it('refuses too many constraints, a bad iteration count and huge coordinates', () => {
+    const many = Array.from({ length: 4 * 4 + 33 }, () => ({
+      type: 'rightAngle' as const,
+      corner: 0,
+    }))
+    expect(() => solveRoomOutline({ polygon: rect(5, 4), constraints: many })).toThrow(
+      OutlineSolverInputError,
+    )
+    for (const maxIterations of [Number.NaN, 0, -3, 2.5])
+      expect(() => solveRoomOutline({ polygon: rect(5, 4), maxIterations })).toThrow(
+        OutlineSolverInputError,
+      )
+    expect(() => solveRoomOutline({ polygon: rect(1e200, 4) })).toThrow(OutlineSolverInputError)
+  })
+  it('reports convergence and names the constraint behind a conflict', () => {
+    const ok = solveRoomOutline({
+      polygon: rect(5, 4),
+      constraints: [{ type: 'distance', a: 0, b: 1, value: 5.2 }],
+    })
+    expect(ok.converged).toBe(true)
+    const bad = solveRoomOutline({
+      polygon: rect(5, 4),
+      constraints: [
+        { type: 'distance', a: 0, b: 1, value: 5 },
+        { type: 'distance', a: 2, b: 3, value: 6 },
+        { type: 'equalLength', edgeA: 0, edgeB: 2 },
+      ],
+    })
+    expect(bad.conflicts.every((c) => c.detail.type === c.type)).toBe(true)
+  })
+  it('pins what one tape does: a 5% short 4x3 room with a 4.00 m tape stays within 3 cm', () => {
+    const drawn: OutlinePoint[] = [
+      [0, 0],
+      [3.8, 0],
+      [3.8, 2.85],
+      [0, 2.85],
+    ]
+    const trust = [
+      { confidence: 'medium' as const },
+      { confidence: 'medium' as const },
+      { confidence: 'medium' as const },
+      { confidence: 'medium' as const },
+    ]
+    const one = solveRoomOutline({
+      polygon: drawn,
+      edges: trust,
+      constraints: [{ type: 'distance', a: 0, b: 1, value: 4 }],
+    })
+    expect(one.edges[0]!.length).toBeCloseTo(4, 2)
+    // opposite wall follows; the other direction is only scaled, so it stays off by about 2.5 cm
+    expect(Math.abs(one.edges[2]!.length - 4)).toBeLessThan(0.03)
+    expect(Math.abs(one.edges[1]!.length - 3)).toBeLessThan(0.1)
+    expect(Math.abs(one.edges[1]!.length - 3)).toBeGreaterThan(0.005)
+    // the wall direction nobody measured is the one to measure next
+    expect([1, 3]).toContain(one.measureNext!.edge)
+  })
+})
+
 describe('solveRoomOutline', () => {
   it('leaves an outline alone when nothing is stated', () => {
     const polygon = rect(5, 4)
@@ -36,8 +146,8 @@ describe('solveRoomOutline', () => {
     })
     expect(solution.edges[0]!.length).toBeCloseTo(5.5, 2)
     // the walls nobody measured follow the same scale: 4 * 1.1
-    expect(solution.edges[1]!.length).toBeGreaterThan(4.2)
-    expect(solution.edges[1]!.length).toBeLessThan(4.45)
+    expect(solution.edges[1]!.length).toBeGreaterThan(4.3)
+    expect(solution.edges[1]!.length).toBeLessThan(4.4)
     expect(solution.scale).toBeGreaterThan(1.05)
     expect(solution.edges[0]!.measured).toBe(true)
     expect(solution.conflicts).toHaveLength(0)

@@ -1,17 +1,20 @@
 'use client'
 
+import { type AnyNodeId, type ScanNode, useScene } from '@pascal-app/core'
 import type { OutlineSolution } from '@pascal-app/core/capture'
 import { useLocale, usePascalI18n } from '@pascal-app/core/i18n'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { buildRoomFromOutline } from '@/lib/mapping/build-room'
 import {
   clampHeight,
   type EdgeTone,
   edgeTone,
+  heightInRange,
   MAX_HEIGHT,
   MIN_HEIGHT,
   parseMetres,
   type ReviewState,
+  scanPlacementNow,
   setRightAngle,
   setTape,
   TONE_COLOURS,
@@ -36,6 +39,51 @@ const TONE_LABELS: Record<EdgeTone, { id: string; message: string }> = {
   low: /* i18n */ { id: 'app.review.tone.low', message: 'Low confidence' },
   assumed: /* i18n */ { id: 'app.review.tone.assumed', message: 'Assumed' },
   glass: /* i18n */ { id: 'app.review.tone.glass', message: 'Likely glass' },
+}
+
+type Translate = ReturnType<typeof usePascalI18n>
+
+/** Names the wall, corner and tape a conflict is about, numbered from 1 as the panel is. */
+function conflictText(
+  entry: OutlineSolution['conflicts'][number],
+  number: Intl.NumberFormat,
+  i18n: Translate,
+): string {
+  const c = entry.detail
+  const amount = number.format(Math.abs(entry.error))
+  switch (c.type) {
+    case 'distance':
+      return i18n._({
+        id: 'app.review.conflictTape',
+        message:
+          'The tape of {tape} m between corners {a} and {b} comes out {value} m off. It disagrees with the other tapes or right angles.',
+        values: { tape: number.format(c.value), a: c.a + 1, b: c.b + 1, value: amount },
+      })
+    case 'rightAngle':
+      return i18n._({
+        id: 'app.review.conflictCorner',
+        message: 'The right angle at corner {corner} is {value}° off. The tapes do not allow it.',
+        values: { corner: c.corner + 1, value: amount },
+      })
+    case 'parallel':
+      return i18n._({
+        id: 'app.review.conflictParallel',
+        message: 'Walls {a} and {b} are {value}° from parallel.',
+        values: { a: c.edgeA + 1, b: c.edgeB + 1, value: amount },
+      })
+    case 'equalLength':
+      return i18n._({
+        id: 'app.review.conflictEqual',
+        message: 'Walls {a} and {b} differ by {value} m.',
+        values: { a: c.edgeA + 1, b: c.edgeB + 1, value: amount },
+      })
+    case 'fixed':
+      return i18n._({
+        id: 'app.review.conflictFixed',
+        message: 'Corner {corner} moved {value} m although it was fixed.',
+        values: { corner: c.corner + 1, value: amount },
+      })
+  }
 }
 
 /** The angle at a corner of the outline, in degrees. */
@@ -68,6 +116,12 @@ export function ScanReviewPanel({
   const [moveScan, setMoveScan] = useState(false)
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
   const [resets, setResets] = useState(0)
+  const [tapeErrors, setTapeErrors] = useState<Record<number, boolean>>({})
+  const [heightError, setHeightError] = useState(false)
+  // A build over a conflict or a fit that did not settle asks twice: the first press warns.
+  const [warned, setWarned] = useState(false)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: any change to the fit withdraws the warning
+  useEffect(() => setWarned(false), [solution])
   const number = new Intl.NumberFormat(locale, {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
@@ -81,8 +135,22 @@ export function ScanReviewPanel({
   const suggested = state.proposal.suggestedScanTransform
   const unresolved = solution.selfIntersecting || !scan.levelId
 
+  const doubtful = solution.conflicts.length > 0 || !solution.converged
   const build = () => {
     if (!scan.levelId) return
+    if (doubtful && !warned) {
+      setWarned(true)
+      return
+    }
+    const live = useScene.getState().nodes[scan.id as AnyNodeId] as ScanNode | undefined
+    const placement =
+      moveScan && live
+        ? scanPlacementNow(state.proposal, {
+            position: live.position,
+            rotation: live.rotation,
+            scale: live.scale,
+          })
+        : null
     const result = buildRoomFromOutline({
       levelId: scan.levelId,
       name: name.trim() || i18n._({ id: 'app.review.defaultName', message: 'Room' }),
@@ -91,17 +159,7 @@ export function ScanReviewPanel({
         Math.round(z * 1000) / 1000,
       ]),
       height: state.height,
-      scan:
-        moveScan && suggested
-          ? {
-              id: scan.id,
-              transform: {
-                position: suggested.position,
-                rotation: suggested.rotation,
-                scale: suggested.scale,
-              },
-            }
-          : undefined,
+      scan: placement ? { id: scan.id, transform: placement } : undefined,
     })
     if (!result.ok) {
       setMessage({
@@ -220,9 +278,15 @@ export function ScanReviewPanel({
                   key={`${edge.index}:${resets}`}
                   onChange={(event) => {
                     const raw = event.target.value
-                    onChange(
-                      setTape(state, edge.index, raw.trim() === '' ? null : parseMetres(raw)),
-                    )
+                    if (raw.trim() === '') {
+                      setTapeErrors((current) => ({ ...current, [edge.index]: false }))
+                      onChange(setTape(state, edge.index, null))
+                      return
+                    }
+                    // A typed length that is not one keeps the last good tape and says so.
+                    const value = parseMetres(raw)
+                    setTapeErrors((current) => ({ ...current, [edge.index]: value === null }))
+                    if (value !== null) onChange(setTape(state, edge.index, value))
                   }}
                   placeholder={i18n._({
                     id: 'app.review.tapePlaceholder',
@@ -231,6 +295,14 @@ export function ScanReviewPanel({
                   type="text"
                 />
               </div>
+              {tapeErrors[edge.index] && (
+                <span className="text-red-400" role="alert">
+                  {i18n._({
+                    id: 'app.review.tapeInvalid',
+                    message: 'Enter a length in metres, more than 0 and at most 200.',
+                  })}
+                </span>
+              )}
               {next && (
                 <span className="text-amber-500">
                   {i18n._({
@@ -280,23 +352,29 @@ export function ScanReviewPanel({
           </p>
           <ul className="mt-1 list-disc pl-4">
             {solution.conflicts.map((entry) => (
-              <li key={entry.constraint}>
-                {entry.type === 'distance'
-                  ? i18n._({
-                      id: 'app.review.conflictDistance',
-                      message:
-                        'A tape length is off by {value} m. Check the tapes against each other.',
-                      values: { value: number.format(Math.abs(entry.error)) },
-                    })
-                  : i18n._({
-                      id: 'app.review.conflictAngle',
-                      message: 'A right angle is off by {value}°. The tapes do not allow it.',
-                      values: { value: number.format(Math.abs(entry.error)) },
-                    })}
-              </li>
+              <li key={entry.constraint}>{conflictText(entry, number, i18n)}</li>
             ))}
           </ul>
         </div>
+      )}
+      {!solution.converged && (
+        <p className="rounded bg-red-950/60 p-2" role="alert">
+          {i18n._({
+            id: 'app.review.notConverged',
+            message:
+              'The fit did not settle, so these lengths may be off. Remove a tape or a right angle and try again.',
+          })}
+        </p>
+      )}
+      {Math.abs(solution.scale - 1) >= 0.001 && (
+        <p className="text-sidebar-foreground/60">
+          {i18n._({
+            id: 'app.review.scale',
+            message:
+              'The fit scaled the outline by {percent}%. The scan itself is not rescaled, so its picture and the walls can differ by that much.',
+            values: { percent: number.format((solution.scale - 1) * 100) },
+          })}
+        </p>
       )}
       {solution.selfIntersecting && (
         <p className="rounded bg-red-950/60 p-2" role="alert">
@@ -317,12 +395,22 @@ export function ScanReviewPanel({
             key={`h:${resets}`}
             onChange={(event) => {
               const value = parseMetres(event.target.value)
-              if (value !== null && value >= MIN_HEIGHT && value <= MAX_HEIGHT)
-                onChange({ ...state, height: clampHeight(value) })
+              const valid = value !== null && heightInRange(value)
+              setHeightError(!valid)
+              if (valid) onChange({ ...state, height: clampHeight(value) })
             }}
             type="text"
           />
         </label>
+        {heightError && (
+          <span className="text-red-400" role="alert">
+            {i18n._({
+              id: 'app.review.heightInvalid',
+              message: 'The ceiling height must be between {min} m and {max} m.',
+              values: { min: MIN_HEIGHT, max: MAX_HEIGHT },
+            })}
+          </span>
+        )}
         {state.proposal.height && (
           <span className="text-sidebar-foreground/60">
             {i18n._({
@@ -369,6 +457,15 @@ export function ScanReviewPanel({
         )}
       </section>
 
+      {warned && (
+        <p className="text-amber-500" role="alert">
+          {i18n._({
+            id: 'app.review.buildWarning',
+            message:
+              'The outline still has problems shown above. Press again to build it as it is, or fix them first.',
+          })}
+        </p>
+      )}
       {message && (
         <p className={message.tone === 'error' ? 'text-red-400' : 'text-green-400'} role="status">
           {message.text}
@@ -393,7 +490,9 @@ export function ScanReviewPanel({
           onClick={build}
           type="button"
         >
-          {i18n._({ id: 'app.review.build', message: 'Build walls' })}
+          {warned
+            ? i18n._({ id: 'app.review.buildAnyway', message: 'Build anyway' })
+            : i18n._({ id: 'app.review.build', message: 'Build walls' })}
         </button>
       </div>
       <p className="text-sidebar-foreground/60">

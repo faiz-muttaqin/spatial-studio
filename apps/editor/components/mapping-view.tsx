@@ -29,10 +29,12 @@ import type {
   ScanMapResult,
 } from '@/lib/mapping/scan-map-loader'
 import {
+  beginDrag,
   cornerAt,
+  dragTo,
   edgeAt,
   edgeTone,
-  moveCorner,
+  endDrag,
   type ReviewState,
   solveReview,
   startReview,
@@ -663,13 +665,26 @@ export default function MappingView() {
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
     return screenToLevel(viewportRef.current, event.clientX - rect.left, event.clientY - rect.top)
   }
+  const pendingDrag = useRef<{ point: [number, number]; frame: number } | null>(null)
+  const flushDrag = () => {
+    const pending = pendingDrag.current
+    if (!pending) return
+    cancelAnimationFrame(pending.frame)
+    pendingDrag.current = null
+    setReviewState((current) => (current ? dragTo(current, pending.point) : current))
+  }
   const onPointerDown = (event: React.PointerEvent) => {
+    // Only the primary button of the primary pointer pans or drags: a second finger or a right click does neither.
+    if (event.button !== 0 || !event.isPrimary) return
     if (solution) {
       const point = levelPoint(event)
       const metresPerPixel = 1 / viewportRef.current.scale
       const corner = cornerAt(solution.polygon, point, 14 * metresPerPixel)
       if (corner !== null) {
         cornerDrag.current = corner
+        setReviewState((current) =>
+          current ? beginDrag(current, solution.polygon, corner) : current,
+        )
         setDragCorner(corner)
         setSelectedEdge(null)
         ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
@@ -683,8 +698,11 @@ export default function MappingView() {
   const onPointerMove = (event: React.PointerEvent) => {
     const dragged = cornerDrag.current
     if (dragged !== null) {
+      // One solve per animation frame, with the latest pointer position.
       const point = levelPoint(event)
-      setReviewState((current) => (current ? moveCorner(current, dragged, point) : current))
+      const pending = pendingDrag.current
+      if (pending) pending.point = point
+      else pendingDrag.current = { point, frame: requestAnimationFrame(flushDrag) }
       return
     }
     const start = drag.current
@@ -700,6 +718,10 @@ export default function MappingView() {
   }
   const onPointerUp = () => {
     drag.current = null
+    if (cornerDrag.current !== null) {
+      flushDrag()
+      setReviewState((current) => (current ? endDrag(current) : current))
+    }
     cornerDrag.current = null
     setDragCorner(null)
   }

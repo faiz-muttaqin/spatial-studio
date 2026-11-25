@@ -1574,6 +1574,16 @@ msgstr "Cartographie"
 msgid "app.review.build"
 msgstr "Construire les murs"
 
+# Source-Hash: a2032d86a72e4128
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Build anyway"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.buildAnyway"
+msgstr "Construire quand même"
+
 # Source-Hash: 083fd91471c923e6
 # Review: required
 # AI-Provider: claude-code
@@ -1583,6 +1593,16 @@ msgstr "Construire les murs"
 #, fuzzy
 msgid "app.review.buildFailed"
 msgstr "Les murs n’ont pas été construits : {reason}"
+
+# Source-Hash: fbf9ff28acc64691
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The outline still has problems shown above. Press again to build it as it is, or fix them first."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.buildWarning"
+msgstr "Le contour présente encore les problèmes indiqués ci-dessus. Appuyez de nouveau pour le construire tel quel, ou corrigez-les d’abord."
 
 # Source-Hash: d7cf5045c01b2eb9
 # Review: required
@@ -1594,25 +1614,45 @@ msgstr "Les murs n’ont pas été construits : {reason}"
 msgid "app.review.close"
 msgstr "Fermer"
 
-# Source-Hash: f7026d7447d155bb
+# Source-Hash: 74b254183bfa0183
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-sonnet-5-5
-# English: "A right angle is off by {value}°. The tapes do not allow it."
+# English: "The right angle at corner {corner} is {value}° off. The tapes do not allow it."
 #: apps/editor/components/scan-review-panel.tsx
 #, fuzzy
-msgid "app.review.conflictAngle"
-msgstr "Un angle droit s’écarte de {value}°. Les mesures au mètre ne le permettent pas."
+msgid "app.review.conflictCorner"
+msgstr "L’angle droit de l’angle {corner} s’écarte de {value}°. Les mesures au mètre ne le permettent pas."
 
-# Source-Hash: 2c421e18197c539a
+# Source-Hash: 836dfaa9823c2f82
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-sonnet-5-5
-# English: "A tape length is off by {value} m. Check the tapes against each other."
+# English: "Walls {a} and {b} differ by {value} m."
 #: apps/editor/components/scan-review-panel.tsx
 #, fuzzy
-msgid "app.review.conflictDistance"
-msgstr "Une mesure au mètre s’écarte de {value} m. Vérifiez les mesures les unes par rapport aux autres."
+msgid "app.review.conflictEqual"
+msgstr "Les murs {a} et {b} diffèrent de {value} m."
+
+# Source-Hash: 9c04ed2590199226
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Corner {corner} moved {value} m although it was fixed."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.conflictFixed"
+msgstr "L’angle {corner} a bougé de {value} m alors qu’il était fixé."
+
+# Source-Hash: 8f2bb26708a50e57
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Walls {a} and {b} are {value}° from parallel."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.conflictParallel"
+msgstr "Les murs {a} et {b} s’écartent de {value}° du parallélisme."
 
 # Source-Hash: c57e13ed1ed24a98
 # Review: required
@@ -1623,6 +1663,16 @@ msgstr "Une mesure au mètre s’écarte de {value} m. Vérifiez les mesures les
 #, fuzzy
 msgid "app.review.conflicts"
 msgstr "Ces données sont incompatibles entre elles :"
+
+# Source-Hash: 7d1482cba891419e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The tape of {tape} m between corners {a} and {b} comes out {value} m off. It disagrees with the other tapes or right angles."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.conflictTape"
+msgstr "La mesure de {tape} m entre les angles {a} et {b} s’écarte de {value} m. Elle ne concorde pas avec les autres mesures ou angles droits."
 
 # Source-Hash: 3ce6a6a1bdee7189
 # Review: required
@@ -1693,6 +1743,16 @@ msgstr "Hauteur sous plafond, m"
 #, fuzzy
 msgid "app.review.heightFrom"
 msgstr "D’après le scan : {value} m (une estimation)."
+
+# Source-Hash: 040dba126c0523fd
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The ceiling height must be between {min} m and {max} m."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.heightInvalid"
+msgstr "La hauteur sous plafond doit être comprise entre {min} m et {max} m."
 
 # Source-Hash: d69304d8ba2e6547
 # Review: required
@@ -1765,6 +1825,16 @@ msgstr "Nom de la pièce"
 msgid "app.review.noProposal"
 msgstr "Aucun contour n’a pu être proposé à partir de ce scan, il n’y a donc encore rien à vérifier."
 
+# Source-Hash: 848ffd2285f63a56
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The fit did not settle, so these lengths may be off. Remove a tape or a right angle and try again."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.notConverged"
+msgstr "L’ajustement ne s’est pas stabilisé, ces longueurs peuvent donc être inexactes. Retirez une mesure ou un angle droit et réessayez."
+
 # Source-Hash: c0bdcd412e7c9dac
 # Review: required
 # AI-Provider: claude-code
@@ -1785,6 +1855,16 @@ msgstr "Vérifier le scan"
 msgid "app.review.reset"
 msgstr "Recommencer"
 
+# Source-Hash: 8f71ff5faff1b5f4
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The fit scaled the outline by {percent}%. The scan itself is not rescaled, so its picture and the walls can differ by that much."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.scale"
+msgstr "L’ajustement a mis le contour à l’échelle de {percent} %. Le scan lui-même n’est pas redimensionné ; son image et les murs peuvent donc différer d’autant."
+
 # Source-Hash: 86d25bde4d323e64
 # Review: required
 # AI-Provider: claude-code
@@ -1794,6 +1874,16 @@ msgstr "Recommencer"
 #, fuzzy
 msgid "app.review.sigma"
 msgstr "± {value} m"
+
+# Source-Hash: d243d67d3f4123d6
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Enter a length in metres, more than 0 and at most 200."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.tapeInvalid"
+msgstr "Saisissez une longueur en mètres, supérieure à 0 et d’au plus 200."
 
 # Source-Hash: 277dd231dd8a7864
 # Review: required

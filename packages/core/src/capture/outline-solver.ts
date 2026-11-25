@@ -62,6 +62,8 @@ export type OutlineEdgeResult = {
 export type OutlineResidual = {
   /** Index in the input `constraints`. */
   constraint: number
+  /** The constraint itself, so a message can name its edge, corner and tape. */
+  detail: OutlineConstraint
   type: OutlineConstraint['type']
   /** Metres for distances and equal lengths, degrees for angles and parallels, metres moved for a fixed corner. */
   error: number
@@ -110,7 +112,12 @@ export const OUTLINE_SIGMA = {
 } as const
 
 export const OUTLINE_MAX_CORNERS = 48
+/** Constraints allowed per corner, plus 32. */
+export const OUTLINE_MAX_CONSTRAINTS_PER_CORNER = 4
 const DEFAULT_MAX_ITERATIONS = 60
+const MAX_ITERATIONS = 200
+/** Largest corner coordinate or tape, in metres; far beyond any building, small enough for doubles. */
+export const OUTLINE_MAX_COORDINATE = 100_000
 /** A tape the fit misses by more than this is reported as a conflict. */
 const CONFLICT_DISTANCE = 0.01
 const CONFLICT_ANGLE_DEG = 1
@@ -137,6 +144,16 @@ function validate(input: OutlineSolverInput): void {
   for (const [x, z] of input.polygon)
     if (!(Number.isFinite(x) && Number.isFinite(z)))
       throw new OutlineSolverInputError('Every corner must be two finite numbers.')
+    else if (Math.abs(x) > OUTLINE_MAX_COORDINATE || Math.abs(z) > OUTLINE_MAX_COORDINATE)
+      throw new OutlineSolverInputError(`A corner lies beyond ${OUTLINE_MAX_COORDINATE} m.`)
+  const limit = OUTLINE_MAX_CONSTRAINTS_PER_CORNER * n + 32
+  if ((input.constraints?.length ?? 0) > limit)
+    throw new OutlineSolverInputError(`At most ${limit} constraints for ${n} corners.`)
+  if (
+    input.maxIterations !== undefined &&
+    !(Number.isInteger(input.maxIterations) && input.maxIterations >= 1)
+  )
+    throw new OutlineSolverInputError('maxIterations must be a positive whole number.')
   const corner = (value: number, what: string) => {
     if (!Number.isInteger(value) || value < 0 || value >= n)
       throw new OutlineSolverInputError(`${what} ${value} is not a corner (0 to ${n - 1}).`)
@@ -292,7 +309,7 @@ export function solveRoomOutline(input: OutlineSolverInput): OutlineSolution {
     return { A, g }
   }
 
-  const maxIterations = Math.min(input.maxIterations ?? DEFAULT_MAX_ITERATIONS, 200)
+  const maxIterations = Math.min(input.maxIterations ?? DEFAULT_MAX_ITERATIONS, MAX_ITERATIONS)
   let lambda = 1e-3
   let iterations = 0
   let converged = false
@@ -323,7 +340,8 @@ export function solveRoomOutline(input: OutlineSolverInput): OutlineSolution {
       lambda *= 10
     }
     if (!improved) {
-      converged = true
+      // Twelve damped steps found no better point: a stationary point only when the gradient is flat.
+      converged = Math.max(...g.map(Math.abs)) < 1e-2
       break
     }
     if (converged) break
@@ -379,6 +397,7 @@ export function solveRoomOutline(input: OutlineSolverInput): OutlineSolution {
       c.type === 'rightAngle' || c.type === 'parallel' ? CONFLICT_ANGLE_DEG : CONFLICT_DISTANCE
     return {
       constraint: index,
+      detail: c,
       type: c.type,
       error,
       sigmas: z,
@@ -446,18 +465,47 @@ export function solveRoomOutline(input: OutlineSolverInput): OutlineSolution {
   }
 }
 
+/**
+ * True when the outline touches or crosses itself: two edges that are not neighbours share any
+ * point (a crossing, a corner on an edge, a collinear overlap), or neighbours fold back on each other.
+ */
 function crosses(polygon: readonly OutlinePoint[]): boolean {
   const n = polygon.length
   const side = (a: OutlinePoint, b: OutlinePoint, c: OutlinePoint) =>
     (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+  const tolerance = 1e-9
+  const sign = (value: number) => (Math.abs(value) <= tolerance ? 0 : value > 0 ? 1 : -1)
+  const within = (a: OutlinePoint, b: OutlinePoint, p: OutlinePoint) =>
+    p[0] >= Math.min(a[0], b[0]) - tolerance &&
+    p[0] <= Math.max(a[0], b[0]) + tolerance &&
+    p[1] >= Math.min(a[1], b[1]) - tolerance &&
+    p[1] <= Math.max(a[1], b[1]) + tolerance
+  const meet = (a: OutlinePoint, b: OutlinePoint, c: OutlinePoint, d: OutlinePoint) => {
+    const d1 = sign(side(a, b, c))
+    const d2 = sign(side(a, b, d))
+    const d3 = sign(side(c, d, a))
+    const d4 = sign(side(c, d, b))
+    if (d1 * d2 < 0 && d3 * d4 < 0) return true
+    return (
+      (d1 === 0 && within(a, b, c)) ||
+      (d2 === 0 && within(a, b, d)) ||
+      (d3 === 0 && within(c, d, a)) ||
+      (d4 === 0 && within(c, d, b))
+    )
+  }
   for (let i = 0; i < n; i++) {
+    const a = polygon[i]!
+    const b = polygon[(i + 1) % n]!
+    // The next edge folds back when it runs along this one in the opposite direction.
+    const c = polygon[(i + 2) % n]!
+    if (
+      sign(side(a, b, c)) === 0 &&
+      (b[0] - a[0]) * (c[0] - b[0]) + (b[1] - a[1]) * (c[1] - b[1]) < 0
+    )
+      return true
     for (let j = i + 2; j < n; j++) {
       if (i === 0 && j === n - 1) continue
-      const a = polygon[i]!
-      const b = polygon[(i + 1) % n]!
-      const c = polygon[j]!
-      const d = polygon[(j + 1) % n]!
-      if (side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0) return true
+      if (meet(a, b, polygon[j]!, polygon[(j + 1) % n]!)) return true
     }
   }
   return false

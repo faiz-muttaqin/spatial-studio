@@ -3,6 +3,14 @@ import { Client } from '@modelcontextprotocol/client'
 import { InMemoryTransport, McpServer } from '@modelcontextprotocol/server'
 import { registerRoomOutlineTool } from './room-outline-tool'
 
+const parse = (text: string) => {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return { error: text }
+  }
+}
+
 describe('solve_room_outline', () => {
   let client: Client
   beforeEach(async () => {
@@ -16,7 +24,7 @@ describe('solve_room_outline', () => {
     const result = await client.callTool({ name: 'solve_room_outline', arguments: args })
     return {
       isError: result.isError,
-      body: JSON.parse((result.content as Array<{ text: string }>)[0]!.text),
+      body: parse((result.content as Array<{ text: string }>)[0]!.text),
     }
   }
   const rect = [
@@ -54,6 +62,8 @@ describe('solve_room_outline', () => {
       ],
     })
     expect(body.conflicts.length).toBeGreaterThan(0)
+    expect(body.conflicts[0].message).toMatch(/corners|Edges/)
+    expect(body.converged).toBe(true)
   })
 
   test('refuses a corner that does not exist', async () => {
@@ -63,5 +73,27 @@ describe('solve_room_outline', () => {
     })
     expect(isError).toBe(true)
     expect(body.code).toBe('invalid_outline')
+  })
+
+  test('refuses coordinates beyond 100 km and reports a touching outline', async () => {
+    const huge = await call({
+      polygon: [
+        [0, 0],
+        [1e200, 0],
+        [1e200, 4],
+        [0, 4],
+      ],
+    })
+    expect(huge.isError).toBe(true)
+    const touching = await call({
+      polygon: [
+        [0, 0],
+        [4, 0],
+        [4, 4],
+        [2, 0],
+        [0, 4],
+      ],
+    })
+    expect(touching.body.selfIntersecting).toBe(true)
   })
 })

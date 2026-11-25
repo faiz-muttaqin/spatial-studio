@@ -20,6 +20,8 @@ export type ReviewState = {
   /** Corners ticked as right angles. */
   rightAngles: boolean[]
   height: number
+  /** A corner being dragged, pinned to the cursor while the rest of the outline follows. */
+  drag: { corner: number; position: Point } | null
 }
 
 export const DEFAULT_HEIGHT = 2.5
@@ -27,6 +29,7 @@ export const MIN_HEIGHT = 1.8
 export const MAX_HEIGHT = 6
 /** A corner the person placed by hand: its two edges are trusted to a few centimetres. */
 const PLACED_SIGMA = 0.03
+const DRAGGED_SIGMA = 1
 
 export function startReview(proposal: ProposalReview): ReviewState {
   const n = proposal.polygon.length
@@ -37,6 +40,7 @@ export function startReview(proposal: ProposalReview): ReviewState {
     tapes: {},
     rightAngles: new Array<boolean>(n).fill(false),
     height: clampHeight(proposal.height?.value ?? DEFAULT_HEIGHT),
+    drag: null,
   }
 }
 
@@ -45,6 +49,40 @@ export function clampHeight(value: number): number {
   return Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, value))
 }
 
+/**
+ * Starts a drag from what the person sees: the outline as last solved becomes the reference, so
+ * nothing but the dragged corner and what the constraints pull along moves.
+ */
+export function beginDrag(
+  state: ReviewState,
+  solved: readonly Point[],
+  corner: number,
+): ReviewState {
+  return {
+    ...state,
+    base: solved.map(([x, z]): Point => [x, z]),
+    drag: { corner, position: [solved[corner]![0], solved[corner]![1]] },
+  }
+}
+
+/** The dragged corner follows the cursor exactly; the solver moves the rest. */
+export function dragTo(state: ReviewState, to: Point): ReviewState {
+  return state.drag ? { ...state, drag: { ...state.drag, position: [to[0], to[1]] } } : state
+}
+
+/** Drops the corner where it is: it becomes a hand-placed corner of the reference outline. */
+export function endDrag(state: ReviewState): ReviewState {
+  if (!state.drag) return state
+  const { corner, position } = state.drag
+  return {
+    ...state,
+    base: state.base.map((point, i): Point => (i === corner ? position : point)),
+    placed: state.placed.map((flag, i) => flag || i === corner),
+    drag: null,
+  }
+}
+
+/** Moves a corner of the reference outline directly, with no solve in between (tests, keyboard). */
 export function moveCorner(state: ReviewState, corner: number, to: Point): ReviewState {
   const base = state.base.map((point, i): Point => (i === corner ? [to[0], to[1]] : point))
   const placed = state.placed.map((flag, i) => flag || i === corner)
@@ -73,16 +111,21 @@ export function constraintsOf(state: ReviewState): OutlineConstraint[] {
   state.rightAngles.forEach((on, corner) => {
     if (on) list.push({ type: 'rightAngle', corner })
   })
+  if (state.drag)
+    list.push({ type: 'fixed', corner: state.drag.corner, position: state.drag.position })
   return list
 }
 
 export function trustOf(state: ReviewState): OutlineEdgeTrust[] {
   const n = state.base.length
-  return state.proposal.edges.map((edge, i) =>
-    state.placed[i] || state.placed[(i + 1) % n]
-      ? { sigma: PLACED_SIGMA }
-      : { confidence: edge.confidence, basis: edge.basis, likelyGlass: edge.likelyGlass },
-  )
+  return state.proposal.edges.map((edge, i) => {
+    // The edges of a corner being dragged give way, so the corner goes where the cursor is and the
+    // rest of the outline stays put.
+    if (state.drag && (state.drag.corner === i || state.drag.corner === (i + 1) % n))
+      return { sigma: DRAGGED_SIGMA }
+    if (state.placed[i] || state.placed[(i + 1) % n]) return { sigma: PLACED_SIGMA }
+    return { confidence: edge.confidence, basis: edge.basis, likelyGlass: edge.likelyGlass }
+  })
 }
 
 export function solveReview(state: ReviewState): OutlineSolution {
@@ -156,4 +199,32 @@ export function parseMetres(text: string): number | null {
   if (cleaned === '') return null
   const value = Number(cleaned)
   return Number.isFinite(value) && value > 0 && value <= 200 ? value : null
+}
+
+/** The range a ceiling height may take, and whether a typed value is inside it. */
+export function heightInRange(value: number): boolean {
+  return Number.isFinite(value) && value >= MIN_HEIGHT && value <= MAX_HEIGHT
+}
+
+/**
+ * The scan placement that lowers the detected floor to the level floor, taken from the scan's
+ * placement now: the suggestion is a move in y relative to the placement it was computed for, so a
+ * scan the person has moved since is not snapped back to an old position.
+ */
+export function scanPlacementNow(
+  review: ProposalReview,
+  live: { position: [number, number, number]; rotation: [number, number, number]; scale: number },
+): {
+  position: [number, number, number]
+  rotation: [number, number, number]
+  scale: number
+} | null {
+  const suggested = review.suggestedScanTransform
+  if (!suggested) return null
+  const dy = suggested.position[1] - review.scanTransform.position[1]
+  return {
+    position: [live.position[0], live.position[1] + dy, live.position[2]],
+    rotation: live.rotation,
+    scale: live.scale,
+  }
 }
