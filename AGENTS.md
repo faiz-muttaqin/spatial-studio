@@ -38,3 +38,7 @@ Use the Bun version in `package.json`. Run focused checks for the changed behavi
 - Old scenes must still load after your change (E-003).
 - Never cite private-repo plan paths from this repo (E-015).
 - Complete authorized work; honor review-only requests. Merge on green required CI and actual GitHub reviews, resolving P0/P1 findings. No fleet approval is needed. Reuse authorization; obtain it for secrets, spend, new access, sign-ins, destructive or access-widening data, and messages under a person's name. Preserve checks and branch protection.
+
+## Spatial Studio downstream
+
+For work in this fork, read [docs/spatial-studio/README.md](docs/spatial-studio/README.md), [ROADMAP.md](docs/spatial-studio/ROADMAP.md) and [STATUS.md](docs/spatial-studio/STATUS.md) before implementation. Preserve upstream invariants; record actual test evidence and target PRs to this fork. Do not publish upstream packages or MCP registry entries.
