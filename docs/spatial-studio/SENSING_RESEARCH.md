@@ -35,9 +35,9 @@ The recorded bundle stays the source of truth. A live stream is for preview and 
 2. **Loopback WebSocket in the app.** Bound to `127.0.0.1` only, with a random per-session token handed to the page through the bridge, an `Origin` check and binary frames. Suits high-rate sensor batches and preview frames. Must be tested against Chrome and Android WebView local-network-access rules for an HTTPS page calling loopback. A LAN-reachable mode (for a desktop on the same Wi-Fi) stays off by default and needs authentication and TLS before it is considered.
 3. **Record, then upload** (current v1). Always available; the other two only add liveness.
 
-## Proposed contract additions (v1.1, not adopted)
+## Contract additions (v1.1)
 
-Each lands in [CAPTURE_CONTRACT.md](CAPTURE_CONTRACT.md) in its own commit before code uses it.
+Adopted for the first five items in [CAPTURE_CONTRACT.md](CAPTURE_CONTRACT.md) (2026-11-25); `rf-observations` stays research and has no schema.
 
 - `device-orientation`: rotation-vector quaternions with accuracy, device clock.
 - `heading`: true-north heading samples with magnetic accuracy and declination; manifest metadata `trueNorth: { worldYawDeg, confidence, method }`.
