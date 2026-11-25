@@ -44,6 +44,7 @@ import com.faizmuttaqin.spatialstudio.bridge.NativeBridge
 import com.faizmuttaqin.spatialstudio.capabilities.CapabilityProbe
 import com.faizmuttaqin.spatialstudio.scan.gl.CameraBackground
 import com.faizmuttaqin.spatialstudio.scan.gl.CoverageOverlay
+import com.faizmuttaqin.spatialstudio.scan.gl.EdgeOverlay
 import com.faizmuttaqin.spatialstudio.scan.gl.LineOverlay
 import com.faizmuttaqin.spatialstudio.scan.gl.PointOverlay
 import com.google.ar.core.ArCoreApk
@@ -149,6 +150,10 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
     private val overlay = PointOverlay()
     private val lines = LineOverlay()
     private val coverageOverlay = CoverageOverlay()
+    private val edgeOverlay = EdgeOverlay()
+    private val edgePose = FloatArray(16)
+    @Volatile private var showModel = true
+    private lateinit var modelToggle: Button
     private var textureBound = false
     private var viewportWidth = 0
     private var viewportHeight = 0
@@ -206,6 +211,11 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             resumeButton.visibility = View.GONE
         }
         markToggle = ActivityCompat.requireViewById(this, R.id.scan_mark_toggle)
+        modelToggle = ActivityCompat.requireViewById(this, R.id.scan_model_toggle)
+        modelToggle.setOnClickListener {
+            showModel = !showModel
+            modelToggle.setText(if (showModel) R.string.scan_model_hide else R.string.scan_model_show)
+        }
         markPanel = ActivityCompat.requireViewById(this, R.id.scan_mark_panel)
         markStatus = ActivityCompat.requireViewById(this, R.id.scan_mark_status)
         markKind = ActivityCompat.requireViewById(this, R.id.scan_mark_kind)
@@ -541,6 +551,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         overlay.create()
         lines.create()
         coverageOverlay.create()
+        edgeOverlay.create()
         textureBound = false
     }
 
@@ -594,6 +605,8 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             camera.getProjectionMatrix(projection, 0, 0.1f, 100f)
             if (recorder.guidance.jumpHeld.not()) coverageOverlay.draw(recorder.coverage, view, projection)
             overlay.draw(recorder.overlayPoints, recorder.overlayCount, view, projection)
+            camera.pose.toMatrix(edgePose, 0)
+            edgeOverlay.draw(recorder.edges.snapshot, showModel, edgePose, view, projection)
             lines.draw(marks.snapshot(), marks.pending(), candidate, view, projection)
         }
         if (progressGate.ready(frame.timestamp)) {
