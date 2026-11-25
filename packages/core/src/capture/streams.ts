@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { PointCloudPayloadSchema } from './schema'
 
 /**
  * Payloads of the scan-bundle streams in `docs/spatial-studio/CAPTURE_CONTRACT.md`.
@@ -9,6 +10,7 @@ import { z } from 'zod'
 export const CAPTURE_MAX_KEYFRAMES = 300
 export const CAPTURE_MAX_IMAGE_LONG_EDGE = 1920
 export const CAPTURE_MAX_ARTIFACT_BYTES = 16 * 1024 * 1024
+export const CAPTURE_MAX_POINT_CLOUD_POINTS = 200_000
 
 export const CaptureProviderIdSchema = z.enum(['browser-photo', 'webxr', 'android-arcore'])
 
@@ -77,6 +79,33 @@ export const DepthKeyframeIndexSchema = z
   .object({ frames: z.array(DepthKeyframeSchema).max(CAPTURE_MAX_KEYFRAMES) })
   .superRefine((index, context) => validateUniqueFrameIds(index.frames, context))
 
+/**
+ * Depth frames naming an rgb keyframe the bundle does not have. The two
+ * indexes are separate artifacts, so this check runs once both are read.
+ */
+export function missingRgbKeyframeReferences(
+  depth: { frames: ReadonlyArray<{ rgbKeyframeId: string }> },
+  rgb: { frames: ReadonlyArray<{ id: string }> },
+): string[] {
+  const known = new Set(rgb.frames.map((frame) => frame.id))
+  return [...new Set(depth.frames.map((frame) => frame.rgbKeyframeId))].filter(
+    (id) => !known.has(id),
+  )
+}
+
+/**
+ * A `point-cloud` stream written by a capture provider: the shared payload
+ * plus the contract's downsampled bound. Older scenes keep the unbounded
+ * `PointCloudPayloadSchema`.
+ */
+export const CapturePointCloudPayloadSchema = PointCloudPayloadSchema.refine(
+  (payload) => payload.positions.length <= CAPTURE_MAX_POINT_CLOUD_POINTS * 3,
+  {
+    message: `Capture point clouds hold at most ${CAPTURE_MAX_POINT_CLOUD_POINTS} points after downsampling.`,
+    path: ['positions'],
+  },
+)
+
 const PlanePoint = z.tuple([z.number().finite(), z.number().finite()])
 
 export const CapturePlaneSchema = z
@@ -133,7 +162,8 @@ export const SensorPermissionSchema = z.enum(['granted', 'denied', 'prompt', 'no
 
 export const BrowserCapabilitiesSchema = z.object({
   secureContext: z.boolean(),
-  userAgent: z.string().max(512),
+  /** Browser family and major version, e.g. `Chrome 140`; never the full user agent. */
+  browser: z.string().max(64).nullable(),
   camera: z.object({
     mediaDevices: z.boolean(),
     /** Labels need a camera permission; the count does not. Null when enumeration failed. */
@@ -220,6 +250,7 @@ export type CameraIntrinsics = z.infer<typeof CameraIntrinsicsSchema>
 export type CaptureArtifactPointer = z.infer<typeof CaptureArtifactPointerSchema>
 export type CapturePlane = z.infer<typeof CapturePlaneSchema>
 export type CapturePlaneSet = z.infer<typeof CapturePlaneSetSchema>
+export type CapturePointCloudPayload = z.infer<typeof CapturePointCloudPayloadSchema>
 export type CaptureProviderId = z.infer<typeof CaptureProviderIdSchema>
 export type CaptureTrackingState = z.infer<typeof CaptureTrackingStateSchema>
 export type BrowserCapabilities = z.infer<typeof BrowserCapabilitiesSchema>

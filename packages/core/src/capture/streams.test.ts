@@ -1,10 +1,13 @@
 import { describe, expect, test } from 'bun:test'
-import { CaptureSessionManifestV2Schema } from './schema'
+import { CaptureSessionManifestV2Schema, PointCloudPayloadSchema } from './schema'
 import {
+  CAPTURE_MAX_POINT_CLOUD_POINTS,
   CapturePlaneSetSchema,
+  CapturePointCloudPayloadSchema,
   DepthKeyframeIndexSchema,
   DeviceCapabilitiesSchema,
   ManualMeasurementsSchema,
+  missingRgbKeyframeReferences,
   NativeCapabilitiesSchema,
   RgbKeyframeIndexSchema,
   ScanBundleMetadataSchema,
@@ -113,6 +116,34 @@ describe('depth keyframe index', () => {
   })
 })
 
+describe('depth references and point clouds', () => {
+  test('lists depth frames whose rgb keyframe is missing', () => {
+    expect(
+      missingRgbKeyframeReferences(
+        {
+          frames: [
+            { rgbKeyframeId: 'frame-1' },
+            { rgbKeyframeId: 'frame-9' },
+            { rgbKeyframeId: 'frame-9' },
+          ],
+        },
+        { frames: [{ id: 'frame-1' }] },
+      ),
+    ).toEqual(['frame-9'])
+  })
+
+  test('bounds capture point clouds at 200,000 points without touching the shared schema', () => {
+    const at = {
+      coordinateSystem: 'arcore-world',
+      positions: new Array(CAPTURE_MAX_POINT_CLOUD_POINTS * 3).fill(0),
+    }
+    const over = { ...at, positions: [...at.positions, 0, 0, 0] }
+    expect(CapturePointCloudPayloadSchema.safeParse(at).success).toBe(true)
+    expect(CapturePointCloudPayloadSchema.safeParse(over).success).toBe(false)
+    expect(PointCloudPayloadSchema.safeParse(over).success).toBe(true)
+  })
+})
+
 describe('plane set', () => {
   const wall = {
     id: 'plane-1',
@@ -173,7 +204,7 @@ describe('manual measurements', () => {
 describe('device capabilities', () => {
   const browser = {
     secureContext: true,
-    userAgent: 'test',
+    browser: 'Chrome 140',
     camera: { mediaDevices: true, videoInputs: null },
     webxr: { api: true, immersiveAr: 'supported', features: { 'depth-sensing': 'unknown' } },
     orientation: { api: true, permission: 'not-required' },
