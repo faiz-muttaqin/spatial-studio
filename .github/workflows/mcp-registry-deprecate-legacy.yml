@@ -12,7 +12,6 @@ on:
         default: deleted
 
 permissions:
-  id-token: write
   contents: read
 
 env:
@@ -21,6 +20,10 @@ env:
 
 jobs:
   deprecate:
+    if: github.repository == 'pascalorg/editor'
+    permissions:
+      id-token: write
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - name: Install MCP Registry publisher

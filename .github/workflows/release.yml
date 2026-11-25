@@ -20,7 +20,9 @@ on:
         default: false
 
 jobs:
+  # Upstream distribution only. Forks retain ordinary CI and local builds.
   cli-smoke:
+    if: github.repository == 'pascalorg/editor'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -48,6 +50,7 @@ jobs:
           bun run smoke-runtime
 
   release:
+    if: github.repository == 'pascalorg/editor'
     needs: cli-smoke
     runs-on: ubuntu-latest
     environment: npm
@@ -447,7 +450,8 @@ jobs:
   mcp-registry:
     needs: release
     if: >-
-      inputs.dry-run == false
+      github.repository == 'pascalorg/editor'
+      && inputs.dry-run == false
       && needs.release.outputs.channel == 'latest'
       && needs.release.outputs.mcp-version != ''
       && !contains(needs.release.outputs.mcp-version, '-')
@@ -466,7 +470,7 @@ jobs:
   # of a release are the same bits.
   docker:
     needs: release
-    if: inputs.dry-run == false
+    if: github.repository == 'pascalorg/editor' && inputs.dry-run == false
     strategy:
       matrix:
         include:
@@ -514,6 +518,7 @@ jobs:
           if-no-files-found: error
 
   docker-manifest:
+    if: github.repository == 'pascalorg/editor'
     needs: [release, docker]
     runs-on: ubuntu-latest
     permissions:
