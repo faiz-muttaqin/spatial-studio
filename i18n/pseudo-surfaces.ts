@@ -264,6 +264,7 @@ const roofFeaturesPath = async (base: string) =>
 export const surfaces: PseudoSurface[] = [
   { name: 'home', path: '/', data: ['Project #1'] },
   { name: 'settings', path: '/settings' },
+  { name: 'scan', path: '/scan', scope: 'main', viewport: { width: 390, height: 844 } },
   { name: 'editor', path: editorPath, steps: openEditor, data: ['Project #1'] },
   { name: 'navbar', path: editorPath, steps: openEditor, scope: 'nav', data: ['Project #1'] },
   {

@@ -459,6 +459,338 @@ msgstr "Shed"
 msgid "app.lib.buildTabState.wall"
 msgstr "Wall"
 
+#: apps/editor/app/scan/destination-picker.tsx
+msgid "app.scan.destination.existing"
+msgstr "Existing project"
+
+#: apps/editor/app/scan/destination-picker.tsx
+msgid "app.scan.destination.loading"
+msgstr "Loading projects…"
+
+#: apps/editor/app/scan/destination-picker.tsx
+msgid "app.scan.destination.name"
+msgstr "Project name"
+
+#: apps/editor/app/scan/destination-picker.tsx
+msgid "app.scan.destination.namePlaceholder"
+msgstr "Named after the scan date if left empty"
+
+#: apps/editor/app/scan/destination-picker.tsx
+msgid "app.scan.destination.new"
+msgstr "New project"
+
+#: apps/editor/app/scan/destination-picker.tsx
+msgid "app.scan.destination.project"
+msgstr "Project"
+
+#: apps/editor/app/scan/scan-app.tsx
+msgid "app.scan.done.again"
+msgstr "Scan again"
+
+#: apps/editor/app/scan/scan-app.tsx
+msgid "app.scan.done.body"
+msgstr "The capture is stored and the project now has a scan reference layer on its ground level."
+
+#: apps/editor/app/scan/scan-app.tsx
+msgid "app.scan.done.open"
+msgstr "Open project"
+
+#: apps/editor/app/scan/scan-app.tsx
+msgid "app.scan.error.attach"
+msgstr "The files are stored, but the scan could not be added to the project."
+
+#: apps/editor/app/scan/scan-app.tsx
+msgid "app.scan.error.measurements"
+msgstr "Some measurements are not valid numbers. Use metres, for example 2.75."
+
+#: apps/editor/app/scan/scan-app.tsx
+msgid "app.scan.error.noPhotos"
+msgstr "Add at least one photo first."
+
+#: apps/editor/app/scan/scan-app.tsx
+msgid "app.scan.error.upload"
+msgstr "Upload failed. Nothing was attached; you can try again."
+
+#: apps/editor/app/scan/scan-app.tsx
+msgid "app.scan.intro"
+msgstr "Capture photos and measurements on this phone. They are stored with the project as a reference layer for rebuilding the room."
+
+#: apps/editor/app/scan/measurements-form.tsx
+msgid "app.scan.measure.addDoor"
+msgstr "Add door"
+
+#: apps/editor/app/scan/measurements-form.tsx
+msgid "app.scan.measure.addWindow"
+msgstr "Add window"
+
+#: apps/editor/app/scan/measurements-form.tsx
+msgid "app.scan.measure.doorTitle"
+msgstr "Door {number}"
+
+#: apps/editor/app/scan/measurements-form.tsx
+msgid "app.scan.measure.height"
+msgstr "Height (m)"
+
+#: apps/editor/app/scan/measurements-form.tsx
+msgid "app.scan.measure.hint"
+msgstr "Enter what you measured, in metres. Leave a field empty when you do not know it; nothing is estimated."
+
+#: apps/editor/app/scan/measurements-form.tsx
+msgid "app.scan.measure.length"
+msgstr "Length (m)"
+
+#: apps/editor/app/scan/measurements-form.tsx
+msgid "app.scan.measure.notes"
+msgstr "Notes"
+
+#: apps/editor/app/scan/measurements-form.tsx
+msgid "app.scan.measure.removeOpening"
+msgstr "Remove opening"
+
+#: apps/editor/app/scan/measurements-form.tsx
+msgid "app.scan.measure.sill"
+msgstr "Sill (m)"
+
+#: apps/editor/app/scan/measurements-form.tsx
+msgid "app.scan.measure.wall"
+msgstr "Wall (e.g. north)"
+
+#: apps/editor/app/scan/measurements-form.tsx
+msgid "app.scan.measure.width"
+msgstr "Width (m)"
+
+#: apps/editor/app/scan/measurements-form.tsx
+msgid "app.scan.measure.windowTitle"
+msgstr "Window {number}"
+
+#: apps/editor/app/scan/native-scan.tsx
+msgid "app.scan.native.earlier"
+msgstr "Scans not uploaded yet"
+
+#: apps/editor/app/scan/native-scan.tsx
+msgid "app.scan.native.entry"
+msgstr "{keyframes, plural, one {# keyframe} other {# keyframes}}, {state}"
+
+#: apps/editor/app/scan/native-scan.tsx
+msgid "app.scan.native.failed"
+msgstr "The companion app reported an error: {code}"
+
+#: apps/editor/app/scan/native-scan.tsx
+msgid "app.scan.native.hint"
+msgstr "The companion app records pose, planes, depth and keyframes with ARCore, then uploads them to this site."
+
+#: apps/editor/app/scan/native-scan.tsx
+msgid "app.scan.native.start"
+msgstr "Start companion scan"
+
+#: apps/editor/app/scan/native-scan.tsx
+msgid "app.scan.native.starting"
+msgstr "Opening the scanner…"
+
+#: apps/editor/app/scan/native-scan.tsx
+msgid "app.scan.native.upload"
+msgstr "Upload this scan"
+
+#: apps/editor/app/scan/native-scan.tsx
+msgid "app.scan.native.uploading"
+msgstr "Uploading…"
+
+#: apps/editor/app/scan/native-scan.tsx
+msgid "app.scan.native.uploadShort"
+msgstr "Upload"
+
+#: apps/editor/app/scan/scan-app.tsx
+msgid "app.scan.phase.attaching"
+msgstr "Adding the scan to the project…"
+
+#: apps/editor/app/scan/scan-app.tsx
+msgid "app.scan.phase.uploading"
+msgstr "Uploading {done} of {total} files…"
+
+#: apps/editor/app/scan/photo-capture.tsx
+msgid "app.scan.photos.alt"
+msgstr "Photo {number}"
+
+#: apps/editor/app/scan/photo-capture.tsx
+msgid "app.scan.photos.choose"
+msgstr "Choose photos"
+
+#: apps/editor/app/scan/photo-capture.tsx
+msgid "app.scan.photos.count"
+msgstr "{count} of {max} photos"
+
+#: apps/editor/app/scan/photo-capture.tsx
+msgid "app.scan.photos.hint"
+msgstr "Photograph each wall, corner, door and window. Photos are resized to 1920 px and their location data is removed before upload."
+
+#: apps/editor/app/scan/photo-capture.tsx
+msgid "app.scan.photos.processing"
+msgstr "preparing {count}…"
+
+#: apps/editor/app/scan/photo-capture.tsx
+msgid "app.scan.photos.remove"
+msgstr "Remove photo {number}"
+
+#: apps/editor/app/scan/photo-capture.tsx
+msgid "app.scan.photos.take"
+msgstr "Take photo"
+
+#: apps/editor/app/scan/scan-app.tsx
+msgid "app.scan.photos.unreadable"
+msgstr "{count, plural, one {# file could not be read as a photo.} other {# files could not be read as photos.}}"
+
+#: apps/editor/app/scan/scan-app.tsx
+msgid "app.scan.photos.webxrNote"
+msgstr "Live AR capture in the browser is not part of this version. Photos with measured dimensions work on any phone."
+
+#: apps/editor/app/scan/capability-panel.tsx
+msgid "app.scan.probe.arcore"
+msgstr "ARCore"
+
+#: apps/editor/app/scan/capability-panel.tsx
+msgid "app.scan.probe.arcoreDepth"
+msgstr "ARCore depth"
+
+#: apps/editor/app/scan/capability-panel.tsx
+msgid "app.scan.probe.available"
+msgstr "Available"
+
+#: apps/editor/app/scan/capability-panel.tsx
+msgid "app.scan.probe.camera"
+msgstr "Camera"
+
+#: apps/editor/app/scan/capability-panel.tsx
+msgid "app.scan.probe.cameraCount"
+msgstr "{count, plural, one {# camera} other {# cameras}}"
+
+#: apps/editor/app/scan/capability-panel.tsx
+msgid "app.scan.probe.checking"
+msgstr "Checking this device…"
+
+#: apps/editor/app/scan/capability-panel.tsx
+msgid "app.scan.probe.companion"
+msgstr "Companion app"
+
+#: apps/editor/app/scan/capability-panel.tsx
+msgid "app.scan.probe.companionAbsent"
+msgstr "Not detected"
+
+#: apps/editor/app/scan/capability-panel.tsx
+msgid "app.scan.probe.companionFailed"
+msgstr "Not responding ({code})"
+
+#: apps/editor/app/scan/capability-panel.tsx
+msgid "app.scan.probe.companionProbing"
+msgstr "Connecting…"
+
+#: apps/editor/app/scan/capability-panel.tsx
+msgid "app.scan.probe.companionReady"
+msgstr "Connected, app {version}, bridge v{bridge}"
+
+#: apps/editor/app/scan/capability-panel.tsx
+msgid "app.scan.probe.denied"
+msgstr "Blocked"
+
+#: apps/editor/app/scan/capability-panel.tsx
+msgid "app.scan.probe.device"
+msgstr "Device"
+
+#: apps/editor/app/scan/capability-panel.tsx
+msgid "app.scan.probe.granted"
+msgstr "Allowed"
+
+#: apps/editor/app/scan/capability-panel.tsx
+msgid "app.scan.probe.motion"
+msgstr "Motion sensor"
+
+#: apps/editor/app/scan/capability-panel.tsx
+msgid "app.scan.probe.noSecureContext"
+msgstr "No: open over HTTPS"
+
+#: apps/editor/app/scan/capability-panel.tsx
+msgid "app.scan.probe.orientation"
+msgstr "Orientation sensor"
+
+#: apps/editor/app/scan/capability-panel.tsx
+msgid "app.scan.probe.prompt"
+msgstr "Asks when used"
+
+#: apps/editor/app/scan/capability-panel.tsx
+msgid "app.scan.probe.secureContext"
+msgstr "Secure connection"
+
+#: apps/editor/app/scan/capability-panel.tsx
+msgid "app.scan.probe.supported"
+msgstr "Supported"
+
+#: apps/editor/app/scan/capability-panel.tsx
+msgid "app.scan.probe.unavailable"
+msgstr "Not available"
+
+#: apps/editor/app/scan/capability-panel.tsx
+msgid "app.scan.probe.unknown"
+msgstr "Unknown until a session starts"
+
+#: apps/editor/app/scan/capability-panel.tsx
+msgid "app.scan.probe.unsupported"
+msgstr "Not supported"
+
+#: apps/editor/app/scan/capability-panel.tsx
+msgid "app.scan.probe.webxr"
+msgstr "WebXR AR session"
+
+#: apps/editor/app/scan/capability-panel.tsx
+msgid "app.scan.probe.webxrDepth"
+msgstr "WebXR depth sensing"
+
+#: apps/editor/app/scan/capability-panel.tsx
+msgid "app.scan.probe.yes"
+msgstr "Yes"
+
+#: apps/editor/app/scan/scan-app.tsx
+msgid "app.scan.provider.native"
+msgstr "Companion scan"
+
+#: apps/editor/app/scan/scan-app.tsx
+msgid "app.scan.provider.photos"
+msgstr "Photos"
+
+#: apps/editor/app/scan/scan-app.tsx
+msgid "app.scan.section.destination"
+msgstr "Save to"
+
+#: apps/editor/app/scan/scan-app.tsx
+msgid "app.scan.section.device"
+msgstr "This device"
+
+#: apps/editor/app/scan/scan-app.tsx
+msgid "app.scan.section.done"
+msgstr "Scan attached"
+
+#: apps/editor/app/scan/scan-app.tsx
+msgid "app.scan.section.measurements"
+msgstr "Measurements"
+
+#: apps/editor/app/scan/scan-app.tsx
+msgid "app.scan.section.native"
+msgstr "Companion scan"
+
+#: apps/editor/app/scan/scan-app.tsx
+msgid "app.scan.section.photos"
+msgstr "Photos"
+
+#: apps/editor/app/scan/scan-app.tsx
+msgid "app.scan.submit.attach"
+msgstr "Upload and attach to project"
+
+#: apps/editor/app/scan/scan-app.tsx
+msgid "app.scan.submit.create"
+msgstr "Upload and create project"
+
+#: apps/editor/app/scan/scan-app.tsx
+msgid "app.scan.title"
+msgstr "Scan a room"
+
 #: apps/editor/components/scene-loader.tsx
 msgid "app.sceneLoader.anotherSessionSavedFirstRefresh"
 msgstr "Another session saved first — refresh?"

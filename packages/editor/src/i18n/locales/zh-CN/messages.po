@@ -1144,6 +1144,836 @@ msgstr "单坡"
 msgid "app.lib.buildTabState.wall"
 msgstr "墙体"
 
+# Source-Hash: c77728d1508ddd3d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Existing project"
+#: apps/editor/app/scan/destination-picker.tsx
+#, fuzzy
+msgid "app.scan.destination.existing"
+msgstr "现有项目"
+
+# Source-Hash: 3bf656c4d6f1a25e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Loading projects…"
+#: apps/editor/app/scan/destination-picker.tsx
+#, fuzzy
+msgid "app.scan.destination.loading"
+msgstr "正在加载项目…"
+
+# Source-Hash: 9f2cbc9214c8f7b0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Project name"
+#: apps/editor/app/scan/destination-picker.tsx
+#, fuzzy
+msgid "app.scan.destination.name"
+msgstr "项目名称"
+
+# Source-Hash: 7c8206e0a3dc6db0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Named after the scan date if left empty"
+#: apps/editor/app/scan/destination-picker.tsx
+#, fuzzy
+msgid "app.scan.destination.namePlaceholder"
+msgstr "留空则按扫描日期命名"
+
+# Source-Hash: 008df04307a93de8
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "New project"
+#: apps/editor/app/scan/destination-picker.tsx
+#, fuzzy
+msgid "app.scan.destination.new"
+msgstr "新建项目"
+
+# Source-Hash: 6c6b7df3070f112f
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Project"
+#: apps/editor/app/scan/destination-picker.tsx
+#, fuzzy
+msgid "app.scan.destination.project"
+msgstr "项目"
+
+# Source-Hash: 68db9bacb1c8105e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Scan again"
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.done.again"
+msgstr "再次扫描"
+
+# Source-Hash: 14ec635636c57cbc
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "The capture is stored and the project now has a scan reference layer on its ground level."
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.done.body"
+msgstr "采集内容已保存，项目的首层楼层现在带有一个扫描模型参考图层。"
+
+# Source-Hash: eca2e87363143ae9
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Open project"
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.done.open"
+msgstr "打开项目"
+
+# Source-Hash: 385a8c4e774eceb8
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "The files are stored, but the scan could not be added to the project."
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.error.attach"
+msgstr "文件已保存，但无法将扫描模型添加到项目。"
+
+# Source-Hash: cc327dc2dc06e4ec
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Some measurements are not valid numbers. Use metres, for example 2.75."
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.error.measurements"
+msgstr "部分尺寸不是有效数字。请使用米，例如 2.75。"
+
+# Source-Hash: 1b35fc62cb313ce9
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Add at least one photo first."
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.error.noPhotos"
+msgstr "请先添加至少一张照片。"
+
+# Source-Hash: d0071d3021ae9985
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Upload failed. Nothing was attached; you can try again."
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.error.upload"
+msgstr "上传失败。未添加任何内容，你可以重试。"
+
+# Source-Hash: e82efb436faf47ef
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Capture photos and measurements on this phone. They are stored with the project as a reference layer for rebuilding the room."
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.intro"
+msgstr "用这部手机拍摄照片并记录尺寸。它们会作为重建房间的参考图层与项目一起保存。"
+
+# Source-Hash: ccee46b3fa1542a3
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Add door"
+#: apps/editor/app/scan/measurements-form.tsx
+#, fuzzy
+msgid "app.scan.measure.addDoor"
+msgstr "添加门"
+
+# Source-Hash: e7c8a75974a03903
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Add window"
+#: apps/editor/app/scan/measurements-form.tsx
+#, fuzzy
+msgid "app.scan.measure.addWindow"
+msgstr "添加窗"
+
+# Source-Hash: 946936ffe021230d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Door {number}"
+#: apps/editor/app/scan/measurements-form.tsx
+#, fuzzy
+msgid "app.scan.measure.doorTitle"
+msgstr "门 {number}"
+
+# Source-Hash: dd11c0e1a277ae7b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Height (m)"
+#: apps/editor/app/scan/measurements-form.tsx
+#, fuzzy
+msgid "app.scan.measure.height"
+msgstr "高度 (m)"
+
+# Source-Hash: 6fa7c6b53d2b5901
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Enter what you measured, in metres. Leave a field empty when you do not know it; nothing is estimated."
+#: apps/editor/app/scan/measurements-form.tsx
+#, fuzzy
+msgid "app.scan.measure.hint"
+msgstr "输入你测量的数值，单位为米。不知道的字段请留空；不会进行任何估算。"
+
+# Source-Hash: f69460b19ee600f6
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Length (m)"
+#: apps/editor/app/scan/measurements-form.tsx
+#, fuzzy
+msgid "app.scan.measure.length"
+msgstr "长度 (m)"
+
+# Source-Hash: 28a939dccbff00d7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Notes"
+#: apps/editor/app/scan/measurements-form.tsx
+#, fuzzy
+msgid "app.scan.measure.notes"
+msgstr "备注"
+
+# Source-Hash: 7e3505710613543f
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Remove opening"
+#: apps/editor/app/scan/measurements-form.tsx
+#, fuzzy
+msgid "app.scan.measure.removeOpening"
+msgstr "移除洞口"
+
+# Source-Hash: 857469ea6493cf25
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Sill (m)"
+#: apps/editor/app/scan/measurements-form.tsx
+#, fuzzy
+msgid "app.scan.measure.sill"
+msgstr "窗台高度 (m)"
+
+# Source-Hash: f648cd5b4e00158e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Wall (e.g. north)"
+#: apps/editor/app/scan/measurements-form.tsx
+#, fuzzy
+msgid "app.scan.measure.wall"
+msgstr "墙体（例如：北）"
+
+# Source-Hash: b143b48cd707e9cb
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Width (m)"
+#: apps/editor/app/scan/measurements-form.tsx
+#, fuzzy
+msgid "app.scan.measure.width"
+msgstr "宽度 (m)"
+
+# Source-Hash: 5cbb24f8b1ce7fb7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Window {number}"
+#: apps/editor/app/scan/measurements-form.tsx
+#, fuzzy
+msgid "app.scan.measure.windowTitle"
+msgstr "窗 {number}"
+
+# Source-Hash: 726043edb189abab
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Scans not uploaded yet"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.earlier"
+msgstr "尚未上传的扫描"
+
+# Source-Hash: 81e1405f801de1e7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "{keyframes, plural, one {# keyframe} other {# keyframes}}, {state}"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.entry"
+msgstr "{keyframes, plural, other {# 个关键帧}}，{state}"
+
+# Source-Hash: 838e0f39e51fdaae
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "The companion app reported an error: {code}"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.failed"
+msgstr "配套应用报告了错误：{code}"
+
+# Source-Hash: 6270972be99e74e0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "The companion app records pose, planes, depth and keyframes with ARCore, then uploads them to this site."
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.hint"
+msgstr "配套应用使用 ARCore 记录位姿、平面、深度和关键帧，然后将其上传到本站。"
+
+# Source-Hash: e4e15da3db73b81d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Start companion scan"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.start"
+msgstr "开始配套应用扫描"
+
+# Source-Hash: 9ae8513f7dc02a27
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Opening the scanner…"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.starting"
+msgstr "正在打开扫描器…"
+
+# Source-Hash: ceedca8a2b02b006
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Upload this scan"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.upload"
+msgstr "上传此扫描"
+
+# Source-Hash: 756844bbc7a4b1cf
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Uploading…"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.uploading"
+msgstr "正在上传…"
+
+# Source-Hash: 1120b36b44bc664a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Upload"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.uploadShort"
+msgstr "上传"
+
+# Source-Hash: a95ece46b0ab3877
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Adding the scan to the project…"
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.phase.attaching"
+msgstr "正在将扫描模型添加到项目…"
+
+# Source-Hash: cd7a51c3288258f2
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Uploading {done} of {total} files…"
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.phase.uploading"
+msgstr "正在上传第 {done} 个文件，共 {total} 个…"
+
+# Source-Hash: 376c783d1eb19211
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Photo {number}"
+#: apps/editor/app/scan/photo-capture.tsx
+#, fuzzy
+msgid "app.scan.photos.alt"
+msgstr "照片 {number}"
+
+# Source-Hash: 614d05ac08db9075
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Choose photos"
+#: apps/editor/app/scan/photo-capture.tsx
+#, fuzzy
+msgid "app.scan.photos.choose"
+msgstr "选择照片"
+
+# Source-Hash: 38afe6483a341113
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "{count} of {max} photos"
+#: apps/editor/app/scan/photo-capture.tsx
+#, fuzzy
+msgid "app.scan.photos.count"
+msgstr "{count} / {max} 张照片"
+
+# Source-Hash: bf2e88e465e2f954
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Photograph each wall, corner, door and window. Photos are resized to 1920 px and their location data is removed before upload."
+#: apps/editor/app/scan/photo-capture.tsx
+#, fuzzy
+msgid "app.scan.photos.hint"
+msgstr "拍摄每面墙体、墙角、门和窗。照片会缩小到 1920 px，并在上传前移除位置信息。"
+
+# Source-Hash: 48f20d8ae648477a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "preparing {count}…"
+#: apps/editor/app/scan/photo-capture.tsx
+#, fuzzy
+msgid "app.scan.photos.processing"
+msgstr "正在处理 {count} 张…"
+
+# Source-Hash: 97c6ac91eac0ffc3
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Remove photo {number}"
+#: apps/editor/app/scan/photo-capture.tsx
+#, fuzzy
+msgid "app.scan.photos.remove"
+msgstr "移除照片 {number}"
+
+# Source-Hash: 7352ef53f6d74ea6
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Take photo"
+#: apps/editor/app/scan/photo-capture.tsx
+#, fuzzy
+msgid "app.scan.photos.take"
+msgstr "拍照"
+
+# Source-Hash: d64d61b962686da1
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "{count, plural, one {# file could not be read as a photo.} other {# files could not be read as photos.}}"
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.photos.unreadable"
+msgstr "{count, plural, other {# 个文件无法作为照片读取。}}"
+
+# Source-Hash: 49525cef055b8358
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Live AR capture in the browser is not part of this version. Photos with measured dimensions work on any phone."
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.photos.webxrNote"
+msgstr "此版本不包含浏览器内的实时 AR 采集。带有实测尺寸的照片适用于任何手机。"
+
+# Source-Hash: a18e49d9e8f3d369
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "ARCore"
+#: apps/editor/app/scan/capability-panel.tsx
+#, fuzzy
+msgid "app.scan.probe.arcore"
+msgstr "ARCore"
+
+# Source-Hash: c026f2432e4a7e83
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "ARCore depth"
+#: apps/editor/app/scan/capability-panel.tsx
+#, fuzzy
+msgid "app.scan.probe.arcoreDepth"
+msgstr "ARCore 深度"
+
+# Source-Hash: b22e9f5cdb4a7344
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Available"
+#: apps/editor/app/scan/capability-panel.tsx
+#, fuzzy
+msgid "app.scan.probe.available"
+msgstr "可用"
+
+# Source-Hash: 14622745dbf93f4c
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Camera"
+#: apps/editor/app/scan/capability-panel.tsx
+#, fuzzy
+msgid "app.scan.probe.camera"
+msgstr "相机"
+
+# Source-Hash: 125746705f294ed9
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "{count, plural, one {# camera} other {# cameras}}"
+#: apps/editor/app/scan/capability-panel.tsx
+#, fuzzy
+msgid "app.scan.probe.cameraCount"
+msgstr "{count, plural, other {# 个相机}}"
+
+# Source-Hash: ec37a22353e4f0a8
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Checking this device…"
+#: apps/editor/app/scan/capability-panel.tsx
+#, fuzzy
+msgid "app.scan.probe.checking"
+msgstr "正在检查此设备…"
+
+# Source-Hash: b0bfd8f397e6f1d9
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Companion app"
+#: apps/editor/app/scan/capability-panel.tsx
+#, fuzzy
+msgid "app.scan.probe.companion"
+msgstr "配套应用"
+
+# Source-Hash: d0c912879c267182
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Not detected"
+#: apps/editor/app/scan/capability-panel.tsx
+#, fuzzy
+msgid "app.scan.probe.companionAbsent"
+msgstr "未检测到"
+
+# Source-Hash: f79e482ee9909442
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Not responding ({code})"
+#: apps/editor/app/scan/capability-panel.tsx
+#, fuzzy
+msgid "app.scan.probe.companionFailed"
+msgstr "无响应（{code}）"
+
+# Source-Hash: c461411bac27bea1
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Connecting…"
+#: apps/editor/app/scan/capability-panel.tsx
+#, fuzzy
+msgid "app.scan.probe.companionProbing"
+msgstr "正在连接…"
+
+# Source-Hash: bbd33c04a5b9c519
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Connected, app {version}, bridge v{bridge}"
+#: apps/editor/app/scan/capability-panel.tsx
+#, fuzzy
+msgid "app.scan.probe.companionReady"
+msgstr "已连接，应用 {version}，桥接 v{bridge}"
+
+# Source-Hash: c0ee434b7aa8dedc
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Blocked"
+#: apps/editor/app/scan/capability-panel.tsx
+#, fuzzy
+msgid "app.scan.probe.denied"
+msgstr "已阻止"
+
+# Source-Hash: 4a58d77261797015
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Device"
+#: apps/editor/app/scan/capability-panel.tsx
+#, fuzzy
+msgid "app.scan.probe.device"
+msgstr "设备"
+
+# Source-Hash: 3e811fd5d175f66b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Allowed"
+#: apps/editor/app/scan/capability-panel.tsx
+#, fuzzy
+msgid "app.scan.probe.granted"
+msgstr "已允许"
+
+# Source-Hash: f469d381d2f97733
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Motion sensor"
+#: apps/editor/app/scan/capability-panel.tsx
+#, fuzzy
+msgid "app.scan.probe.motion"
+msgstr "运动传感器"
+
+# Source-Hash: 4990f68575d33a3c
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "No: open over HTTPS"
+#: apps/editor/app/scan/capability-panel.tsx
+#, fuzzy
+msgid "app.scan.probe.noSecureContext"
+msgstr "否：请通过 HTTPS 打开"
+
+# Source-Hash: aea234b94d51f672
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Orientation sensor"
+#: apps/editor/app/scan/capability-panel.tsx
+#, fuzzy
+msgid "app.scan.probe.orientation"
+msgstr "方向传感器"
+
+# Source-Hash: 3c5024a32de28e69
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Asks when used"
+#: apps/editor/app/scan/capability-panel.tsx
+#, fuzzy
+msgid "app.scan.probe.prompt"
+msgstr "使用时询问"
+
+# Source-Hash: 03b4911d194a9369
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Secure connection"
+#: apps/editor/app/scan/capability-panel.tsx
+#, fuzzy
+msgid "app.scan.probe.secureContext"
+msgstr "安全连接"
+
+# Source-Hash: 5656e9b4c8d971bc
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Supported"
+#: apps/editor/app/scan/capability-panel.tsx
+#, fuzzy
+msgid "app.scan.probe.supported"
+msgstr "支持"
+
+# Source-Hash: 60922503e2e8ab10
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Not available"
+#: apps/editor/app/scan/capability-panel.tsx
+#, fuzzy
+msgid "app.scan.probe.unavailable"
+msgstr "不可用"
+
+# Source-Hash: 4c945d5668841136
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Unknown until a session starts"
+#: apps/editor/app/scan/capability-panel.tsx
+#, fuzzy
+msgid "app.scan.probe.unknown"
+msgstr "会话开始前未知"
+
+# Source-Hash: 26ce87746094707a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Not supported"
+#: apps/editor/app/scan/capability-panel.tsx
+#, fuzzy
+msgid "app.scan.probe.unsupported"
+msgstr "不支持"
+
+# Source-Hash: 14b5b0ad9e5693bd
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "WebXR AR session"
+#: apps/editor/app/scan/capability-panel.tsx
+#, fuzzy
+msgid "app.scan.probe.webxr"
+msgstr "WebXR AR 会话"
+
+# Source-Hash: f339886723562825
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "WebXR depth sensing"
+#: apps/editor/app/scan/capability-panel.tsx
+#, fuzzy
+msgid "app.scan.probe.webxrDepth"
+msgstr "WebXR 深度感知"
+
+# Source-Hash: 184fda5c980b9d9c
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Yes"
+#: apps/editor/app/scan/capability-panel.tsx
+#, fuzzy
+msgid "app.scan.probe.yes"
+msgstr "是"
+
+# Source-Hash: cd120d70bf9170f7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Companion scan"
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.provider.native"
+msgstr "配套应用扫描"
+
+# Source-Hash: a9e5b4262fdbf3e9
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Photos"
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.provider.photos"
+msgstr "照片"
+
+# Source-Hash: e1d9ccdb04968c1a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Save to"
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.section.destination"
+msgstr "保存到"
+
+# Source-Hash: b3c2cb2eb7703f46
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "This device"
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.section.device"
+msgstr "此设备"
+
+# Source-Hash: 5ba22be9d69e6ada
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Scan attached"
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.section.done"
+msgstr "已添加扫描模型"
+
+# Source-Hash: c6aa74075f37313a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Measurements"
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.section.measurements"
+msgstr "尺寸"
+
+# Source-Hash: cd120d70bf9170f7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Companion scan"
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.section.native"
+msgstr "配套应用扫描"
+
+# Source-Hash: a9e5b4262fdbf3e9
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Photos"
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.section.photos"
+msgstr "照片"
+
+# Source-Hash: cb07b25103a690d5
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Upload and attach to project"
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.submit.attach"
+msgstr "上传并添加到项目"
+
+# Source-Hash: 9108321fe5de2060
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Upload and create project"
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.submit.create"
+msgstr "上传并创建项目"
+
+# Source-Hash: 60719018fc6cb91b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Scan a room"
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.title"
+msgstr "扫描房间"
+
 # Source-Hash: 8d17e7556ce142da
 # Review: required
 # AI-Provider: claude-code
