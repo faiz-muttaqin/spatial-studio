@@ -81,6 +81,9 @@ class BundleInput(
     val sensorOrientationDeg: Int?,
     /** Extra provider details kept under `metadata.arcore`. */
     val arcore: JsonObject,
+    /** v1.1 sensor streams; null when the sensors were off for the whole scan. */
+    val sensors: SensorCapture? = null,
+    val lightEstimates: List<LightRecord> = emptyList(),
 )
 
 class ArtifactFile(val path: String, val sha256: String, val byteLength: Long, val mediaType: String) {
@@ -203,6 +206,100 @@ object ScanBundle {
                 }
             }
         }
+    }
+
+    /** Rounds for JSON; an angle that rounds up to 360 becomes 0 so it stays in [0, 360). */
+    private fun bearing(deg: Double): JsonPrimitive {
+        val v = JsonUtil.rounded(deg, 2)
+        return if (v.content.toDouble() >= 360.0) JsonPrimitive(0.0) else v
+    }
+
+    private fun nullable(value: Double?, decimals: Int): JsonElement = value?.let { JsonUtil.rounded(it, decimals) } ?: JsonNull
+
+    private fun vector(values: DoubleArray?, decimals: Int): JsonElement =
+        values?.let { v -> JsonArray(v.map { JsonUtil.rounded(it, decimals) }) } ?: JsonNull
+
+    fun deviceOrientation(samples: List<DeviceOrientationData>): JsonObject = buildJsonObject {
+        putJsonArray("samples") {
+            for (s in samples) {
+                addJsonObject {
+                    put("timestamp", s.timestampNs)
+                    put("q", vector(doubleArrayOf(s.q.x, s.q.y, s.q.z, s.q.w), 6))
+                    put("headingAccuracyDeg", nullable(s.headingAccuracyDeg, 1))
+                }
+            }
+        }
+    }
+
+    fun heading(samples: List<HeadingData>): JsonObject = buildJsonObject {
+        putJsonArray("samples") {
+            for (s in samples) {
+                addJsonObject {
+                    put("timestamp", s.timestampNs)
+                    put("azimuthMagneticDeg", bearing(s.azimuthMagneticDeg))
+                    put("azimuthTrueDeg", s.azimuthTrueDeg?.let(::bearing) ?: JsonNull)
+                    put("declinationDeg", nullable(s.declinationDeg, 2))
+                    put("magnetometerAccuracy", s.magnetometerAccuracy)
+                    put("headingAccuracyDeg", nullable(s.headingAccuracyDeg, 1))
+                    put("worldBearingDeg", bearing(s.worldBearingDeg))
+                }
+            }
+        }
+    }
+
+    fun geolocation(fixes: List<LocationFix>): JsonObject = buildJsonObject {
+        putJsonArray("fixes") {
+            for (f in fixes) {
+                addJsonObject {
+                    put("timestamp", f.timestampMs)
+                    put("latitude", JsonUtil.rounded(f.latitude, 5))
+                    put("longitude", JsonUtil.rounded(f.longitude, 5))
+                    put("altitudeM", nullable(f.altitudeM, 1))
+                    put("accuracyM", JsonUtil.rounded(f.accuracyM, 1))
+                    put("provider", f.provider)
+                }
+            }
+        }
+    }
+
+    fun lightEstimates(records: List<LightRecord>): JsonObject = buildJsonObject {
+        putJsonArray("estimates") {
+            for (r in records) {
+                addJsonObject {
+                    put("keyframeId", r.keyframeId)
+                    put("timestamp", r.timestampNs)
+                    put("mode", r.mode)
+                    put("state", if (r.valid) "valid" else "invalid")
+                    put("pixelIntensity", nullable(r.pixelIntensity, 4))
+                    put("colorCorrection", vector(r.colorCorrection, 4))
+                    put("mainLightDirection", vector(r.mainLightDirection, 6))
+                    put("mainLightIntensity", vector(r.mainLightIntensity, 4))
+                }
+            }
+        }
+    }
+
+    fun barometer(samples: List<PressureSample>): JsonObject = buildJsonObject {
+        putJsonArray("samples") {
+            for (s in samples) {
+                addJsonObject {
+                    put("timestamp", s.timestampNs)
+                    put("hPa", JsonUtil.rounded(s.hPa, 3))
+                }
+            }
+        }
+    }
+
+    fun trueNorth(result: TrueNorthResult): JsonObject = buildJsonObject {
+        // (-180, 180]: a value that rounds to -180 is the same direction as +180.
+        val yaw = JsonUtil.rounded(result.worldYawDeg, 2).content.toDouble().let { if (it <= -180.0) 180.0 else it }
+        put("worldYawDeg", yaw)
+        put("confidence", JsonUtil.rounded(result.confidence.coerceIn(0.0, 1.0), 3))
+        put("method", result.method)
+        put("reference", result.reference)
+        put("spreadDeg", JsonUtil.rounded(result.spreadDeg, 2))
+        put("sampleCount", result.sampleCount)
+        put("declinationDeg", nullable(result.declinationDeg, 2))
     }
 
     /** Planes the contract can represent: at least three boundary points, finite values. */
@@ -345,6 +442,76 @@ class ScanBundleWriter(private val dir: File) {
             }
         }
 
+        val sensors = input.sensors
+        var trueNorth: TrueNorthResult? = null
+        if (sensors != null) {
+            warnings += sensors.warnings
+            val streamMeta = { count: Int ->
+                buildJsonObject {
+                    put("source", "rotation-vector")
+                    put("timestampSource", sensors.timestampSource)
+                    put("count", count)
+                }
+            }
+            fun jsonStream(id: String, role: String, clock: String, frame: String?, file: ArtifactFile, meta: JsonObject) = buildJsonObject {
+                put("id", id)
+                put("kind", id)
+                put("role", role)
+                put("availability", "ready")
+                frame?.let { put("frameId", it) }
+                put("clockId", clock)
+                put("artifact", ScanBundle.artifactRef(sessionId, id, file))
+                put("metadata", meta)
+            }
+            if (sensors.orientation.isNotEmpty()) {
+                val file = writeJson("device-orientation.json", ScanBundle.deviceOrientation(sensors.orientation))
+                streams += jsonStream("device-orientation", "orientation", "device", null, file, streamMeta(sensors.orientation.size))
+            }
+            if (sensors.heading.isNotEmpty()) {
+                val file = writeJson("heading.json", ScanBundle.heading(sensors.heading))
+                streams += jsonStream("heading", "heading", "device", null, file, streamMeta(sensors.heading.size))
+                trueNorth = NorthEstimator.estimate(sensors.heading)
+            }
+            if (sensors.fixes.isNotEmpty()) {
+                val file = writeJson("geolocation.json", ScanBundle.geolocation(sensors.fixes))
+                streams += jsonStream(
+                    "geolocation", "geolocation", "wall", null, file,
+                    buildJsonObject {
+                        put("source", "location-manager")
+                        put("count", sensors.fixes.size)
+                    },
+                )
+            }
+            if (sensors.pressure.isNotEmpty()) {
+                val file = writeJson("barometer.json", ScanBundle.barometer(sensors.pressure))
+                streams += jsonStream(
+                    "barometer", "barometer", "device", null, file,
+                    buildJsonObject {
+                        put("source", "pressure-sensor")
+                        put("count", sensors.pressure.size)
+                    },
+                )
+            }
+        }
+        val lightRecords = input.lightEstimates.filter { it.keyframeId in keyframeIds }
+        if (lightRecords.isNotEmpty()) {
+            val file = writeJson("light-estimate.json", ScanBundle.lightEstimates(lightRecords))
+            streams += buildJsonObject {
+                put("id", "light-estimate")
+                put("kind", "light-estimate")
+                put("role", "lightEstimate")
+                put("availability", "ready")
+                put("frameId", "world")
+                put("clockId", "device")
+                put("artifact", ScanBundle.artifactRef(sessionId, "light-estimate", file))
+                putJsonObject("metadata") {
+                    put("source", "arcore")
+                    put("mode", lightRecords.first().mode)
+                    put("count", lightRecords.size)
+                }
+            }
+        }
+
         streams += buildJsonObject {
             put("id", "device-capabilities")
             put("kind", "device-capabilities")
@@ -401,6 +568,7 @@ class ScanBundleWriter(private val dir: File) {
                     put("sensorOrientationDeg", input.sensorOrientationDeg)
                 }
                 put("arcore", input.arcore)
+                trueNorth?.let { put("trueNorth", ScanBundle.trueNorth(it)) }
             }
         }
 

@@ -14,6 +14,10 @@ data class ScanOptions(
     val keyframeSpacingM: Double = DEFAULT_SPACING_M,
     val keyframeAngleDeg: Double = DEFAULT_ANGLE_DEG,
     val maxKeyframes: Int = MAX_KEYFRAMES,
+    /** Orientation, heading, light estimate and barometer. */
+    val sensors: Boolean = true,
+    /** Approximate location for `geolocation` and the compass declination. Off unless the page opts in. */
+    val location: Boolean = false,
 ) {
     companion object {
         const val DEFAULT_SPACING_M = 0.25
@@ -75,7 +79,11 @@ object ScanParams {
             if (v < 1 || v > ScanOptions.MAX_KEYFRAMES) invalid("options.maxKeyframes must be between 1 and ${ScanOptions.MAX_KEYFRAMES}")
             v
         }
+        val sensors = o["sensors"]?.let { (it as? JsonPrimitive)?.takeIf { p -> !p.isString }?.booleanOrNull ?: invalid("options.sensors must be a boolean") }
+        val location = o["location"]?.let { (it as? JsonPrimitive)?.takeIf { p -> !p.isString }?.booleanOrNull ?: invalid("options.location must be a boolean") }
         return ScanOptions(
+            sensors = sensors ?: defaults.sensors,
+            location = location ?: defaults.location,
             depth = depth ?: defaults.depth,
             keyframeSpacingM = spacing ?: defaults.keyframeSpacingM,
             maxKeyframes = max ?: defaults.maxKeyframes,

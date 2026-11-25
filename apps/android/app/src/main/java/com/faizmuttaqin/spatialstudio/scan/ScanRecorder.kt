@@ -9,6 +9,7 @@ import android.media.Image
 import android.util.Log
 import com.google.ar.core.Camera
 import com.google.ar.core.CameraIntrinsics
+import com.google.ar.core.Config
 import com.google.ar.core.Frame
 import com.google.ar.core.Plane
 import com.google.ar.core.Session
@@ -39,6 +40,11 @@ class ScanRecorder(
     val keyframes: MutableList<KeyframeRecord> = Collections.synchronizedList(ArrayList())
     val depthFrames: MutableList<DepthRecord> = Collections.synchronizedList(ArrayList())
     val warnings: MutableSet<String> = Collections.synchronizedSet(LinkedHashSet())
+    val lightEstimates: MutableList<LightRecord> = Collections.synchronizedList(ArrayList())
+
+    /** Set by the scan screen; off when the sensors toggle is off or the mode is DISABLED. */
+    @Volatile
+    var lightMode: Config.LightEstimationMode = Config.LightEstimationMode.DISABLED
 
     @Volatile
     var depthKind: String? = depthKind
@@ -63,6 +69,12 @@ class ScanRecorder(
     var overlayCount = 0
         private set
 
+    /** Sensors toggle: off stops light estimates and drops those already taken. */
+    fun setLightEnabled(enabled: Boolean, configured: Config.LightEstimationMode) {
+        lightMode = if (enabled) configured else Config.LightEstimationMode.DISABLED
+        if (!enabled) lightEstimates.clear()
+    }
+
     private val encoder = Executors.newSingleThreadExecutor()
     private val pending = AtomicInteger()
     private val planeIds = HashMap<Plane, String>()
@@ -80,6 +92,7 @@ class ScanRecorder(
         val minConfidence: Float,
         val keyframes: List<KeyframeRecord>,
         val depth: List<DepthRecord>,
+        val lightEstimates: List<LightRecord>,
     )
 
     /** GL thread. Synchronized with [stop] and [captured] so finalizing never races a frame. */
@@ -148,6 +161,7 @@ class ScanRecorder(
         }
         val imageIntrinsics = intrinsicsFor(camera.imageIntrinsics, width, height)
         val depth = captureDepth(frame, camera)
+        val light = lightRecord(frame, timestamp)
 
         val keyframePose = pose.copyOf()
         val id = "kf-%04d".format(Locale.ROOT, selector.reserve(timestamp, keyframePose))
@@ -170,6 +184,7 @@ class ScanRecorder(
                     ),
                 )
                 depthRecord?.let(depthFrames::add)
+                light?.let { lightEstimates.add(it.copy(keyframeId = id)) }
                 stored = true
             } catch (e: OutOfMemoryError) {
                 // Skip this keyframe; the next one gets a fresh chance.
@@ -187,6 +202,17 @@ class ScanRecorder(
                 }
                 pending.decrementAndGet()
             }
+        }
+    }
+
+    /** The frame's light estimate, with the keyframe id filled in once the keyframe is stored. */
+    private fun lightRecord(frame: Frame, timestamp: Long): LightRecord? {
+        val mode = lightMode
+        if (mode == Config.LightEstimationMode.DISABLED) return null
+        return try {
+            LightMath.fromEstimate(frame.lightEstimate, mode == Config.LightEstimationMode.ENVIRONMENTAL_HDR, timestamp)
+        } catch (e: Exception) {
+            null
         }
     }
 
@@ -336,6 +362,7 @@ class ScanRecorder(
             minConfidence = voxels.minConfidence,
             keyframes = keyframes,
             depth = depthFrames.toList().filter { it.rgbKeyframeId in ids }.sortedBy { it.timestampNs },
+            lightEstimates = lightEstimates.toList().filter { it.keyframeId in ids }.sortedBy { it.timestampNs },
         )
     }
 

@@ -16,6 +16,7 @@ import android.view.Surface
 import android.view.View
 import android.view.WindowManager
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -40,6 +41,7 @@ import com.google.ar.core.TrackingFailureReason
 import com.google.ar.core.TrackingState
 import com.google.ar.core.exceptions.CameraNotAvailableException
 import com.google.ar.core.exceptions.SessionPausedException
+import com.google.ar.core.exceptions.UnsupportedConfigurationException
 import com.google.ar.core.exceptions.UnavailableDeviceNotCompatibleException
 import com.google.ar.core.exceptions.UnavailableException
 import com.google.ar.core.exceptions.UnavailableUserDeclinedInstallationException
@@ -66,6 +68,9 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
     private lateinit var hintText: TextView
     private lateinit var finishButton: Button
     private lateinit var cancelButton: Button
+    private lateinit var sensorsText: TextView
+    private lateinit var sensorsToggle: CheckBox
+    private lateinit var locationToggle: CheckBox
 
     @Volatile private var phase = Phase.STARTING
     private var session: Session? = null
@@ -74,6 +79,13 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
     private var capabilitiesProbedAtMs = 0L
     private var cameraConfigJson: JsonObject = JsonObject(emptyMap())
     private var sensorOrientationDeg: Int? = null
+    private var cameraClockRealtime = false
+    private var sensorRecorder: SensorRecorder? = null
+    private var lightMode = Config.LightEstimationMode.DISABLED
+    private var locationRequested = false
+    private var locationDenied = false
+    private var updatingToggles = false
+    private val headingPose = FloatArray(16)
     private var installRequested = false
     private var permissionRequested = false
     private var createdAtMs = 0L
@@ -92,6 +104,18 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
 
     private val cameraPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (!granted) fail(BridgeErrorCode.PERMISSION_DENIED, getString(R.string.scan_camera_denied))
+    }
+
+    private val locationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) {
+            locationDenied = true
+            Toast.makeText(this, R.string.scan_location_denied, Toast.LENGTH_LONG).show()
+        }
+        // Before the session exists, createSession reads the permission state on the next resume.
+        sensorRecorder?.let { recorder ->
+            recorder.setLocationEnabled(granted)
+            setToggles(recorder)
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -116,6 +140,24 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         hintText = ActivityCompat.requireViewById(this, R.id.scan_hint)
         finishButton = ActivityCompat.requireViewById(this, R.id.scan_finish)
         cancelButton = ActivityCompat.requireViewById(this, R.id.scan_cancel)
+        sensorsText = ActivityCompat.requireViewById(this, R.id.scan_sensors)
+        sensorsToggle = ActivityCompat.requireViewById(this, R.id.scan_toggle_sensors)
+        locationToggle = ActivityCompat.requireViewById(this, R.id.scan_toggle_location)
+        sensorsToggle.setOnCheckedChangeListener { _, checked ->
+            if (updatingToggles) return@setOnCheckedChangeListener
+            sensorRecorder?.setSensorsEnabled(checked)
+            recorder?.setLightEnabled(checked, lightMode)
+            if (!checked) sensorsText.setText(R.string.scan_sensors_off)
+        }
+        locationToggle.setOnCheckedChangeListener { _, checked ->
+            if (updatingToggles) return@setOnCheckedChangeListener
+            val sensors = sensorRecorder ?: return@setOnCheckedChangeListener
+            if (checked && !sensors.hasLocationPermission()) {
+                locationPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+            } else {
+                sensors.setLocationEnabled(checked)
+            }
+        }
 
         val hud = ActivityCompat.requireViewById<View>(this, R.id.scan_hud)
         val controls = ActivityCompat.requireViewById<View>(this, R.id.scan_controls)
@@ -164,6 +206,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             startedAtElapsed = SystemClock.elapsedRealtime()
             finishButton.isEnabled = true
         }
+        sensorRecorder?.start()
         ScanCoordinator.state(scan.sessionId, "scanning")
     }
 
@@ -172,6 +215,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         if (!::scan.isInitialized) return
         // Stop rendering first, then release the camera. No capture continues in the background.
         surface.onPause()
+        sensorRecorder?.stop()
         session?.pause()
         if (phase == Phase.SCANNING && !isFinishing) ScanCoordinator.state(scan.sessionId, "paused")
     }
@@ -181,6 +225,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             // Destroyed without Finish (for example the system reclaimed the screen): discard.
             discardPartial("cancelled", null)
         }
+        sensorRecorder?.stop()
         session?.close()
         session = null
         finalizer.shutdown()
@@ -194,6 +239,14 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                 permissionRequested = true
                 cameraPermission.launch(Manifest.permission.CAMERA)
             }
+            return false
+        }
+        if (scan.options.location && !locationRequested &&
+            checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED
+        ) {
+            // Only on the page's opt-in, and only the approximate permission: sun and declination need kilometres.
+            locationRequested = true
+            locationPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
             return false
         }
         try {
@@ -252,7 +305,22 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             fail(BridgeErrorCode.INTERNAL, "Could not create scan storage")
             return false
         }
-        recorder = ScanRecorder(dir, scan.options, depthKind)
+        val scanRecorder = ScanRecorder(dir, scan.options, depthKind)
+        scanRecorder.lightMode = lightMode
+        recorder = scanRecorder
+        val sensors = SensorRecorder(
+            this,
+            clocksComparable = cameraClockRealtime,
+            sensors = scan.options.sensors,
+            location = scan.options.location,
+        )
+        // The permission may have been refused while the scan screen was asking for it.
+        if (scan.options.location && !sensors.hasLocationPermission()) {
+            locationDenied = true
+            sensors.setLocationEnabled(false)
+        }
+        sensorRecorder = sensors
+        setToggles(sensors)
         capabilitiesProbedAtMs = System.currentTimeMillis()
         capabilities = runCatching { CapabilityProbe(this).probe(session = currentSession) }.getOrNull()
         return true
@@ -272,6 +340,11 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                 ?.getCameraCharacteristics(chosen.cameraId)
                 ?.get(CameraCharacteristics.SENSOR_ORIENTATION)
         }.getOrNull()
+        cameraClockRealtime = runCatching {
+            getSystemService(CameraManager::class.java)
+                ?.getCameraCharacteristics(chosen.cameraId)
+                ?.get(CameraCharacteristics.SENSOR_INFO_TIMESTAMP_SOURCE) == CameraCharacteristics.SENSOR_INFO_TIMESTAMP_SOURCE_REALTIME
+        }.getOrDefault(false)
         cameraConfigJson = buildJsonObject {
             put("imageWidth", chosen.imageSize.width)
             put("imageHeight", chosen.imageSize.height)
@@ -285,7 +358,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         val config = Config(session).apply {
             focusMode = Config.FocusMode.AUTO
             planeFindingMode = Config.PlaneFindingMode.HORIZONTAL_AND_VERTICAL
-            lightEstimationMode = Config.LightEstimationMode.DISABLED
+            lightEstimationMode = if (scan.options.sensors) Config.LightEstimationMode.ENVIRONMENTAL_HDR else Config.LightEstimationMode.DISABLED
             instantPlacementMode = Config.InstantPlacementMode.DISABLED
             depthMode = when {
                 !scan.options.depth -> Config.DepthMode.DISABLED
@@ -294,7 +367,23 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                 else -> Config.DepthMode.DISABLED
             }
         }
-        session.configure(config)
+        try {
+            session.configure(config)
+        } catch (e: UnsupportedConfigurationException) {
+            if (config.lightEstimationMode == Config.LightEstimationMode.DISABLED) throw e
+            config.lightEstimationMode = Config.LightEstimationMode.AMBIENT_INTENSITY
+            session.configure(config)
+        }
+        lightMode = config.lightEstimationMode
+    }
+
+    private fun setToggles(sensors: SensorRecorder) {
+        runOnUiThread {
+            updatingToggles = true
+            sensorsToggle.isChecked = sensors.sensorsEnabled
+            locationToggle.isChecked = sensors.locationEnabled
+            updatingToggles = false
+        }
     }
 
     // --- GL thread ---
@@ -341,6 +430,10 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         if (phase == Phase.SCANNING) {
             try {
                 recorder.onFrame(session, frame, camera)
+                if (camera.trackingState == TrackingState.TRACKING) {
+                    camera.pose.toMatrix(headingPose, 0)
+                    sensorRecorder?.onFrame(frame.timestamp, headingPose)
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "Frame processing failed", e)
             }
@@ -384,7 +477,41 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                 keyframes, recorder.selector.maxKeyframes, planes, points, seconds / 60, seconds % 60,
             )
             if (recorder.selector.limitReached) hintText.setText(R.string.scan_keyframe_limit)
+            sensorRecorder?.let { updateSensorsText(it) }
         }
+    }
+
+    private fun updateSensorsText(sensors: SensorRecorder) {
+        if (!sensors.sensorsEnabled) {
+            sensorsText.setText(R.string.scan_sensors_off)
+            return
+        }
+        val live = sensors.live
+        val heading = if (live == null) {
+            getString(if (sensors.hasRotationVector) R.string.scan_heading_wait else R.string.scan_heading_unavailable)
+        } else {
+            val true_ = live.azimuthTrueDeg
+            getString(
+                R.string.scan_heading,
+                Math.round(true_ ?: live.azimuthMagneticDeg).toInt() % 360,
+                getString(if (true_ != null) R.string.scan_heading_true else R.string.scan_heading_magnetic),
+                getString(compassLabel(live.magnetometerAccuracy)),
+                live.headingAccuracyDeg?.let { getString(R.string.scan_heading_accuracy, Math.round(it).toInt()) } ?: "",
+            )
+        }
+        val location = if (sensors.locationEnabled) {
+            "\n" + if (sensors.fixCount == 0) getString(R.string.scan_location_waiting) else getString(R.string.scan_location_fixes, sensors.fixCount)
+        } else {
+            ""
+        }
+        sensorsText.text = heading + location
+    }
+
+    private fun compassLabel(accuracy: Int): Int = when (accuracy) {
+        3 -> R.string.compass_high
+        2 -> R.string.compass_medium
+        1 -> R.string.compass_low
+        else -> R.string.compass_unreliable
     }
 
     private fun trackingLabel(state: TrackingState, failure: TrackingFailureReason): String = getString(
@@ -410,6 +537,9 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         cancelButton.isEnabled = false
         statusText.setText(R.string.scan_saving)
         ScanCoordinator.state(scan.sessionId, "finalizing")
+        sensorsToggle.isEnabled = false
+        locationToggle.isEnabled = false
+        sensorRecorder?.stop()
         val planes = recorder?.latestPlanes.orEmpty()
         finalizer.execute { finalizeBundle(planes) }
     }
@@ -423,6 +553,18 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             val keyframes = captured.keyframes
             if (planes.isEmpty()) recorder.warnings.add("no-planes-detected")
             if (keyframes.isEmpty()) recorder.warnings.add("no-keyframes")
+            val sensors = sensorRecorder
+            val sensorCapture = sensors?.takeIf { it.sensorsEnabled || it.locationEnabled }?.captured()
+            if (sensors != null) {
+                if (sensors.sensorsEnabled && !sensors.hasRotationVector) recorder.warnings.add("rotation-vector-unavailable")
+                if (sensors.sensorsEnabled && NorthEstimator.estimate(sensorCapture?.heading.orEmpty()) == null) {
+                    recorder.warnings.add("true-north-unavailable")
+                }
+                if (scan.options.location || sensors.locationEnabled) {
+                    if (!sensors.locationEnabled && locationDenied) recorder.warnings.add("location-permission-denied")
+                    else if (sensors.locationEnabled && sensorCapture?.fixes.isNullOrEmpty()) recorder.warnings.add("location-unavailable")
+                }
+            }
             val input = BundleInput(
                 sessionId = scan.sessionId,
                 projectId = scan.projectId,
@@ -449,6 +591,9 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                     put("keyframeAngleDeg", scan.options.keyframeAngleDeg)
                     put("maxKeyframes", scan.options.maxKeyframes)
                 },
+                // A group the user switched off is empty, so only what was recorded is written.
+                sensors = sensorCapture,
+                lightEstimates = captured.lightEstimates,
             )
             val bundle = ScanBundleWriter(store.dir(scan.sessionId)).finalize(input)
             val record = store.read(scan.sessionId)

@@ -37,6 +37,33 @@
             android:textSize="14sp" />
 
         <TextView
+            android:id="@+id/scan_sensors"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:fontFamily="monospace"
+            android:text="@string/scan_heading_wait"
+            android:textColor="@color/brand_foreground"
+            android:textSize="14sp" />
+
+        <CheckBox
+            android:id="@+id/scan_toggle_sensors"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:checked="true"
+            android:text="@string/scan_toggle_sensors"
+            android:textColor="@color/brand_foreground"
+            android:textSize="14sp" />
+
+        <CheckBox
+            android:id="@+id/scan_toggle_location"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/scan_toggle_location"
+            android:textColor="@color/brand_foreground"
+            android:textSize="14sp" />
+
+        <TextView
             android:id="@+id/scan_hint"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

@@ -35,6 +35,22 @@ class ScanParamsTest {
     }
 
     @Test
+    fun locationIsOffByDefaultAndSensorsAreOn() {
+        val options = ScanParams.start(params("{}")).options
+        assertFalse(options.location)
+        assertTrue(options.sensors)
+    }
+
+    @Test
+    fun readsSensorOptIns() {
+        val on = ScanParams.start(params("""{"options":{"location":true,"sensors":false}}""")).options
+        assertTrue(on.location)
+        assertFalse(on.sensors)
+        invalid { ScanParams.start(params("""{"options":{"location":"yes"}}""")) }
+        invalid { ScanParams.start(params("""{"options":{"sensors":1}}""")) }
+    }
+
+    @Test
     fun rejectsBadOptions() {
         invalid { ScanParams.start(params("""{"options":{"depth":"yes"}}""")) }
         invalid { ScanParams.start(params("""{"options":{"keyframeSpacingM":0.001}}""")) }
