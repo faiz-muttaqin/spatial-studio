@@ -29,6 +29,7 @@ A bundle is one `CaptureSessionManifest` schema version 2 (`packages/core/src/ca
 - `coordinateFrames`: `{ id: "world", convention: "arcore-world" }` for the companion (right-handed, Y up, metres, gravity aligned, origin at session start) or `"webxr-local-floor"` for WebXR. Browser-photo bundles have no world frame.
 - Matrices are 16 numbers, column-major (Three.js `Matrix4.fromArray` and ARCore `Pose.toMatrix` order), camera-to-world.
 - Camera poses use OpenGL camera axes: +X right, +Y up, -Z along the view direction. For `android-arcore`, keyframe and trajectory poses are ARCore `Camera.getPose()`, whose right and up are relative to the image readout, so they match the stored, unrotated JPEG and its intrinsics (`Camera.getImageIntrinsics()`, scaled to the stored size); depth intrinsics are `Camera.getTextureIntrinsics()` scaled to the depth image. The manifest records this as `metadata.camera: { convention: "opengl", frame: "image-readout", sensorOrientationDeg }`. Consumers using the computer-vision convention (+Y down, +Z forward) flip the Y and Z axes of the camera frame.
+- Depth unprojection uses integer pixel indices with no half-pixel offset, as in the ARCore raw depth sample: for the pixel at column `x`, row `y` and depth `d` metres along the optical axis, the camera-frame point is `[d(x - cx)/fx, d(cy - y)/fy, -d]`, with `fx, fy, cx, cy` the depth intrinsics stored with the frame. Adding 0.5 would shift points by half a depth pixel, about 1.5 cm at 5 m.
 - `clocks`: `{ id: "device", timebase: "nanoseconds" }` for ARCore frame timestamps and `{ id: "wall", timebase: "milliseconds", epoch: "unix" }` for capture times.
 
 ### Streams
@@ -153,7 +154,7 @@ type BridgeRequest = { v: 1; id: string; method: string; params?: Record<string,
 type BridgeReply =
   | { v: 1; id: string; ok: true; result: unknown }
   | { v: 1; id: string; ok: false; error: { code: string; message: string } }
-type BridgeEvent = { v: 1; event: 'scan.state' | 'scan.progress' | 'upload.progress'; data: unknown }
+type BridgeEvent = { v: 1; event: 'scan.state' | 'scan.progress' | 'upload.progress' | 'upload.done'; data: unknown }
 ```
 
 Event `data` is an object that carries the `sessionId` it belongs to. The page extends a pending `scan.upload` timeout only on `upload.progress` events for that upload's session.
@@ -167,9 +168,10 @@ Error codes: `forbidden`, `invalid_request`, `unknown_method`, `unsupported`, `p
 | `bridge.hello` | none | `{ bridgeVersion: 1, appVersion, platform: "android", methods: string[] }` |
 | `capabilities.get` | none | `{ arcore: { availability, depth: boolean, rawDepth: boolean }, cameras: [{ id, facing, focalLengths, intrinsics, depthOutput, logicalMultiCamera, physicalIds }], sensors: { accelerometer, gyroscope, rotationVector, magnetometer, barometer, ... }, device: { manufacturer, model, sdkInt, webViewVersion } }` |
 | `scan.start` | `{ projectId?, options?: { depth?: boolean, keyframeSpacingM?: number, maxKeyframes?: number, location?: boolean, sensors?: boolean } }` | `{ sessionId }`, then `scan.state` and `scan.progress` events while the native scan screen runs |
-| `scan.list` | none | `[{ sessionId, createdAt, state, keyframes, bytes, uploaded }]` |
-| `scan.upload` | `{ sessionId }` | `{ sessionId, manifestUrl, manifestSha256 }` after every artifact and the manifest are stored; `upload.progress` events meanwhile |
+| `scan.list` | none | `[{ sessionId, createdAt, state, keyframes, bytes, uploaded, uploading?, attached?, projectId?, manifestUrl? }]`; `manifestUrl` is present once `uploaded` is true |
+| `scan.upload` | `{ sessionId }` | `{ sessionId, manifestUrl, manifestSha256 }` after every artifact and the manifest are stored; `upload.progress` events meanwhile. A repeated request for a session that is already uploading joins that upload and gets the same result (v1.3: it was `busy`); `busy` is only for a different session. A session whose manifest is already stored is answered at once without network work. `upload.progress` data carries `phase`: `artifacts`, `manifest` (the manifest PUT) or `finalising` (stored on the site, the app is writing its record; this event has no counts), so a stall is visible. An upload that shows no activity (bytes sent, a retry or a progress step) for 90 s is cancelled, its HTTP request is cut, and it is replaced by a repeated request for the same session, instead of answering `busy`. A single PUT is cut after 45 s without bytes moving or 10 min in all. A scan counts as already uploaded only for the origin it was uploaded to; the same session toward another origin is `busy` while one runs. Retries are capped: 8 attempts and 120 s per artifact, 100 retries and 30 min per upload; `Retry-After` waits are capped at 30 s. On success the app also emits `upload.done` with the same object to the page that most recently sent a request, so a reloaded page can attach. |
 | `scan.discard` | `{ sessionId }` | `{ sessionId }` |
+| `scan.markAttached` | `{ sessionId }` | `{ sessionId }`; v1.3. The page calls it after it attached the uploaded scan to a project; `scan.list` then reports `attached: true` so a reloaded page does not offer the scan again |
 
 ### Upload and security rules
 

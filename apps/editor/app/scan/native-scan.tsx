@@ -23,6 +23,9 @@ function describeEventData(data: unknown): string {
     .join(' · ')
 }
 
+/** The list shows only the latest few; the companion does not say which were attached. */
+const MAX_UPLOADED_SHOWN = 3
+
 function eventSession(event: BridgeEvent): string | null {
   const sessionId = (event.data as { sessionId?: unknown } | null)?.sessionId
   return typeof sessionId === 'string' ? sessionId : null
@@ -52,12 +55,14 @@ export function NativeScan({
   onUploadFailed: (sessionId: string) => void
   onDiscarded: (sessionId: string) => void
   /** Attaches an uploaded scan; resolves once attached or failed (failure is shown by the caller). */
-  onUploaded: (result: ScanUploadResult) => Promise<void>
+  onUploaded: (result: ScanUploadResult & { projectId?: string | null }) => Promise<void>
 }) {
   const i18n = usePascalI18n()
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [events, setEvents] = useState<Partial<Record<BridgeEvent['event'], string>>>({})
   const [earlier, setEarlier] = useState<ScanListEntry[]>([])
+  /** Uploaded on the phone but possibly never attached (for example the page reloaded mid-upload). */
+  const [uploaded, setUploaded] = useState<ScanListEntry[]>([])
   const [busy, setBusy] = useState<'start' | 'upload' | 'discard' | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
   const [location, setLocation] = useState(false)
@@ -73,16 +78,31 @@ export function NativeScan({
     [client, sessionId],
   )
 
+  const [listVersion, setListVersion] = useState(0)
+  /** Scans this visit uploaded or attached: never offered again, whatever a late list says. */
+  const [handled, setHandled] = useState<ReadonlySet<string>>(new Set())
+  const markHandled = (id: string) => setHandled((current) => new Set(current).add(id))
+
+  // A finished upload whose reply this page never got: list again so it can be attached.
+  useEffect(
+    () => client.subscribe('upload.done', () => setListVersion((version) => version + 1)),
+    [client],
+  )
+
   useEffect(() => {
     let active = true
     client.listScans().then(
-      (entries) => active && setEarlier(entries.filter((entry) => !entry.uploaded)),
+      (entries) => {
+        if (!active) return
+        setEarlier(entries.filter((entry) => !entry.uploaded))
+        setUploaded(entries.filter((entry) => entry.uploaded && entry.manifestUrl))
+      },
       () => {},
     )
     return () => {
       active = false
     }
-  }, [client])
+  }, [client, listVersion])
 
   const run = async (kind: 'start' | 'upload' | 'discard', action: () => Promise<void>) => {
     setBusy(kind)
@@ -121,10 +141,32 @@ export function NativeScan({
         throw error
       }
       // Uploaded scans leave the list whatever happens next; a failed attach keeps its result.
+      markHandled(id)
       setEarlier((entries) => entries.filter((entry) => entry.sessionId !== id))
       if (id === sessionId) setSessionId(null)
       await onUploaded(result)
     })
+
+  /** The scan is already stored on the site: attach it from the list, with no second upload. */
+  const attachUploaded = (entry: ScanListEntry) =>
+    run('upload', async () => {
+      const manifestUrl = entry.manifestUrl
+      if (!manifestUrl) return
+      onBeforeUpload(entry.sessionId)
+      markHandled(entry.sessionId)
+      if (entry.sessionId === sessionId) setSessionId(null)
+      await onUploaded({
+        sessionId: entry.sessionId,
+        manifestUrl,
+        manifestSha256: manifestUrl.slice(-64),
+        projectId: entry.projectId,
+      })
+    })
+
+  // Scans the companion says are attached, or this visit handled, are not offered; the latest few remain.
+  const offered = uploaded
+    .filter((entry) => !entry.attached && !handled.has(entry.sessionId))
+    .slice(0, MAX_UPLOADED_SHOWN)
 
   const discard = (id: string) =>
     run('discard', async () => {
@@ -238,6 +280,38 @@ export function NativeScan({
                   type="button"
                 >
                   {i18n._({ id: 'app.scan.native.uploadShort', message: 'Upload' })}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {offered.length > 0 ? (
+        <div className="space-y-2">
+          <p className="font-medium text-sm">
+            {i18n._({ id: 'app.scan.native.uploadedList', message: 'Uploaded, not attached yet' })}
+          </p>
+          <ul className="space-y-2">
+            {offered.map((entry) => (
+              <li
+                className="flex items-center justify-between gap-2 rounded-lg border border-border/60 p-2 text-sm"
+                key={entry.sessionId}
+              >
+                <span className="text-muted-foreground">
+                  {i18n._({
+                    id: 'app.scan.native.entry',
+                    message: '{keyframes, plural, one {# keyframe} other {# keyframes}}, {state}',
+                    values: { keyframes: entry.keyframes, state: entry.state },
+                  })}
+                </span>
+                <button
+                  className={SECONDARY_PILL}
+                  disabled={disabled || busy !== null}
+                  onClick={() => attachUploaded(entry)}
+                  type="button"
+                >
+                  {i18n._({ id: 'app.scan.native.attach', message: 'Attach' })}
                 </button>
               </li>
             ))}

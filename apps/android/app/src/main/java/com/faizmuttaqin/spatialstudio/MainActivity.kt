@@ -139,6 +139,7 @@ class MainActivity : ComponentActivity() {
         val uploader = ArtifactUploader(
             transport = HttpArtifactTransport(),
             cookies = CookieSource { origin -> CookieManager.getInstance().getCookie(origin) },
+            log = { Log.i("SpatialStudioUpload", it) },
         )
         bridge = NativeBridge(this, allowlist, store, uploader) { sessionId ->
             startActivity(ScanActivity.intent(this, sessionId))

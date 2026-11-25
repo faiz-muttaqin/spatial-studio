@@ -102,7 +102,7 @@ class BridgeProtocolTest {
     @Test
     fun methodsAreTheContractSet() {
         assertEquals(
-            listOf("bridge.hello", "capabilities.get", "scan.start", "scan.list", "scan.upload", "scan.discard"),
+            listOf("bridge.hello", "capabilities.get", "scan.start", "scan.list", "scan.upload", "scan.discard", "scan.markAttached"),
             BridgeProtocol.METHODS,
         )
     }
