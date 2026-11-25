@@ -17,9 +17,12 @@ export const DEVICE_MOTION_PLAYBACK_SPEED = 3
 
 export function CaptureDeviceMotionLayer({
   lineWidth = 2.5,
+  opacity = 1,
   trajectory,
 }: {
   lineWidth?: number
+  /** 0 to 1. */
+  opacity?: number
   trajectory: DeviceTrajectory
 }) {
   const deviceRef = useRef<Group>(null)
@@ -57,16 +60,22 @@ export function CaptureDeviceMotionLayer({
   return (
     <group>
       {trajectorySegments.map(({ points, segment }) => (
-        <CaptureLine color="#39ff14" key={segment} lineWidth={lineWidth} points={points} />
+        <CaptureLine
+          color="#39ff14"
+          key={segment}
+          lineWidth={lineWidth}
+          opacity={opacity}
+          points={points}
+        />
       ))}
       <group ref={deviceRef}>
-        <CameraFrustum lineWidth={lineWidth} />
+        <CameraFrustum lineWidth={lineWidth} opacity={opacity} />
       </group>
     </group>
   )
 }
 
-function CameraFrustum({ lineWidth }: { lineWidth: number }) {
+function CameraFrustum({ lineWidth, opacity }: { lineWidth: number; opacity: number }) {
   const apex: [number, number, number] = [0, 0, 0]
   const topRight: [number, number, number] = [0.14, 0.1, -0.28]
   const topLeft: [number, number, number] = [-0.14, 0.1, -0.28]
@@ -83,10 +92,21 @@ function CameraFrustum({ lineWidth }: { lineWidth: number }) {
 
   return (
     <group scale={1.35}>
-      <CaptureLine color="#ffee00" lineWidth={lineWidth} points={points} segments />
+      <CaptureLine
+        color="#ffee00"
+        lineWidth={lineWidth}
+        opacity={opacity}
+        points={points}
+        segments
+      />
       <mesh>
         <sphereGeometry args={[0.035, 12, 12]} />
-        <meshBasicMaterial color="#ffee00" toneMapped={false} />
+        <meshBasicMaterial
+          color="#ffee00"
+          opacity={opacity}
+          toneMapped={false}
+          transparent={opacity < 1}
+        />
       </mesh>
     </group>
   )
@@ -95,11 +115,13 @@ function CameraFrustum({ lineWidth }: { lineWidth: number }) {
 function CaptureLine({
   color,
   lineWidth,
+  opacity,
   points,
   segments = false,
 }: {
   color: string
   lineWidth: number
+  opacity: number
   points: readonly [number, number, number][]
   segments?: boolean
 }) {
@@ -118,6 +140,12 @@ function CaptureLine({
     object.frustumCulled = false
     return object
   }, [color, lineWidth, points, segments])
+
+  useEffect(() => {
+    const material = line.material as LineBasicMaterial
+    material.opacity = opacity
+    material.transparent = opacity < 1
+  }, [line, opacity])
 
   useEffect(
     () => () => {

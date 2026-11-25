@@ -6143,6 +6143,190 @@ msgstr "{use} “{name}”"
 msgid "editor.panels.roomPanel.viewCode"
 msgstr "View code"
 
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.cameraConvention"
+msgstr "Camera axes"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.capturedAt"
+msgstr "Captured"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.ceilingHeight"
+msgstr "Ceiling height"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.clearHeight"
+msgstr "Floor to ceiling"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.close"
+msgstr "Close photo"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.device"
+msgstr "Device"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.enlarge"
+msgstr "Enlarge photo"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.floorHeight"
+msgstr "Floor height"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.layer.deviceMotion"
+msgstr "Camera path"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.layer.model"
+msgstr "3D model"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.layer.pointCloud"
+msgstr "Point cloud"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.layer.surfaceMesh"
+msgstr "Surface mesh"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.layers"
+msgstr "Layers"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.loading"
+msgstr "Loading capture data…"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.measurements"
+msgstr "Manual measurements"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.nextPage"
+msgstr "Next"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.noManifest"
+msgstr "This scan has no capture manifest, so there is no evidence to show."
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.openings"
+msgstr "Doors, windows"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.pageOf"
+msgstr "{page} of {pages}"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.partFailed"
+msgstr "{part}: the capture could not produce this."
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.partial"
+msgstr "Some evidence in this capture could not be read."
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.partPending"
+msgstr "{part}: not ready yet."
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.photoDialog"
+msgstr "Capture photo"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.photos"
+msgstr "Photos ({count})"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.photosName"
+msgstr "Photos"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.planes"
+msgstr "Detected planes"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.planesCeilings"
+msgstr "Ceiling-facing"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.planesFloors"
+msgstr "Floor-facing"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.planesNote"
+msgstr "Heights are in the capture’s own frame. Merged planes are counted once."
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.planesWalls"
+msgstr "Vertical"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.previousPage"
+msgstr "Previous"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.provider"
+msgstr "Provider"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.provider.androidArcore"
+msgstr "Android (ARCore)"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.provider.browserPhoto"
+msgstr "Browser photos"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.provider.webxr"
+msgstr "WebXR"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.roomHeight"
+msgstr "Height"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.roomLength"
+msgstr "Length"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.roomWidth"
+msgstr "Width"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.state.failed"
+msgstr "Failed"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.state.finalizing"
+msgstr "Finalising"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.state.live"
+msgstr "Live"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.status"
+msgstr "Status"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.title"
+msgstr "Scan evidence"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.trackingLoss"
+msgstr "Tracking losses"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.unavailable"
+msgstr "The capture data could not be loaded."
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.warnings"
+msgstr "Warnings"
+
 #: packages/editor/src/components/ui/panels/room-panel.tsx
 #: packages/nodes/src/wall/panel.tsx
 msgid "editor.panels.scriptUnreadable"

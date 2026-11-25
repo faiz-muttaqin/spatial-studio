@@ -33,6 +33,7 @@ import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
 import { PanelWrapper } from './panel-wrapper'
+import { ScanEvidenceSection } from './scan-evidence-section'
 
 type ReferenceNode = ScanNode | GuideNode
 
@@ -373,6 +374,8 @@ export function ReferencePanel() {
           </ActionGroup>
         </PanelSection>
       )}
+
+      {isScan && <ScanEvidenceSection node={node as ScanNode} />}
 
       <PanelSection title={i18n._({ id: 'editor.panels.referencePanel.position', message: 'Position' })}>
         <SliderControl
