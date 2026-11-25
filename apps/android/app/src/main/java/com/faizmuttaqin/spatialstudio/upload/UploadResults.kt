@@ -10,9 +10,9 @@ object UploadResults {
      * The `scan.upload` result of a scan whose manifest is already stored (the record was written after
      * the manifest upload), so a repeated request needs no network work. Null when the scan is not uploaded.
      */
-    fun alreadyUploaded(record: SessionRecord): JsonObject? {
+    fun alreadyUploaded(record: SessionRecord, origin: String): JsonObject? {
         val sha = record.manifestSha256 ?: return null
-        if (!record.uploaded) return null
+        if (!record.uploaded || record.uploadedOrigin != origin) return null
         return buildJsonObject {
             put("sessionId", record.sessionId)
             put("manifestUrl", "/api/artifacts/$sha")

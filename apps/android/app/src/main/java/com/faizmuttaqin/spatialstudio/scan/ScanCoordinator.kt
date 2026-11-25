@@ -6,6 +6,7 @@ import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.util.concurrent.CopyOnWriteArraySet
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -31,12 +32,19 @@ object ScanCoordinator {
     /** Handle of one upload run; [cancelled] is set when a newer run replaced it. */
     class UploadToken {
         val cancelled = AtomicBoolean(false)
+
+        /** Counted down when the run has returned (or failed), so a replacement can wait for it to stop. */
+        val finished = CountDownLatch(1)
     }
 
-    class UploadAttempt(val join: UploadJoin, val token: UploadToken?)
+    /** [replaced]: for [UploadJoin.REPLACED], the run that was cancelled. */
+    class UploadAttempt(val join: UploadJoin, val token: UploadToken?, val replaced: UploadToken? = null)
 
-    /** An upload with no progress or retry activity for this long is stalled and can be replaced. */
-    const val UPLOAD_STALE_MS = 60_000L
+    /**
+     * An upload with no activity (bytes moving, a retry, a progress step) for this long is stalled and can be
+     * replaced. Above the longest quiet stretch a healthy upload has: connect 15 s or response read 60 s.
+     */
+    const val UPLOAD_STALE_MS = 90_000L
 
     class ActiveScan(val sessionId: String, val projectId: String?, val options: ScanOptions)
 
@@ -58,6 +66,7 @@ object ScanCoordinator {
     private val listeners = CopyOnWriteArraySet<Listener>()
     private val uploadWaiters = ArrayList<UploadWaiter>()
     private var uploadToken: UploadToken? = null
+    private var uploadOrigin: String? = null
     private var uploadActivityMs = 0L
 
     private fun nowMs() = System.nanoTime() / 1_000_000
@@ -97,34 +106,30 @@ object ScanCoordinator {
         }
     }
 
-    @Synchronized
-    fun beginUpload(sessionId: String): Boolean {
-        if (uploading != null) return false
-        uploading = sessionId
-        return true
-    }
-
     /**
      * Starts the upload of [sessionId] ([UploadJoin.STARTED]: the caller runs it), or, when that same
      * session is already uploading, queues [waiter] to get the same result ([UploadJoin.JOINED]). A
      * different session is [UploadJoin.BUSY]. The waiter is queued in the first two cases.
      */
     @Synchronized
-    fun beginOrJoinUpload(sessionId: String, waiter: UploadWaiter, nowMs: Long = nowMs()): UploadAttempt {
+    fun beginOrJoinUpload(sessionId: String, origin: String, waiter: UploadWaiter, nowMs: Long = nowMs()): UploadAttempt {
         val current = uploading
-        if (current != null && current != sessionId) return UploadAttempt(UploadJoin.BUSY, null)
+        // Another session, or the same scan toward another origin, is a different upload.
+        if (current != null && (current != sessionId || uploadOrigin != origin)) return UploadAttempt(UploadJoin.BUSY, null)
         uploadWaiters.add(waiter)
         if (current == null) {
             uploading = sessionId
+            uploadOrigin = origin
             uploadToken = UploadToken().also { uploadActivityMs = nowMs }
             return UploadAttempt(UploadJoin.STARTED, uploadToken)
         }
         if (nowMs - uploadActivityMs >= UPLOAD_STALE_MS) {
             // The running upload showed no activity for a minute: cancel it and run a new one. Waiters are kept.
-            uploadToken?.cancelled?.set(true)
+            val old = uploadToken
+            old?.cancelled?.set(true)
             uploadToken = UploadToken()
             uploadActivityMs = nowMs
-            return UploadAttempt(UploadJoin.REPLACED, uploadToken)
+            return UploadAttempt(UploadJoin.REPLACED, uploadToken, old)
         }
         return UploadAttempt(UploadJoin.JOINED, null)
     }
@@ -142,19 +147,20 @@ object ScanCoordinator {
             if (uploading != sessionId || uploadToken !== token) return
             uploading = null
             uploadToken = null
+            uploadOrigin = null
             uploadWaiters.toList().also { uploadWaiters.clear() }
         }
         waiting.forEach { runCatching { it.onDone(outcome) } }
         if (outcome is UploadOutcome.Ok) emit("upload.done", outcome.result)
     }
 
+    /** Forgets any upload without answering waiters. For tests. */
     @Synchronized
-    fun endUpload(sessionId: String) {
-        if (uploading == sessionId) {
-            uploading = null
-            uploadToken = null
-            uploadWaiters.clear()
-        }
+    internal fun clearUploadsForTest() {
+        uploading = null
+        uploadToken = null
+        uploadOrigin = null
+        uploadWaiters.clear()
     }
 
     fun addListener(listener: Listener) = listeners.add(listener)

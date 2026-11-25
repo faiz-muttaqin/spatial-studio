@@ -40,6 +40,7 @@ object BridgeProtocol {
         "scan.list",
         "scan.upload",
         "scan.discard",
+        "scan.markAttached",
     )
 
     val EVENTS = setOf("scan.state", "scan.progress", "upload.progress", "upload.done")

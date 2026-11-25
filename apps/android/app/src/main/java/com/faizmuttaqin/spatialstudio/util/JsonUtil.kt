@@ -36,11 +36,16 @@ object JsonUtil {
 
     /** Writes through a temporary file and renames, so readers never see half a file. */
     fun writeAtomically(file: File, bytes: ByteArray) {
-        val tmp = File(file.parentFile, ".${file.name}.tmp")
-        tmp.writeBytes(bytes)
-        if (!tmp.renameTo(file)) {
-            file.delete()
-            check(tmp.renameTo(file)) { "Could not write ${file.name}" }
+        // A unique temporary name: two writers of one file must not share (and delete) each other's.
+        val tmp = File.createTempFile(".${file.name}.", ".tmp", file.parentFile)
+        try {
+            tmp.writeBytes(bytes)
+            if (!tmp.renameTo(file)) {
+                file.delete()
+                check(tmp.renameTo(file)) { "Could not write ${file.name}" }
+            }
+        } finally {
+            tmp.delete()
         }
     }
 }

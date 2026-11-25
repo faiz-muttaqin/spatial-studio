@@ -142,6 +142,7 @@ class NativeBridge(
         "scan.start" -> startScan(ScanParams.start(request.params))
         "scan.list" -> listScans()
         "scan.discard" -> discard(ScanParams.sessionId(request.params))
+        "scan.markAttached" -> markAttached(ScanParams.sessionId(request.params))
         else -> throw BridgeException(BridgeErrorCode.UNKNOWN_METHOD, "Unknown method")
     }
 
@@ -202,6 +203,7 @@ class NativeBridge(
                     put("bytes", record.bytes)
                     put("uploaded", record.uploaded)
                     put("uploading", record.sessionId == uploading)
+                    put("attached", record.attachedAtMs != null)
                     put("projectId", record.projectId)
                     record.manifestSha256?.takeIf { record.uploaded }?.let { put("manifestUrl", "/api/artifacts/$it") }
                     record.error?.let { put("error", it) }
@@ -228,6 +230,7 @@ class NativeBridge(
             post(proxy, BridgeProtocol.errorReply(request.id, e.code, e.message.orEmpty()))
             return
         }
+        val originKey = origin.toString()
         val waiter = ScanCoordinator.UploadWaiter { outcome ->
             post(
                 proxy,
@@ -238,53 +241,78 @@ class NativeBridge(
                 request.id,
             )
         }
-        // Disk reads stay off the main thread, and off the upload thread that may be busy.
+        // Disk reads stay off the main thread, and off the upload threads that may be busy.
         worker.execute {
-            val done = store.read(sessionId)?.let(UploadResults::alreadyUploaded)
-            if (done != null && ScanCoordinator.uploading != sessionId) {
-                Log.i(TAG, "scan.upload $sessionId already uploaded; replying without network work")
-                post(proxy, BridgeProtocol.okReply(request.id, done), request.id)
-                return@execute
-            }
-            val attempt = ScanCoordinator.beginOrJoinUpload(sessionId, waiter)
-            when (attempt.join) {
-                ScanCoordinator.UploadJoin.BUSY -> {
-                    Log.i(TAG, "scan.upload $sessionId rejected as busy: another session is uploading")
-                    post(proxy, BridgeProtocol.errorReply(request.id, BridgeErrorCode.BUSY, "Another upload is running"), request.id)
+            try {
+                val done = store.read(sessionId)?.let { UploadResults.alreadyUploaded(it, originKey) }
+                if (done != null && ScanCoordinator.uploading != sessionId) {
+                    Log.i(TAG, "scan.upload $sessionId already uploaded; replying without network work")
+                    post(proxy, BridgeProtocol.okReply(request.id, done), request.id)
+                    return@execute
                 }
-                ScanCoordinator.UploadJoin.JOINED ->
-                    Log.i(TAG, "scan.upload $sessionId joined the upload already running for it")
-                ScanCoordinator.UploadJoin.STARTED -> {
-                    Log.i(TAG, "scan.upload $sessionId begin")
-                    val token = attempt.token!!
-                    uploads.execute { runUpload(sessionId, origin, token) }
+                val attempt = ScanCoordinator.beginOrJoinUpload(sessionId, originKey, waiter)
+                when (attempt.join) {
+                    ScanCoordinator.UploadJoin.BUSY -> {
+                        Log.i(TAG, "scan.upload $sessionId rejected as busy: another upload is running")
+                        post(proxy, BridgeProtocol.errorReply(request.id, BridgeErrorCode.BUSY, "Another upload is running"), request.id)
+                    }
+                    ScanCoordinator.UploadJoin.JOINED ->
+                        Log.i(TAG, "scan.upload $sessionId joined the upload already running for it")
+                    ScanCoordinator.UploadJoin.STARTED -> {
+                        Log.i(TAG, "scan.upload $sessionId begin")
+                        launchUpload(sessionId, origin, attempt.token!!, null)
+                    }
+                    ScanCoordinator.UploadJoin.REPLACED -> {
+                        Log.w(TAG, "scan.upload $sessionId: previous upload showed no activity for ${ScanCoordinator.UPLOAD_STALE_MS / 1000} s; replacing it")
+                        launchUpload(sessionId, origin, attempt.token!!, attempt.replaced)
+                    }
                 }
-                ScanCoordinator.UploadJoin.REPLACED -> {
-                    Log.w(TAG, "scan.upload $sessionId: previous upload showed no activity for ${ScanCoordinator.UPLOAD_STALE_MS / 1000} s; replacing it")
-                    val token = attempt.token!!
-                    uploads.execute { runUpload(sessionId, origin, token) }
-                }
+            } catch (t: Throwable) {
+                Log.e(TAG, "scan.upload failed before it started", t)
+                post(proxy, BridgeProtocol.errorReply(request.id, BridgeErrorCode.INTERNAL, "Internal error in scan.upload"), request.id)
             }
         }
     }
 
-    private fun runUpload(sessionId: String, origin: OriginAllowlist.Origin, token: ScanCoordinator.UploadToken) {
-        val outcome = try {
-            ScanCoordinator.UploadOutcome.Ok(upload(sessionId, origin, token))
-        } catch (e: BridgeException) {
-            ScanCoordinator.UploadOutcome.Failed(e.code, e.message.orEmpty())
-        } catch (e: UploadFailedException) {
-            ScanCoordinator.UploadOutcome.Failed(BridgeErrorCode.UPLOAD_FAILED, e.message.orEmpty())
-        } catch (e: Exception) {
-            Log.e(TAG, "Upload failed", e)
-            ScanCoordinator.UploadOutcome.Failed(BridgeErrorCode.INTERNAL, "Internal error during upload")
+    private fun launchUpload(sessionId: String, origin: OriginAllowlist.Origin, token: ScanCoordinator.UploadToken, replaced: ScanCoordinator.UploadToken?) {
+        try {
+            uploads.execute { runUpload(sessionId, origin, token, replaced) }
+        } catch (t: Throwable) {
+            // For example the bridge was detached: free the lock and answer every queued page.
+            token.finished.countDown()
+            ScanCoordinator.finishUpload(
+                sessionId,
+                token,
+                ScanCoordinator.UploadOutcome.Failed(BridgeErrorCode.INTERNAL, "The upload could not start"),
+            )
         }
-        Log.i(TAG, "scan.upload $sessionId end: ${if (outcome is ScanCoordinator.UploadOutcome.Ok) "ok" else "failed"}")
-        ScanCoordinator.finishUpload(sessionId, token, outcome)
+    }
+
+    /** Always ends by freeing the upload slot and answering the waiters, whatever was thrown. */
+    private fun runUpload(sessionId: String, origin: OriginAllowlist.Origin, token: ScanCoordinator.UploadToken, replaced: ScanCoordinator.UploadToken?) {
+        var outcome: ScanCoordinator.UploadOutcome = ScanCoordinator.UploadOutcome.Failed(BridgeErrorCode.INTERNAL, "Internal error during upload")
+        try {
+            // The replaced run was told to stop (its PUT is cut within a second); do not overlap with it.
+            replaced?.finished?.await(REPLACED_STOP_WAIT_S, java.util.concurrent.TimeUnit.SECONDS)
+            outcome = ScanCoordinator.UploadOutcome.Ok(upload(sessionId, origin, token))
+        } catch (e: BridgeException) {
+            outcome = ScanCoordinator.UploadOutcome.Failed(e.code, e.message.orEmpty())
+        } catch (e: UploadFailedException) {
+            outcome = ScanCoordinator.UploadOutcome.Failed(BridgeErrorCode.UPLOAD_FAILED, e.message.orEmpty())
+        } catch (t: Throwable) {
+            Log.e(TAG, "Upload failed", t)
+        } finally {
+            token.finished.countDown()
+            Log.i(TAG, "scan.upload $sessionId end: ${if (outcome is ScanCoordinator.UploadOutcome.Ok) "ok" else "failed"}")
+            ScanCoordinator.finishUpload(sessionId, token, outcome)
+        }
     }
 
     private fun upload(sessionId: String, origin: OriginAllowlist.Origin, token: ScanCoordinator.UploadToken): JsonObject {
+        val originKey = origin.toString()
         val record = store.read(sessionId) ?: throw BridgeException(BridgeErrorCode.NOT_FOUND, "No such scan")
+        // Re-checked here: the early answer in startUpload can race with a run that just finished.
+        UploadResults.alreadyUploaded(record, originKey)?.let { return it }
         if (record.state != SessionRecord.READY) {
             val reason = record.error?.let { ": $it" }.orEmpty()
             throw BridgeException(BridgeErrorCode.INVALID_REQUEST, "Scan is ${record.state}, not ready to upload$reason")
@@ -293,7 +321,14 @@ class NativeBridge(
         val log = UploadLog(File(store.dir(sessionId), UploadLog.FILE))
         var lastEventAt = 0L
         var lastPhase = ""
-        val result = uploader.upload(origin, store.dir(sessionId), plan, log, isCancelled = { token.cancelled.get() }) { progress ->
+        val result = uploader.upload(
+            origin,
+            store.dir(sessionId),
+            plan,
+            log,
+            isCancelled = { token.cancelled.get() },
+            onActivity = { ScanCoordinator.touchUpload(token) },
+        ) { progress ->
             ScanCoordinator.touchUpload(token)
             val now = SystemClock.elapsedRealtime()
             if (progress.uploaded == progress.total || progress.phase != lastPhase || now - lastEventAt >= PROGRESS_INTERVAL_MS) {
@@ -312,6 +347,8 @@ class NativeBridge(
                 )
             }
         }
+        // A replaced run must not write the record: the run that replaced it owns the result.
+        if (token.cancelled.get()) throw UploadFailedException("Upload replaced by a newer request")
         ScanCoordinator.touchUpload(token)
         Log.i(TAG, "scan.upload $sessionId finalising")
         onScanEvent(
@@ -321,12 +358,20 @@ class NativeBridge(
                 put("phase", ArtifactUploader.PHASE_FINALISING)
             },
         )
-        store.write(record.copy(manifestSha256 = result.manifestSha256, uploadedAtMs = System.currentTimeMillis()))
+        store.update(sessionId) {
+            it.copy(manifestSha256 = result.manifestSha256, uploadedAtMs = System.currentTimeMillis(), uploadedOrigin = originKey)
+        } ?: throw BridgeException(BridgeErrorCode.NOT_FOUND, "The scan was discarded during the upload")
         return buildJsonObject {
             put("sessionId", sessionId)
             put("manifestUrl", result.manifestUrl)
             put("manifestSha256", result.manifestSha256)
         }
+    }
+
+    private fun markAttached(sessionId: String): JsonElement {
+        store.update(sessionId) { it.copy(attachedAtMs = System.currentTimeMillis()) }
+            ?: throw BridgeException(BridgeErrorCode.NOT_FOUND, "No such scan")
+        return buildJsonObject { put("sessionId", sessionId) }
     }
 
     private fun sweepStaleScans() {
@@ -359,6 +404,7 @@ class NativeBridge(
         private const val TAG = "SpatialStudioBridge"
         private const val MIN_FREE_BYTES = 300L * 1024 * 1024
         private const val PROGRESS_INTERVAL_MS = 250L
+        private const val REPLACED_STOP_WAIT_S = 5L
         private const val START_WATCHDOG_MS = 10_000L
         private const val STALE_RECORDING_MS = 24L * 60 * 60 * 1000
 

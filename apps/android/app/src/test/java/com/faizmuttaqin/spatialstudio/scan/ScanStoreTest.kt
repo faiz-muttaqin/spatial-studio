@@ -83,4 +83,30 @@ class ScanStoreTest {
         assertEquals(bundle.manifest.sha256, plan.manifest.sha256)
         assertEquals(bundle.artifacts.map { it.sha256 }, plan.artifacts.map { it.sha256 })
     }
+
+    @Test
+    fun recordKeepsTheUploadOriginAndAttachedMarker() {
+        val store = ScanStore(tmp.newFolder("scans2"))
+        store.create(a, null, 1)
+        store.update(a) { it.copy(state = SessionRecord.READY, uploadedAtMs = 5, uploadedOrigin = "https://x.example") }
+        store.update(a) { it.copy(attachedAtMs = 9) }
+        val record = store.read(a)!!
+        assertEquals("https://x.example", record.uploadedOrigin)
+        assertEquals(9L, record.attachedAtMs)
+        assertNull(store.update(b) { it })
+    }
+
+    @Test
+    fun concurrentWritersNeverLoseTheRecord() {
+        val store = ScanStore(tmp.newFolder("scans3"))
+        store.create(a, "p", 1)
+        val threads = (1..4).map { n ->
+            Thread { repeat(100) { i -> store.update(a) { it.copy(keyframes = n * 1000 + i) } } }
+        }
+        threads.forEach { it.start() }
+        threads.forEach { it.join() }
+        assertEquals("p", store.read(a)?.projectId)
+        // No temporary files are left behind.
+        assertEquals(listOf("session.json"), store.dir(a).list()!!.toList())
+    }
 }

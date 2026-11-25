@@ -275,4 +275,32 @@ class ArtifactUploaderTest {
         }
         assertEquals(withoutRetries + 2, activity)
     }
+
+    @Test
+    fun runsDoNotShareCountersOrClocks() {
+        val (dir, bundle) = bundle()
+        val clock = Clock()
+        val transport = FakeTransport(clock) { _, _ -> ArtifactTransport.Response(503) }
+        val u = ArtifactUploader(transport, { cookie }, sleep = clock::sleep, now = { clock.nowMs }, maxAttempts = 100, minIntervalMs = 0, maxTotalRetries = 2)
+        assertThrows(UploadFailedException::class.java) { u.upload(origin, dir, bundle) }
+        val before = transport.calls.size
+        // A second run on the same uploader starts with a fresh retry budget: again 3 attempts, not 1.
+        assertThrows(UploadFailedException::class.java) { u.upload(origin, dir, bundle) }
+        assertEquals(before * 2, transport.calls.size)
+    }
+
+    @Test
+    fun passesTheControlToTheTransportAndCountsActivity() {
+        val (dir, bundle) = bundle()
+        var activity = 0
+        val transport = object : ArtifactTransport {
+            override fun put(url: String, headers: Map<String, String>, file: File, length: Long) = error("control variant expected")
+            override fun put(url: String, headers: Map<String, String>, file: File, length: Long, control: PutControl): ArtifactTransport.Response {
+                control.onActivity()
+                return ArtifactTransport.Response(200)
+            }
+        }
+        uploader(transport).upload(origin, dir, bundle, onActivity = { activity++ })
+        assertTrue(activity >= bundle.artifacts.size)
+    }
 }
