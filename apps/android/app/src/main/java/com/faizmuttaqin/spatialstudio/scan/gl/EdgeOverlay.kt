@@ -58,6 +58,9 @@ class EdgeOverlay {
     private var anchored = false
     private var centerX = 0f
     private var centerZ = 0f
+    private var boundsX = 0f
+    private var boundsZ = 0f
+    private var outOfViewSinceNs = 0L
     private var floorY = 0f
 
     fun create() {
@@ -85,7 +88,10 @@ class EdgeOverlay {
             placeModel(cameraPose)
             Matrix.multiplyMM(mvp, 0, viewProjection, 0, model, 0)
             GLES20.glLineWidth(MODEL_WIDTH)
+            // Faces without depth writes so the base lines at the same coordinates are never hidden by them.
+            GLES20.glDepthMask(false)
             drawBatch(houseFaces, GLES20.GL_TRIANGLES, mvp)
+            GLES20.glDepthMask(true)
             drawBatch(houseLines, GLES20.GL_LINES, mvp)
         }
         GLES20.glDisable(GLES20.GL_BLEND)
@@ -106,18 +112,41 @@ class EdgeOverlay {
         batch.buffer.position(0)
     }
 
-    /** The model sits on the floor about [DISTANCE_M] ahead of the user, centred on the room, at 1:20. */
+    /**
+     * The model sits on the floor about [DISTANCE_M] ahead of the user at 1:20. Its anchor and centre stay fixed
+     * (so it does not slide while the room grows) until the user walks [REANCHOR_M] away or has had it out of view
+     * for [OUT_OF_VIEW_NS]; it is then placed again in front of them.
+     */
     private fun placeModel(cameraPose: FloatArray) {
         val camX = cameraPose[12]
         val camZ = cameraPose[14]
-        if (!anchored || hypot(camX - anchorX, camZ - anchorZ) > REANCHOR_M) {
-            var fx = -cameraPose[8]
-            var fz = -cameraPose[10]
-            val len = hypot(fx, fz)
-            if (len < 0.2f) { fx = 0f; fz = -1f } else { fx /= len; fz /= len }
+        var fx = -cameraPose[8]
+        var fz = -cameraPose[10]
+        val flen = hypot(fx, fz)
+        val facing = flen >= 0.2f
+        if (facing) { fx /= flen; fz /= flen }
+        var reanchor = !anchored || hypot(camX - anchorX, camZ - anchorZ) > REANCHOR_M
+        if (!reanchor && facing) {
+            val dx = anchorX - camX
+            val dz = anchorZ - camZ
+            val dist = hypot(dx, dz)
+            val inView = dist < 0.01f || (dx * fx + dz * fz) / dist >= IN_VIEW_COS
+            val now = System.nanoTime()
+            if (inView) {
+                outOfViewSinceNs = 0L
+            } else {
+                if (outOfViewSinceNs == 0L) outOfViewSinceNs = now
+                if (now - outOfViewSinceNs > OUT_OF_VIEW_NS) reanchor = true
+            }
+        }
+        if (reanchor) {
+            if (!facing) { fx = 0f; fz = -1f }
             anchorX = camX + fx * DISTANCE_M
             anchorZ = camZ + fz * DISTANCE_M
+            centerX = boundsX
+            centerZ = boundsZ
             anchored = true
+            outOfViewSinceNs = 0L
         }
         Matrix.setIdentityM(model, 0)
         Matrix.translateM(model, 0, anchorX, floorY, anchorZ)
@@ -141,8 +170,8 @@ class EdgeOverlay {
             minX = minOf(minX, w.ax, w.bx); maxX = maxOf(maxX, w.ax, w.bx)
             minZ = minOf(minZ, w.az, w.bz); maxZ = maxOf(maxZ, w.az, w.bz)
         }
-        centerX = (minX + maxX) / 2
-        centerZ = (minZ + maxZ) / 2
+        boundsX = (minX + maxX) / 2
+        boundsZ = (minZ + maxZ) / 2
         val fy = floorY + LIFT_M
         s.outline?.let { xz ->
             val tri = EdgeModel.triangulate(xz)
@@ -172,6 +201,8 @@ class EdgeOverlay {
         const val SCALE = 1f / 20f
         const val DISTANCE_M = 0.9f
         const val REANCHOR_M = 3f
+        const val IN_VIEW_COS = 0.5f
+        const val OUT_OF_VIEW_NS = 1_500_000_000L
         const val LIFT_M = 0.01f
         const val WALL_ALPHA = 0.16f
         const val FLOOR_ALPHA = 0.35f

@@ -1,6 +1,7 @@
 package com.faizmuttaqin.spatialstudio.scan
 
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
 import kotlin.math.hypot
@@ -61,6 +62,50 @@ class EdgeModel {
         fun bz() = pz + dz * t1
     }
 
+    /**
+     * A floor or ceiling height that does not jump. The largest plane wins (a light fitting or a reflection is
+     * small); a different height is adopted at once only when its plane is more than twice the current one, and
+     * otherwise after it has been the best candidate for [PERSIST_UPDATES] updates in a row.
+     */
+    private class Level {
+        var y: Float? = null
+        private var area = 0f
+        private var pendingY = 0f
+        private var pending = 0
+
+        fun reset() { y = null; pending = 0 }
+
+        fun update(candidates: List<Pair<Float, Float>>): Float? {
+            val cur = y
+            if (candidates.isEmpty()) return cur
+            val best = candidates.maxByOrNull { it.second }!!
+            if (cur == null) {
+                y = best.first; area = best.second; pending = 0
+                return y
+            }
+            val here = candidates.filter { abs(it.first - cur) <= LEVEL_TOLERANCE_M }
+            if (here.isNotEmpty()) {
+                val main = here.maxByOrNull { it.second }!!
+                y = cur + (main.first - cur) * SMOOTH
+                area = main.second
+                pending = 0
+                return y
+            }
+            if (best.second > area * LEVEL_SWITCH_RATIO) {
+                y = best.first; area = best.second; pending = 0
+                return y
+            }
+            pending = if (pending > 0 && abs(best.first - pendingY) <= LEVEL_TOLERANCE_M) pending + 1 else 1
+            pendingY = best.first
+            if (pending >= PERSIST_UPDATES) {
+                y = best.first; area = best.second; pending = 0
+            }
+            return y
+        }
+    }
+
+    private val floorLevel = Level()
+    private val ceilingLevel = Level()
     private val tracks = ArrayList<Track>()
     private var version = 0L
 
@@ -69,8 +114,17 @@ class EdgeModel {
         val summaries = live.filter { it.orientation != "vertical" }.map {
             PlaneSummary(it.id, if (it.orientation == "horizontal-up") HitKind.HORIZONTAL_UP_PLANE else HitKind.HORIZONTAL_DOWN_PLANE, true, it.centerPose[13], it.extentX, it.extentZ)
         }
-        val floorY = BoundaryMarking.floorY(summaries)
-        val ceilingY = floorY?.let { f -> BoundaryMarking.ceilingHeight(f.toDouble(), summaries)?.let { f + it.heightM.toFloat() } }
+        val floorY = floorLevel.update(
+            summaries.filter { it.kind == HitKind.HORIZONTAL_UP_PLANE && it.area >= BoundaryMarking.MIN_FLOOR_PLANE_AREA_M2 }.map { it.centerY to it.area },
+        )
+        val ceilingY = floorY?.let { f ->
+            ceilingLevel.update(
+                summaries.filter {
+                    it.kind == HitKind.HORIZONTAL_DOWN_PLANE &&
+                        (it.centerY - f) in BoundaryMarking.MIN_CEILING_HEIGHT_M.toFloat()..BoundaryMarking.MAX_CEILING_HEIGHT_M.toFloat()
+                }.map { it.centerY to it.area },
+            )
+        } ?: run { ceilingLevel.reset(); null }
 
         val seen = BooleanArray(tracks.size)
         val fresh = ArrayList<Track>()
@@ -79,7 +133,7 @@ class EdgeModel {
             val cand = footprint(plane) ?: continue
             val i = tracks.indexOfFirst { matches(it, cand) }
             if (i >= 0) {
-                if (!seen[i]) absorb(tracks[i], cand)
+                absorb(tracks[i], cand)
                 seen[i] = true
             } else {
                 // Two reported planes on one wall merge into one new track.
@@ -248,15 +302,25 @@ class EdgeModel {
                 val sb = (ta.dx * rz - ta.dz * rx) / det
                 if (sa < ta.t0 - CORNER_REACH_M || sa > ta.t1 + CORNER_REACH_M) continue
                 if (sb < tb.t0 - CORNER_REACH_M || sb > tb.t1 + CORNER_REACH_M) continue
-                val cx = ta.px + ta.dx * sa
-                val cz = ta.pz + ta.dz * sa
-                val ci = corners.size
-                corners.add(Corner(cx, cz))
-                cornerHeights.add(min(ta.topY, tb.topY))
-                val ia = shown.indexOf(ta)
-                val ib = shown.indexOf(tb)
-                snap(ta, sa, ia, ci, endCorner, ends, cx, cz)
-                snap(tb, sb, ib, ci, endCorner, ends, cx, cz)
+                // A wall crossing another mid-span, or a T whose stem stops short, is not a corner.
+                val endA = min(abs(sa - ta.t0), abs(sa - ta.t1))
+                val endB = min(abs(sb - tb.t0), abs(sb - tb.t1))
+                if (min(endA, endB) > CORNER_REACH_M) continue
+                var cx = ta.px + ta.dx * sa
+                var cz = ta.pz + ta.dz * sa
+                // Three walls meeting at one point share one corner.
+                var ci = corners.indexOfFirst { hypot(it.x - cx, it.z - cz) <= CORNER_MERGE_M }
+                if (ci < 0) {
+                    ci = corners.size
+                    corners.add(Corner(cx, cz))
+                    cornerHeights.add(min(ta.topY, tb.topY))
+                } else {
+                    cx = corners[ci].x
+                    cz = corners[ci].z
+                    cornerHeights[ci] = min(cornerHeights[ci], min(ta.topY, tb.topY))
+                }
+                snap(ta, sa, shown.indexOf(ta), ci, endCorner, ends, cx, cz)
+                snap(tb, sb, shown.indexOf(tb), ci, endCorner, ends, cx, cz)
             }
         }
 
@@ -358,6 +422,10 @@ class EdgeModel {
         const val FALL = 0.15f
         const val MIN_SHOWN = 0.3f
         const val SMOOTH = 0.3f
+        const val LEVEL_TOLERANCE_M = 0.12f
+        const val LEVEL_SWITCH_RATIO = 2f
+        const val PERSIST_UPDATES = 4
+        const val CORNER_MERGE_M = 0.15f
         const val MIN_OUTLINE_AREA_M2 = 1f
 
         fun signedArea(xz: FloatArray): Float {
@@ -419,21 +487,32 @@ class LiveEdges {
     private val busy = AtomicBoolean(false)
 
     @Volatile
+    private var closed = false
+
+    @Volatile
     var snapshot: EdgeSnapshot = EdgeSnapshot.EMPTY
         private set
 
+    /** Never throws: the caller is the GL frame loop. */
     fun submit(planes: List<PlaneRecord>) {
-        if (!busy.compareAndSet(false, true)) return
-        executor.execute {
-            try {
-                snapshot = model.update(planes)
-            } catch (e: Exception) {
-                android.util.Log.w("LiveEdges", "Edge update failed", e)
-            } finally {
-                busy.set(false)
+        if (closed || !busy.compareAndSet(false, true)) return
+        try {
+            executor.execute {
+                try {
+                    snapshot = model.update(planes)
+                } catch (e: Exception) {
+                    android.util.Log.w("LiveEdges", "Edge update failed", e)
+                } finally {
+                    busy.set(false)
+                }
             }
+        } catch (e: RejectedExecutionException) {
+            busy.set(false)
         }
     }
 
-    fun shutdown() = executor.shutdownNow()
+    fun shutdown() {
+        closed = true
+        executor.shutdownNow()
+    }
 }
