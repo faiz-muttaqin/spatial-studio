@@ -1035,6 +1035,10 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     ['frameCount'],
   ),
   ...described(
+    "A gaussian-splat stream's metadata in a scan bundle's manifest (the trainer and the frame the splat is in): capture metadata, never a node's.",
+    ['frame', 'trainer'],
+  ),
+  ...described(
     "The CLI's Architect API request metadata (`pascal architect run`): the project the turn targets and its credit cap, sent to the API, never stored on a node.",
     ['pascal_max_credits', 'project_id'],
   ),
