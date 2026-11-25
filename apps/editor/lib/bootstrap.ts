@@ -8,7 +8,11 @@ import {
   registerNode,
 } from '@pascal-app/core'
 import { sdfChecksFromEnv, setSdfChecks } from '@pascal-app/core/usage-field'
-import { registerEditorHostPanel, registerEditorHostView } from '@pascal-app/editor'
+import {
+  registerEditorHostPanel,
+  registerEditorHostView,
+  registerScanReviewView,
+} from '@pascal-app/editor'
 import { builtinPlugin } from '@pascal-app/nodes'
 import { bonesHostPanel, bonesPlugin } from '@pascal-app/plugin-bones'
 import {
@@ -152,6 +156,8 @@ registerEditorHostView({
   component: () => import('../components/mapping-view'),
   defaultPinned: true,
 })
+// The scan evidence panel offers "Review scan" and opens it here.
+registerScanReviewView('spatial-studio:mapping')
 
 loadBuiltinsSync()
 void loadExternalPlugins()

@@ -1,7 +1,8 @@
 'use client'
 
 import { FLOORPLAN_VIEW_ROTATION_DEG, useScene } from '@pascal-app/core'
-import { usePascalI18n } from '@pascal-app/core/i18n'
+import { useLocale, usePascalI18n } from '@pascal-app/core/i18n'
+import { useScanReview } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -10,6 +11,7 @@ import {
   type MapViewport,
   northScreenAngle,
   scaleBar,
+  screenToLevel,
   zoomAt,
 } from '@/lib/mapping/map-view-math'
 import {
@@ -27,6 +29,16 @@ import type {
   ScanMapResult,
 } from '@/lib/mapping/scan-map-loader'
 import {
+  cornerAt,
+  edgeAt,
+  edgeTone,
+  moveCorner,
+  type ReviewState,
+  solveReview,
+  startReview,
+  TONE_COLOURS,
+} from '@/lib/mapping/scan-review'
+import {
   buildingRotationOf,
   type CaptureScan,
   captureScans,
@@ -34,6 +46,7 @@ import {
   type SceneOverlays,
   sceneOverlays,
 } from '@/lib/mapping/scene-overlays'
+import { ScanReviewPanel } from './scan-review-panel'
 
 type Layer = 'top' | 'floor'
 type Toggles = { map: boolean; walls: boolean; rooms: boolean; path: boolean; proposal: boolean }
@@ -90,6 +103,117 @@ type DrawState = {
   opacity: number
   toggles: Toggles
   ratio: number
+  review: ReviewDraw | null
+}
+
+/** The outline under review, as the draw loop needs it. */
+type ReviewDraw = {
+  proposal: Array<[number, number]>
+  polygon: Array<[number, number]>
+  colours: string[]
+  labels: string[]
+  selectedEdge: number | null
+  dragCorner: number | null
+  showGrid: boolean
+}
+
+function drawReview(
+  context: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement,
+  state: DrawState,
+  review: ReviewDraw,
+): void {
+  const { viewport } = state
+  const to = (x: number, z: number) => levelToScreen(viewport, x, z)
+  if (review.showGrid) {
+    // A one metre grid over the visible area, as the plain background for the outline.
+    context.strokeStyle = 'rgba(255, 255, 255, 0.12)'
+    context.lineWidth = 1
+    const width = canvas.width / state.ratio
+    const height = canvas.height / state.ratio
+    const corners = [
+      screenToLevel(viewport, 0, 0),
+      screenToLevel(viewport, width, 0),
+      screenToLevel(viewport, 0, height),
+      screenToLevel(viewport, width, height),
+    ]
+    const xs = corners.map((corner) => corner[0])
+    const zs = corners.map((corner) => corner[1])
+    const x0 = Math.floor(Math.min(...xs))
+    const x1 = Math.ceil(Math.max(...xs))
+    const z0 = Math.floor(Math.min(...zs))
+    const z1 = Math.ceil(Math.max(...zs))
+    if ((x1 - x0) * (z1 - z0) < 6000) {
+      context.beginPath()
+      for (let x = x0; x <= x1; x += 1) {
+        const [ax, ay] = to(x, z0)
+        const [bx, by] = to(x, z1)
+        context.moveTo(ax, ay)
+        context.lineTo(bx, by)
+      }
+      for (let z = z0; z <= z1; z += 1) {
+        const [ax, ay] = to(x0, z)
+        const [bx, by] = to(x1, z)
+        context.moveTo(ax, ay)
+        context.lineTo(bx, by)
+      }
+      context.stroke()
+    }
+  }
+  const trace = (points: Array<[number, number]>) => {
+    context.beginPath()
+    points.forEach(([px, pz], index) => {
+      const [sx, sy] = to(px, pz)
+      if (index === 0) context.moveTo(sx, sy)
+      else context.lineTo(sx, sy)
+    })
+    context.closePath()
+  }
+  // The proposal as it was, faint, so the correction can be seen.
+  context.setLineDash([4, 4])
+  context.strokeStyle = 'rgba(255, 255, 255, 0.4)'
+  context.lineWidth = 1
+  trace(review.proposal)
+  context.stroke()
+  context.setLineDash([])
+  const n = review.polygon.length
+  context.lineCap = 'round'
+  context.lineWidth = 4
+  for (let i = 0; i < n; i += 1) {
+    const [ax, ay] = to(...review.polygon[i]!)
+    const [bx, by] = to(...review.polygon[(i + 1) % n]!)
+    context.strokeStyle = review.colours[i]!
+    context.lineWidth = review.selectedEdge === i ? 7 : 4
+    context.beginPath()
+    context.moveTo(ax, ay)
+    context.lineTo(bx, by)
+    context.stroke()
+  }
+  context.font = '12px system-ui, sans-serif'
+  context.textAlign = 'center'
+  context.textBaseline = 'middle'
+  for (let i = 0; i < n; i += 1) {
+    const [ax, ay] = to(...review.polygon[i]!)
+    const [bx, by] = to(...review.polygon[(i + 1) % n]!)
+    const text = review.labels[i]!
+    const width = context.measureText(text).width + 10
+    const mx = (ax + bx) / 2
+    const my = (ay + by) / 2
+    context.fillStyle = 'rgba(0, 0, 0, 0.75)'
+    context.fillRect(mx - width / 2, my - 9, width, 18)
+    context.fillStyle = 'white'
+    context.fillText(text, mx, my)
+  }
+  review.polygon.forEach(([px, pz], index) => {
+    const [sx, sy] = to(px, pz)
+    context.beginPath()
+    context.arc(sx, sy, review.dragCorner === index ? 8 : 6, 0, Math.PI * 2)
+    context.fillStyle = 'white'
+    context.fill()
+    context.strokeStyle = 'rgba(0, 0, 0, 0.8)'
+    context.lineWidth = 2
+    context.stroke()
+  })
 }
 
 function draw(canvas: HTMLCanvasElement, state: DrawState): void {
@@ -162,6 +286,7 @@ function draw(canvas: HTMLCanvasElement, state: DrawState): void {
     context.stroke()
     context.setLineDash([])
   }
+  if (state.review) drawReview(context, canvas, state, state.review)
   if (toggles.path && result && result.path.length > 1) {
     context.strokeStyle = 'rgba(80, 255, 160, 0.95)'
     context.lineWidth = 2
@@ -271,6 +396,7 @@ function noteText(note: MapNote, i18n: ReturnType<typeof usePascalI18n>): string
 
 export default function MappingView() {
   const i18n = usePascalI18n()
+  const locale = useLocale()
   // Selectors return strings and numbers, so a store update that changes none of them (a wall
   // elsewhere, an item moving) does not render this view.
   const scansJson = useScene((state) => JSON.stringify(captureScans(state.nodes)))
@@ -375,6 +501,54 @@ export default function MappingView() {
 
   const image = useMemo(() => (result ? mapCanvas(result) : null), [result])
 
+  // Review mode: the proposed outline over the map, corrected by the person before walls are built.
+  const [reviewing, setReviewing] = useState(false)
+  const [reviewState, setReviewState] = useState<ReviewState | null>(null)
+  const [selectedEdge, setSelectedEdge] = useState<number | null>(null)
+  const [dragCorner, setDragCorner] = useState<number | null>(null)
+  const requestedScanId = useScanReview((review) => review.requestedScanId)
+  const clearRequest = useScanReview((review) => review.clear)
+  useEffect(() => {
+    if (!requestedScanId) return
+    if (scans.some((candidate) => candidate.id === requestedScanId)) {
+      setSelectedId(requestedScanId)
+      setReviewing(true)
+    }
+    clearRequest()
+  }, [requestedScanId, scans, clearRequest])
+  const proposalReview = result?.review ?? null
+  // The state is keyed on the proposal it started from, so a rebuilt map starts a fresh review.
+  useEffect(() => {
+    setReviewState((current) => {
+      if (!reviewing || !proposalReview) return null
+      return current && current.proposal === proposalReview ? current : startReview(proposalReview)
+    })
+    setSelectedEdge(null)
+  }, [reviewing, proposalReview])
+  const solution = useMemo(() => (reviewState ? solveReview(reviewState) : null), [reviewState])
+  const reviewDraw = useMemo<ReviewDraw | null>(() => {
+    if (!(reviewState && solution)) return null
+    const formatter = new Intl.NumberFormat(locale, {
+      maximumFractionDigits: 2,
+      minimumFractionDigits: 2,
+    })
+    return {
+      proposal: reviewState.proposal.polygon,
+      polygon: solution.polygon,
+      colours: solution.polygon.map((_, i) => TONE_COLOURS[edgeTone(reviewState, i)]),
+      labels: solution.edges.map((edge) =>
+        i18n._({
+          id: 'app.review.metres',
+          message: '{value} m',
+          values: { value: formatter.format(edge.length) },
+        }),
+      ),
+      selectedEdge,
+      dragCorner,
+      showGrid: !toggles.map || !result,
+    }
+  }, [reviewState, solution, selectedEdge, dragCorner, toggles.map, result, i18n, locale])
+
   const wrapperRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [size, setSize] = useState({ width: 0, height: 0, ratio: 1 })
@@ -382,7 +556,15 @@ export default function MappingView() {
   // Only the scale reaches React (for the scale bar); panning never re-renders.
   const [scale, setScale] = useState(50)
   const latest = useRef<Omit<DrawState, 'viewport'>>(null as never)
-  latest.current = { result, image, overlays, opacity, toggles, ratio: size.ratio }
+  latest.current = {
+    result,
+    image,
+    overlays,
+    opacity,
+    toggles,
+    ratio: size.ratio,
+    review: reviewDraw,
+  }
   const frame = useRef(0)
 
   const paint = useCallback(() => {
@@ -437,7 +619,7 @@ export default function MappingView() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: any drawn input repaints
   useEffect(() => {
     schedule()
-  }, [result, image, overlays, opacity, toggles, schedule])
+  }, [result, image, overlays, opacity, toggles, reviewDraw, schedule])
 
   const fit = useCallback(() => {
     if (!size.width || !size.height) return
@@ -453,13 +635,14 @@ export default function MappingView() {
     }
     for (const wall of overlays.walls) points.push(wall.a, wall.b)
     for (const zone of overlays.zones) points.push(...zone.polygon)
+    if (reviewState) points.push(...reviewState.proposal.polygon)
     const bounds = overlayBounds(points)
     if (!bounds) return false
     viewportRef.current = fitBounds(bounds, size.width, size.height, rotationDeg)
     setScale(viewportRef.current.scale)
     schedule()
     return true
-  }, [result, overlays, size.width, size.height, rotationDeg, schedule])
+  }, [result, overlays, reviewState, size.width, size.height, rotationDeg, schedule])
 
   // Fit when a new map arrives, when the building's turn changes, and, while there is no map, when
   // the overlays first give something to fit to.
@@ -475,11 +658,35 @@ export default function MappingView() {
   }, [result, key, rotationDeg, size.width, size.height, overlays])
 
   const drag = useRef<{ x: number; y: number } | null>(null)
+  const cornerDrag = useRef<number | null>(null)
+  const levelPoint = (event: React.PointerEvent): [number, number] => {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+    return screenToLevel(viewportRef.current, event.clientX - rect.left, event.clientY - rect.top)
+  }
   const onPointerDown = (event: React.PointerEvent) => {
+    if (solution) {
+      const point = levelPoint(event)
+      const metresPerPixel = 1 / viewportRef.current.scale
+      const corner = cornerAt(solution.polygon, point, 14 * metresPerPixel)
+      if (corner !== null) {
+        cornerDrag.current = corner
+        setDragCorner(corner)
+        setSelectedEdge(null)
+        ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+        return
+      }
+      setSelectedEdge(edgeAt(solution.polygon, point, 10 * metresPerPixel))
+    }
     drag.current = { x: event.clientX, y: event.clientY }
     ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
   }
   const onPointerMove = (event: React.PointerEvent) => {
+    const dragged = cornerDrag.current
+    if (dragged !== null) {
+      const point = levelPoint(event)
+      setReviewState((current) => (current ? moveCorner(current, dragged, point) : current))
+      return
+    }
     const start = drag.current
     if (!start) return
     const view = viewportRef.current
@@ -493,6 +700,8 @@ export default function MappingView() {
   }
   const onPointerUp = () => {
     drag.current = null
+    cornerDrag.current = null
+    setDragCorner(null)
   }
   // A passive React wheel handler cannot stop the page scrolling, so attach it by hand.
   useEffect(() => {
@@ -617,6 +826,15 @@ export default function MappingView() {
         <button className="rounded bg-sidebar-accent px-2 py-1" onClick={rebuild} type="button">
           {i18n._({ id: 'app.mapping.rebuild', message: 'Rebuild' })}
         </button>
+        <button
+          aria-pressed={reviewing}
+          className={`rounded px-2 py-1 ${reviewing ? 'bg-primary text-primary-foreground' : 'bg-sidebar-accent'}`}
+          data-testid="scan-review-toggle"
+          onClick={() => setReviewing((on) => !on)}
+          type="button"
+        >
+          {i18n._({ id: 'app.review.open', message: 'Review scan' })}
+        </button>
         {rotationDeg !== FLOORPLAN_VIEW_ROTATION_DEG && (
           <span className="text-sidebar-foreground/60">
             {i18n._({
@@ -627,97 +845,121 @@ export default function MappingView() {
           </span>
         )}
       </div>
-      <div
-        className="relative min-h-0 flex-1 cursor-grab touch-none overflow-hidden bg-neutral-900 active:cursor-grabbing"
-        data-testid="mapping-surface"
-        onDoubleClick={fit}
-        onPointerCancel={onPointerUp}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        ref={wrapperRef}
-      >
-        <canvas
-          className="absolute inset-0 h-full w-full"
-          ref={canvasRef}
-          style={{ width: size.width, height: size.height }}
-        />
-        {progress && (
-          <div className="absolute inset-x-6 top-4 rounded bg-black/70 p-3 text-xs">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <span>{i18n._(PHASE_LABELS[progress.phase])}</span>
-              <button className="rounded bg-white/10 px-2 py-0.5" onClick={rebuild} type="button">
-                {i18n._({ id: 'app.mapping.restart', message: 'Restart' })}
-              </button>
+      <div className="flex min-h-0 flex-1">
+        <div
+          className="relative min-h-0 flex-1 cursor-grab touch-none overflow-hidden bg-neutral-900 active:cursor-grabbing"
+          data-testid="mapping-surface"
+          onDoubleClick={fit}
+          onPointerCancel={onPointerUp}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          ref={wrapperRef}
+        >
+          <canvas
+            className="absolute inset-0 h-full w-full"
+            ref={canvasRef}
+            style={{ width: size.width, height: size.height }}
+          />
+          {progress && (
+            <div className="absolute inset-x-6 top-4 rounded bg-black/70 p-3 text-xs">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <span>{i18n._(PHASE_LABELS[progress.phase])}</span>
+                <button className="rounded bg-white/10 px-2 py-0.5" onClick={rebuild} type="button">
+                  {i18n._({ id: 'app.mapping.restart', message: 'Restart' })}
+                </button>
+              </div>
+              <progress
+                className="h-1.5 w-full"
+                max={100}
+                value={Math.round(progressFraction(progress) * 100)}
+              />
             </div>
-            <progress
-              className="h-1.5 w-full"
-              max={100}
-              value={Math.round(progressFraction(progress) * 100)}
-            />
+          )}
+          {failure && !progress && (
+            <div className="absolute inset-x-6 top-4 rounded bg-red-950/80 p-3 text-xs">
+              {i18n._({
+                id: 'app.mapping.failed',
+                message: 'The map could not be built: {reason}',
+                values: { reason: i18n._(REFUSAL_LABELS[failure]) },
+              })}
+            </div>
+          )}
+          <div className="pointer-events-none absolute bottom-3 left-3 text-white text-xs">
+            <div className="h-1.5 border-white border-x border-b" style={{ width: bar.pixels }} />
+            <div>
+              {i18n._({
+                id: 'app.mapping.scaleBar',
+                message: '{metres} m',
+                values: { metres: bar.metres },
+              })}
+            </div>
           </div>
-        )}
-        {failure && !progress && (
-          <div className="absolute inset-x-6 top-4 rounded bg-red-950/80 p-3 text-xs">
-            {i18n._({
-              id: 'app.mapping.failed',
-              message: 'The map could not be built: {reason}',
-              values: { reason: i18n._(REFUSAL_LABELS[failure]) },
-            })}
-          </div>
-        )}
-        <div className="pointer-events-none absolute bottom-3 left-3 text-white text-xs">
-          <div className="h-1.5 border-white border-x border-b" style={{ width: bar.pixels }} />
-          <div>
-            {i18n._({
-              id: 'app.mapping.scaleBar',
-              message: '{metres} m',
-              values: { metres: bar.metres },
-            })}
-          </div>
-        </div>
-        {northAngle !== null && (
-          <div
-            aria-label={i18n._({ id: 'app.mapping.north', message: 'North' })}
-            className="absolute top-3 right-3 flex flex-col items-center text-white text-xs"
-            role="img"
-            title={northTitle}
-          >
-            <svg
-              aria-hidden
-              height="36"
-              style={{ transform: `rotate(${northAngle}deg)` }}
-              viewBox="-12 -18 24 36"
-              width="24"
+          {northAngle !== null && (
+            <div
+              aria-label={i18n._({ id: 'app.mapping.north', message: 'North' })}
+              className="absolute top-3 right-3 flex flex-col items-center text-white text-xs"
+              role="img"
+              title={northTitle}
             >
-              <path d="M0 -16 L7 12 L0 7 L-7 12 Z" fill="white" />
-            </svg>
-            <span>{i18n._({ id: 'app.mapping.northLetter', message: 'N' })}</span>
-          </div>
-        )}
-        {result && (result.notes.length > 0 || result.diagnostics.length > 0) && !progress && (
-          <details className="absolute right-3 bottom-3 max-w-sm rounded bg-black/70 p-2 text-white text-xs">
-            <summary className="cursor-pointer">
-              {i18n._({ id: 'app.mapping.notes', message: 'Notes' })}
-            </summary>
-            <ul className="mt-1 list-disc pl-4">
-              {result.notes.map((note) => (
-                <li key={JSON.stringify(note)}>{noteText(note, i18n)}</li>
-              ))}
-            </ul>
-            {result.diagnostics.length > 0 && (
-              <>
-                <p className="mt-2 font-medium">
-                  {i18n._({ id: 'app.mapping.details', message: 'Technical details' })}
-                </p>
-                <ul className="mt-1 list-disc pl-4 text-white/70" lang="en">
-                  {result.diagnostics.map((line) => (
-                    <li key={line}>{line}</li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </details>
+              <svg
+                aria-hidden
+                height="36"
+                style={{ transform: `rotate(${northAngle}deg)` }}
+                viewBox="-12 -18 24 36"
+                width="24"
+              >
+                <path d="M0 -16 L7 12 L0 7 L-7 12 Z" fill="white" />
+              </svg>
+              <span>{i18n._({ id: 'app.mapping.northLetter', message: 'N' })}</span>
+            </div>
+          )}
+          {result && (result.notes.length > 0 || result.diagnostics.length > 0) && !progress && (
+            <details className="absolute right-3 bottom-3 max-w-sm rounded bg-black/70 p-2 text-white text-xs">
+              <summary className="cursor-pointer">
+                {i18n._({ id: 'app.mapping.notes', message: 'Notes' })}
+              </summary>
+              <ul className="mt-1 list-disc pl-4">
+                {result.notes.map((note) => (
+                  <li key={JSON.stringify(note)}>{noteText(note, i18n)}</li>
+                ))}
+              </ul>
+              {result.diagnostics.length > 0 && (
+                <>
+                  <p className="mt-2 font-medium">
+                    {i18n._({ id: 'app.mapping.details', message: 'Technical details' })}
+                  </p>
+                  <ul className="mt-1 list-disc pl-4 text-white/70" lang="en">
+                    {result.diagnostics.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </details>
+          )}
+          {reviewing && !proposalReview && !progress && (
+            <div className="absolute inset-x-6 bottom-12 rounded bg-black/70 p-3 text-white text-xs">
+              {i18n._({
+                id: 'app.review.noProposal',
+                message:
+                  'No outline could be proposed from this scan, so there is nothing to review yet.',
+              })}
+            </div>
+          )}
+        </div>
+        {reviewing && scan && reviewState && solution && (
+          <ScanReviewPanel
+            onBuilt={() => setReviewing(false)}
+            onChange={setReviewState}
+            onClose={() => setReviewing(false)}
+            onReset={() => setReviewState(proposalReview ? startReview(proposalReview) : null)}
+            onSelectEdge={setSelectedEdge}
+            scan={scan}
+            selectedEdge={selectedEdge}
+            solution={solution}
+            state={reviewState}
+          />
         )}
       </div>
     </div>

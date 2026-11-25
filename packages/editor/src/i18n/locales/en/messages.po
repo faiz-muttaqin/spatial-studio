@@ -627,6 +627,147 @@ msgstr "Walls"
 msgid "app.mapping.view"
 msgstr "Mapping"
 
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.build"
+msgstr "Build walls"
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.buildFailed"
+msgstr "The walls were not built: {reason}"
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.close"
+msgstr "Close"
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.conflictAngle"
+msgstr "A right angle is off by {value}°. The tapes do not allow it."
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.conflictDistance"
+msgstr "A tape length is off by {value} m. Check the tapes against each other."
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.conflicts"
+msgstr "These do not fit together:"
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.corner"
+msgstr "Corner {number}"
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.corners"
+msgstr "Right angles"
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.crosses"
+msgstr "The outline crosses itself. Move a corner before building."
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.defaultName"
+msgstr "Room"
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.degrees"
+msgstr "{value}°"
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.height"
+msgstr "Ceiling height, m"
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.heightFrom"
+msgstr "From the scan: {value} m (an estimate)."
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.intro"
+msgstr "This outline is a guess from the scan, not a measurement. Drag corners, type tape lengths and tick right angles, then build the walls."
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.measureNext"
+msgstr "Measure this wall next: it is the least certain."
+
+#: apps/editor/components/mapping-view.tsx
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.metres"
+msgstr "{value} m"
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.moveScan"
+msgstr "Also lower the scan so its detected floor sits at the level floor."
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.moveScanLow"
+msgstr "The floor height was estimated from depth and may be off."
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.name"
+msgstr "Room name"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.review.noProposal"
+msgstr "No outline could be proposed from this scan, so there is nothing to review yet."
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.review.open"
+msgstr "Review scan"
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.reset"
+msgstr "Start over"
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.sigma"
+msgstr "± {value} m"
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.tapeLabel"
+msgstr "Tape length of wall {number}, in metres"
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.tapePlaceholder"
+msgstr "Tape measure, m"
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.title"
+msgstr "Review scan outline"
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.tone.assumed"
+msgstr "Assumed"
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.tone.glass"
+msgstr "Likely glass"
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.tone.high"
+msgstr "High confidence"
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.tone.low"
+msgstr "Low confidence"
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.tone.medium"
+msgstr "Medium confidence"
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.undoHint"
+msgstr "Building is one step in the undo history."
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.unknowns"
+msgstr "What the scan did not show"
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.wall"
+msgstr "Wall {number}"
+
+#: apps/editor/components/scan-review-panel.tsx
+msgid "app.review.walls"
+msgstr "Wall lengths"
+
 #: apps/editor/app/scan/scan-app.tsx
 msgid "app.scan.attach.retry"
 msgstr "Retry attaching"
@@ -6459,6 +6600,10 @@ msgstr "Browser photos"
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 msgid "editor.panels.scanEvidence.provider.webxr"
 msgstr "WebXR"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.review"
+msgstr "Review scan"
 
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 msgid "editor.panels.scanEvidence.roomHeight"

@@ -1195,6 +1195,7 @@ export {
   selectQuickMeasurementHudEntry,
   useQuickMeasurementHud,
 } from './store/use-quick-measurement-hud'
+export { registerScanReviewView, useScanReview } from './store/use-scan-review'
 export { default as useSegmentDraftChain } from './store/use-segment-draft-chain'
 export {
   type StairPreviewPoint,

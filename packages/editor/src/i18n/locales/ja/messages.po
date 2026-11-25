@@ -1564,6 +1564,357 @@ msgstr "壁"
 msgid "app.mapping.view"
 msgstr "マッピング"
 
+# Source-Hash: 10d5a934c3800674
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Build walls"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.build"
+msgstr "壁を作成"
+
+# Source-Hash: 083fd91471c923e6
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The walls were not built: {reason}"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.buildFailed"
+msgstr "壁を作成できませんでした: {reason}"
+
+# Source-Hash: d7cf5045c01b2eb9
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Close"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.close"
+msgstr "閉じる"
+
+# Source-Hash: f7026d7447d155bb
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "A right angle is off by {value}°. The tapes do not allow it."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.conflictAngle"
+msgstr "直角が {value}° ずれています。実測値ではこの角度にできません。"
+
+# Source-Hash: 2c421e18197c539a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "A tape length is off by {value} m. Check the tapes against each other."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.conflictDistance"
+msgstr "実測の長さが {value} m ずれています。実測値同士を確認してください。"
+
+# Source-Hash: c57e13ed1ed24a98
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "These do not fit together:"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.conflicts"
+msgstr "次の内容は互いに矛盾しています:"
+
+# Source-Hash: 3ce6a6a1bdee7189
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Corner {number}"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.corner"
+msgstr "角 {number}"
+
+# Source-Hash: 09d4274834614a15
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Right angles"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.corners"
+msgstr "直角"
+
+# Source-Hash: bd8689af82652eb0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The outline crosses itself. Move a corner before building."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.crosses"
+msgstr "輪郭が自己交差しています。作成する前に角を動かしてください。"
+
+# Source-Hash: 612dcd5bf06a79c4
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Room"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.defaultName"
+msgstr "部屋"
+
+# Source-Hash: ad924ecd9d304d78
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "{value}°"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.degrees"
+msgstr "{value}°"
+
+# Source-Hash: c24141732d9760ea
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Ceiling height, m"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.height"
+msgstr "天井高、m"
+
+# Source-Hash: c022de864bbef74a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "From the scan: {value} m (an estimate)."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.heightFrom"
+msgstr "スキャンから: {value} m（推定値）。"
+
+# Source-Hash: d69304d8ba2e6547
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "This outline is a guess from the scan, not a measurement. Drag corners, type tape lengths and tick right angles, then build the walls."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.intro"
+msgstr "この輪郭はスキャンからの推定であり、実測ではありません。角をドラッグし、実測の長さを入力し、直角にチェックを入れてから壁を作成してください。"
+
+# Source-Hash: 872665476ae886d6
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Measure this wall next: it is the least certain."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.measureNext"
+msgstr "次にこの壁を測ってください。最も不確かです。"
+
+# Source-Hash: 9de1772ec94180b3
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "{value} m"
+#: apps/editor/components/mapping-view.tsx
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.metres"
+msgstr "{value} m"
+
+# Source-Hash: 6a973fd4c9076adc
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Also lower the scan so its detected floor sits at the level floor."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.moveScan"
+msgstr "検出した床がレベルの床に合うよう、スキャンも下げる。"
+
+# Source-Hash: fe03450bed432a64
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The floor height was estimated from depth and may be off."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.moveScanLow"
+msgstr "床の高さは深度から推定したため、ずれている可能性があります。"
+
+# Source-Hash: bf75e739dd7e5877
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Room name"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.name"
+msgstr "部屋名"
+
+# Source-Hash: 858301c87e8ae947
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "No outline could be proposed from this scan, so there is nothing to review yet."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.review.noProposal"
+msgstr "このスキャンからは輪郭を提案できなかったため、確認するものがまだありません。"
+
+# Source-Hash: c0bdcd412e7c9dac
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Review scan"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.review.open"
+msgstr "スキャンを確認"
+
+# Source-Hash: ca7e25a7dce565cf
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Start over"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.reset"
+msgstr "最初からやり直す"
+
+# Source-Hash: 86d25bde4d323e64
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "± {value} m"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.sigma"
+msgstr "± {value} m"
+
+# Source-Hash: 277dd231dd8a7864
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Tape length of wall {number}, in metres"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.tapeLabel"
+msgstr "壁 {number} の実測長（メートル）"
+
+# Source-Hash: 1308e7871a369ff9
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Tape measure, m"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.tapePlaceholder"
+msgstr "実測、m"
+
+# Source-Hash: 2c4b0241d37d8fd5
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Review scan outline"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.title"
+msgstr "スキャン輪郭の確認"
+
+# Source-Hash: 47f49a668bb0936b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Assumed"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.tone.assumed"
+msgstr "仮定"
+
+# Source-Hash: 798413c1ab394a82
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Likely glass"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.tone.glass"
+msgstr "ガラスの可能性"
+
+# Source-Hash: e2bf302b3006c3e3
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "High confidence"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.tone.high"
+msgstr "信頼度 高"
+
+# Source-Hash: 73ef8eda3f84d4ab
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Low confidence"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.tone.low"
+msgstr "信頼度 低"
+
+# Source-Hash: 4fdb55b275c2d690
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Medium confidence"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.tone.medium"
+msgstr "信頼度 中"
+
+# Source-Hash: da0432b81c2c6bc0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Building is one step in the undo history."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.undoHint"
+msgstr "作成は元に戻す履歴の1ステップになります。"
+
+# Source-Hash: 0894d370809dff14
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "What the scan did not show"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.unknowns"
+msgstr "スキャンで確認できなかったこと"
+
+# Source-Hash: c70a47b95dfe26ee
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Wall {number}"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.wall"
+msgstr "壁 {number}"
+
+# Source-Hash: 6b61af90dc8b54d6
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Wall lengths"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.walls"
+msgstr "壁の長さ"
+
 # Source-Hash: 51d4b567c394bc97
 # Review: required
 # AI-Provider: claude-code
@@ -16088,6 +16439,16 @@ msgstr "ブラウザーの写真"
 #, fuzzy
 msgid "editor.panels.scanEvidence.provider.webxr"
 msgstr "WebXR"
+
+# Source-Hash: c0bdcd412e7c9dac
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Review scan"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.review"
+msgstr "スキャンを確認"
 
 # Source-Hash: 646ef0fbcbc58edf
 # Review: required
