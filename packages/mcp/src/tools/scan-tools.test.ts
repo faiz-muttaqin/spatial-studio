@@ -560,8 +560,8 @@ describe('propose_room_from_scan with raw depth and no planes', () => {
     const depth = new Uint16Array(W * H)
     for (let v = 0; v < H; v += 1) {
       for (let u = 0; u < W; u += 1) {
-        const a = (u + 0.5 - K.cx) / K.fx
-        const b = -(v + 0.5 - K.cy) / K.fy
+        const a = (u - K.cx) / K.fx
+        const b = -(v - K.cy) / K.fy
         const d = [0, 1, 2].map((i) => right[i]! * a + up[i]! * b + forward[i]!)
         let t = Number.POSITIVE_INFINITY
         for (const [axis, at] of [

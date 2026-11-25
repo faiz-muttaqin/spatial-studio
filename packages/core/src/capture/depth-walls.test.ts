@@ -76,8 +76,8 @@ function renderFrame(
   for (let v = 0; v < HEIGHT; v += 1) {
     for (let u = 0; u < WIDTH; u += 1) {
       // Camera-space ray with z = -1, so the hit parameter is the depth along the optical axis.
-      const cx = (u + 0.5 - INTRINSICS.cx) / INTRINSICS.fx
-      const cy = -(v + 0.5 - INTRINSICS.cy) / INTRINSICS.fy
+      const cx = (u - INTRINSICS.cx) / INTRINSICS.fx
+      const cy = -(v - INTRINSICS.cy) / INTRINSICS.fy
       const dir = [
         right[0]! * cx + up[0]! * cy + forward[0]!,
         right[1]! * cx + up[1]! * cy + forward[1]!,

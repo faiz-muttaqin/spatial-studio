@@ -23,7 +23,7 @@ import type { CameraIntrinsics, CapturePlane } from './streams'
  *
  * Camera convention (CAPTURE_CONTRACT.md): OpenGL axes (+X right, +Y up, -Z forward) relative to the
  * image readout, depth is the distance along the optical axis (not the ray), intrinsics are in depth
- * pixels. A pixel (u, v) at depth d is `[(u + 0.5 - cx) / fx * d, -(v + 0.5 - cy) / fy * d, -d]`.
+ * pixels. A pixel (u, v) at depth d is `[(u - cx) / fx * d, (cy - v) / fy * d, -d]` with integer pixel indices and no half-pixel offset, as in the ARCore raw depth sample.
  */
 
 export type DepthFrameInput = {
@@ -354,8 +354,8 @@ export function deriveDepthWalls(
         const d = millimetres / 1000
         if (d < MIN_DEPTH_M || d > maxDepth) continue
         if (confidence && confidence[pixel]! < minConfidence) continue
-        const x = ((u + 0.5 - intrinsics.cx) / intrinsics.fx) * d
-        const y = (-(v + 0.5 - intrinsics.cy) / intrinsics.fy) * d
+        const x = ((u - intrinsics.cx) / intrinsics.fx) * d
+        const y = (-(v - intrinsics.cy) / intrinsics.fy) * d
         const z = -d
         const lx = origin[0] + a0[0]! * x + a1[0]! * y + a2[0]! * z
         const ly = origin[1] + a0[1]! * x + a1[1]! * y + a2[1]! * z
@@ -718,8 +718,8 @@ export function estimateVerticalExtent(
         if (confidence && confidence[pixel]! < minConfidence) continue
         const y =
           origin[1] +
-          row[0] * ((u + 0.5 - intrinsics.cx) / intrinsics.fx) * d +
-          row[1] * (-(v + 0.5 - intrinsics.cy) / intrinsics.fy) * d -
+          row[0] * ((u - intrinsics.cx) / intrinsics.fx) * d +
+          row[1] * (-(v - intrinsics.cy) / intrinsics.fy) * d -
           row[2] * d
         const bin = Math.round(y / HEIGHT_BIN)
         bins.set(bin, (bins.get(bin) ?? 0) + 1)
