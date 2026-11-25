@@ -8,7 +8,7 @@ import {
   registerNode,
 } from '@pascal-app/core'
 import { sdfChecksFromEnv, setSdfChecks } from '@pascal-app/core/usage-field'
-import { registerEditorHostPanel } from '@pascal-app/editor'
+import { registerEditorHostPanel, registerEditorHostView } from '@pascal-app/editor'
 import { builtinPlugin } from '@pascal-app/nodes'
 import { bonesHostPanel, bonesPlugin } from '@pascal-app/plugin-bones'
 import {
@@ -140,6 +140,17 @@ extendPluginDiscovery(async () => {
 })
 extendPluginDiscovery(async () => [webXRPlugin])
 registerEditorHostPanel(webXRHostPanel)
+
+// Mapping: the top-down colour map of a capture scan beside the 3D scene and the 2D plan. It is a
+// host view because it reads capture artifacts, which the editor package does not know about.
+// The component, its worker and the capture builders load only when the view is first shown.
+registerEditorHostView({
+  id: 'spatial-studio:mapping',
+  label: 'Mapping',
+  icon: { kind: 'url', src: '/icons/topview.webp' },
+  component: () => import('../components/mapping-view'),
+  defaultPinned: true,
+})
 
 loadBuiltinsSync()
 void loadExternalPlugins()

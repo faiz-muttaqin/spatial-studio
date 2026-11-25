@@ -1,0 +1,119 @@
+import { describe, expect, test } from 'bun:test'
+import {
+  fitBounds,
+  levelToScreen,
+  MAX_SCALE,
+  northScreenAngle,
+  scaleBar,
+  screenToLevel,
+  zoomAt,
+} from './map-view-math'
+import { captureScans, overlayBounds, sceneOverlays } from './scene-overlays'
+
+describe('map viewport', () => {
+  const view = { offsetX: 100, offsetY: 50, scale: 40 }
+  test('level +x goes right and +z goes down, like the 2D plan', () => {
+    const [x0, y0] = levelToScreen(view, 0, 0)
+    const [x1, y1] = levelToScreen(view, 1, 2)
+    expect(x1 - x0).toBe(40)
+    expect(y1 - y0).toBe(80)
+  })
+  test('screenToLevel inverts levelToScreen', () => {
+    const [sx, sy] = levelToScreen(view, 3.25, -1.5)
+    const [x, z] = screenToLevel(view, sx, sy)
+    expect(x).toBeCloseTo(3.25, 9)
+    expect(z).toBeCloseTo(-1.5, 9)
+  })
+  test('zoom keeps the point under the cursor fixed and clamps', () => {
+    const before = screenToLevel(view, 300, 200)
+    const zoomed = zoomAt(view, 300, 200, 2)
+    const after = screenToLevel(zoomed, 300, 200)
+    expect(after[0]).toBeCloseTo(before[0], 9)
+    expect(after[1]).toBeCloseTo(before[1], 9)
+    expect(zoomAt(view, 0, 0, 1e9).scale).toBe(MAX_SCALE)
+  })
+  test('fitBounds centres the bounds', () => {
+    const fitted = fitBounds({ minX: 0, minZ: 0, maxX: 4, maxZ: 2 }, 400, 300, 0)
+    const [cx, cy] = levelToScreen(fitted, 2, 1)
+    expect(cx).toBeCloseTo(200, 6)
+    expect(cy).toBeCloseTo(150, 6)
+  })
+  test('the scale bar is a round number of metres', () => {
+    for (const scale of [7, 33, 120, 900]) {
+      const { metres, pixels } = scaleBar(scale)
+      expect([1, 2, 5]).toContain(
+        Number((metres / 10 ** Math.floor(Math.log10(metres))).toFixed(6)),
+      )
+      expect(pixels).toBeCloseTo(metres * scale, 9)
+    }
+  })
+  test('north arrow angle is clockwise from up', () => {
+    expect(northScreenAngle([0, -1])).toBeCloseTo(0, 9)
+    expect(northScreenAngle([1, 0])).toBeCloseTo(90, 9)
+    expect(Math.abs(northScreenAngle([0, 1]))).toBeCloseTo(180, 9)
+  })
+})
+
+describe('scene overlays', () => {
+  const nodes = {
+    level_1: { id: 'level_1', type: 'level' },
+    wall_a: {
+      id: 'wall_a',
+      type: 'wall',
+      parentId: 'level_1',
+      start: [0, 0],
+      end: [4, 0],
+      thickness: 0.2,
+    },
+    wall_b: { id: 'wall_b', type: 'wall', parentId: 'level_2', start: [9, 9], end: [9, 10] },
+    zone_a: {
+      id: 'zone_a',
+      type: 'zone',
+      parentId: 'level_1',
+      name: 'Hall',
+      polygon: [
+        [0, 0],
+        [4, 0],
+        [4, 3],
+      ],
+    },
+    scan_a: {
+      id: 'scan_a',
+      type: 'scan',
+      name: 'Scan',
+      parentId: 'level_1',
+      position: [1, 0, 2],
+      rotation: [0, 0, 0],
+      scale: 1,
+      captureSession: {
+        sessionId: 's',
+        schemaVersion: 2,
+        manifestUrl: '/api/artifacts/' + 'a'.repeat(64),
+      },
+    },
+    scan_b: { id: 'scan_b', type: 'scan', parentId: 'level_1', captureSession: null },
+  }
+  test('walls and zones of one level keep level coordinates untouched', () => {
+    const overlays = sceneOverlays(nodes, 'level_1')
+    expect(overlays.walls).toEqual([{ id: 'wall_a', a: [0, 0], b: [4, 0], thickness: 0.2 }])
+    expect(overlays.zones[0]!.polygon).toEqual([
+      [0, 0],
+      [4, 0],
+      [4, 3],
+    ])
+  })
+  test('only scans with a capture manifest are listed', () => {
+    const scans = captureScans(nodes)
+    expect(scans.map((scan) => scan.id)).toEqual(['scan_a'])
+    expect(scans[0]!.transform.position).toEqual([1, 0, 2])
+  })
+  test('bounds', () => {
+    expect(
+      overlayBounds([
+        [1, 2],
+        [3, -1],
+      ]),
+    ).toEqual({ minX: 1, minZ: -1, maxX: 3, maxZ: 2 })
+    expect(overlayBounds([])).toBeNull()
+  })
+})

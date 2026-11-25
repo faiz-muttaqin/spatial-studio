@@ -459,6 +459,86 @@ msgstr "Shed"
 msgid "app.lib.buildTabState.wall"
 msgstr "Wall"
 
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.empty.body"
+msgstr "Scan a room with a phone and attach it to see its top-down map here."
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.empty.title"
+msgstr "No capture scans in this project"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.failed"
+msgstr "The map could not be built: {reason}"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.fit"
+msgstr "Fit"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.layer"
+msgstr "Layer"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.layer.floor"
+msgstr "Floor only"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.layer.top"
+msgstr "Top surfaces"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.north"
+msgstr "North"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.northLetter"
+msgstr "N"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.notes"
+msgstr "Notes"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.opacity"
+msgstr "Map opacity"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.rebuild"
+msgstr "Rebuild"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.restart"
+msgstr "Restart"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.scaleBar"
+msgstr "{metres} m"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.scan"
+msgstr "Scan"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.toggle.map"
+msgstr "Map"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.toggle.path"
+msgstr "Walked path"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.toggle.proposal"
+msgstr "Room proposal"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.toggle.rooms"
+msgstr "Rooms"
+
+#: apps/editor/components/mapping-view.tsx
+msgid "app.mapping.toggle.walls"
+msgstr "Walls"
+
 #: apps/editor/app/scan/scan-app.tsx
 msgid "app.scan.attach.retry"
 msgstr "Retry attaching"

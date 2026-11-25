@@ -1144,6 +1144,206 @@ msgstr "片流れ"
 msgid "app.lib.buildTabState.wall"
 msgstr "壁"
 
+# Source-Hash: 0fac904d1e7dde70
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Scan a room with a phone and attach it to see its top-down map here."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.empty.body"
+msgstr "スマートフォンで部屋をスキャンして添付すると、ここに真上から見たマップが表示されます。"
+
+# Source-Hash: 3554daf658b7f235
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "No capture scans in this project"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.empty.title"
+msgstr "このプロジェクトにキャプチャスキャンはありません"
+
+# Source-Hash: e99cebd681449667
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The map could not be built: {reason}"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.failed"
+msgstr "マップを作成できませんでした: {reason}"
+
+# Source-Hash: 8e5c71905dfa8a54
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Fit"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.fit"
+msgstr "全体表示"
+
+# Source-Hash: d7ee1cefa20d0e32
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Layer"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.layer"
+msgstr "レイヤー"
+
+# Source-Hash: df0f7f8e75704297
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Floor only"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.layer.floor"
+msgstr "床のみ"
+
+# Source-Hash: 6d498dc88d305fb5
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Top surfaces"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.layer.top"
+msgstr "上面"
+
+# Source-Hash: f94cb8139f3bbeba
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "North"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.north"
+msgstr "北"
+
+# Source-Hash: f9dfd61493ca94a4
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "N"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.northLetter"
+msgstr "北"
+
+# Source-Hash: 28a939dccbff00d7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Notes"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.notes"
+msgstr "メモ"
+
+# Source-Hash: 520dd6a76101fa4f
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Map opacity"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.opacity"
+msgstr "マップの不透明度"
+
+# Source-Hash: de81ab8273a09913
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Rebuild"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.rebuild"
+msgstr "再構築"
+
+# Source-Hash: 61ecb75a10705708
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Restart"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.restart"
+msgstr "再開始"
+
+# Source-Hash: 053d7b00b76fe936
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "{metres} m"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.scaleBar"
+msgstr "{metres} m"
+
+# Source-Hash: 42e13fe46f56a780
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Scan"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.scan"
+msgstr "3Dスキャン"
+
+# Source-Hash: af8156ce27f17334
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Map"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.toggle.map"
+msgstr "マップ"
+
+# Source-Hash: 5607bb312ed3a662
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Walked path"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.toggle.path"
+msgstr "歩いた経路"
+
+# Source-Hash: 412326a406911146
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Room proposal"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.toggle.proposal"
+msgstr "部屋の提案"
+
+# Source-Hash: 3e7408ed44676176
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Rooms"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.toggle.rooms"
+msgstr "部屋"
+
+# Source-Hash: aac9a732d2159ccc
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Walls"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.toggle.walls"
+msgstr "壁"
+
 # Source-Hash: 51d4b567c394bc97
 # Review: required
 # AI-Provider: claude-code
