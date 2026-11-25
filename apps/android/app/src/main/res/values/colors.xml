@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="brand_background">#FF14161A</color>
+    <color name="brand_foreground">#FFF2F3F5</color>
+    <color name="hud_scrim">#99000000</color>
+</resources>

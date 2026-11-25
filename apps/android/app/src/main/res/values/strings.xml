@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Spatial Studio</string>
+    <string name="scan_finish">Finish</string>
+    <string name="scan_cancel">Cancel</string>
+    <string name="scan_starting">Starting camera…</string>
+    <string name="scan_saving">Saving scan…</string>
+    <string name="scan_hint">Move slowly along the walls. Point at the floor and ceiling too.</string>
+    <string name="scan_keyframe_limit">Keyframe limit reached. Finish and start a new scan for the rest of the room.</string>
+    <string name="scan_camera_denied">Camera permission is needed to scan.</string>
+    <string name="scan_arcore_unavailable">ARCore is not available on this device.</string>
+    <string name="scan_arcore_not_installed">Google Play Services for AR is not installed and cannot be installed here.</string>
+    <string name="scan_failed">Scan failed: %1$s</string>
+    <string name="scan_stats">Keyframes %1$d/%2$d  Planes %3$d  Points %4$d  %5$02d:%6$02d</string>
+    <string name="tracking_ok">Tracking</string>
+    <string name="tracking_searching">Looking for surfaces…</string>
+    <string name="tracking_dark">Too dark: turn on more lights</string>
+    <string name="tracking_fast">Moving too fast: slow down</string>
+    <string name="tracking_features">Not enough detail: aim at textured surfaces</string>
+    <string name="tracking_camera">Camera unavailable</string>
+    <string name="tracking_stopped">Tracking stopped</string>
+</resources>
