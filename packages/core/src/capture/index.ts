@@ -7,6 +7,21 @@ export {
   transformPositions,
 } from './cloud-summary'
 export {
+  type BeyondEdge,
+  type DepthFrameInput,
+  type DepthWallBasis,
+  type DepthWallEvidence,
+  type DepthWallOptions,
+  deriveDepthWalls,
+  distanceFromPath,
+  estimateVerticalExtent,
+  floorPolygonsFromPlanes,
+  floorSeenAlongEdge,
+  measureBeyondEdge,
+  pathOutside,
+  type WallCandidate,
+} from './depth-walls'
+export {
   isIdentityMatrix4,
   multiplyMatrix4,
   resolveFrameTransform,
@@ -29,6 +44,7 @@ export {
   type WallSegment,
 } from './plane-analysis'
 export {
+  type DepthSummary,
   type EdgeBasis,
   type EdgeConfidence,
   proposeRoom,
