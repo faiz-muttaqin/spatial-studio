@@ -69,7 +69,8 @@ class SensorRecorder(
     private val history = OrientationHistory()
     private val diagnostics = HeadingDiagnostics()
     @Volatile private var magnetometerAccuracy = 0
-    private val frameClock = ClockCalibrator()
+    // Rolling: a camera reconfigure can shift the frame clock's base mid-scan; headings pair only while it checks out.
+    private val frameClock = ClockCalibrator(rolling = true)
     private val sensorClock = ClockCalibrator()
 
     /** Most recent camera-direction reading for the HUD; null until the phone is held upright. */
@@ -178,10 +179,11 @@ class SensorRecorder(
 
     /** Verified boot-time clocks for both sources, so sensor and camera timestamps can be compared. */
     val clocksVerified: Boolean
-        get() = frameClock.state == ClockCalibrator.State.COMPARABLE && sensorClock.state == ClockCalibrator.State.COMPARABLE
+        get() = frameClock.everComparable && sensorClock.everComparable
 
     private val clockMismatch: Boolean
-        get() = frameClock.state == ClockCalibrator.State.MISMATCH || sensorClock.state == ClockCalibrator.State.MISMATCH
+        get() = (!frameClock.everComparable && frameClock.state == ClockCalibrator.State.MISMATCH) ||
+            (!sensorClock.everComparable && sensorClock.state == ClockCalibrator.State.MISMATCH)
 
     fun captured(): SensorCapture {
         val warnings = ArrayList<String>()
@@ -190,6 +192,7 @@ class SensorRecorder(
         if (pressure.truncated) warnings += "barometer-truncated"
         if (fixes.truncated) warnings += "geolocation-truncated"
         if (sensorsOn && clockMismatch) warnings += "sensor-clock-not-comparable"
+        if (sensorsOn && frameClock.resets > 0) warnings += "frame-clock-reset"
         return SensorCapture(
             orientation = orientation.snapshot(),
             heading = heading.snapshot(),

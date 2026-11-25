@@ -359,8 +359,54 @@ class SensorTrustTest {
         val samples = run(0.0, 60, 20.0) + run(65.0, 60, 80.0)
         val result = NorthEstimator.estimate(samples)!!
         assertFalse(result.segmentsAgree)
-        assertTrue(result.confidence <= 0.3 + 1e-9)
         assertTrue(NorthEstimator.estimate(run(0.0, 60, 20.0) + run(65.0, 60, 21.0))!!.segmentsAgree)
+    }
+
+    @Test
+    fun disagreeingSegmentsGiveTheBestSupportedSegmentNotALowOverallFigure() {
+        // A long segment at offset 20 and a shorter one at 80: the long one is reported, with its own confidence.
+        val result = NorthEstimator.estimate(run(0.0, 80, 20.0) + run(85.0, 30, 80.0))!!
+        assertFalse(result.segmentsAgree)
+        assertTrue(result.fromSegment)
+        assertEquals(20.0, result.worldYawDeg, 1.0)
+        assertTrue(result.confidence > 0.3)
+        // Agreeing segments use everything and are not flagged.
+        val agree = NorthEstimator.estimate(run(0.0, 60, 20.0) + run(65.0, 60, 21.0))!!
+        assertFalse(agree.fromSegment)
+    }
+
+    @Test
+    fun segmentsTooShortToEstimateFallBackToTheOverallResult() {
+        val result = NorthEstimator.estimate(run(0.0, 40, 20.0) + run(45.0, 3, 80.0) + run(50.0, 3, 140.0))!!
+        assertTrue(result.sampleCount >= NorthEstimator.MIN_SAMPLES)
+    }
+
+    @Test
+    fun aRollingClockCalibratorDropsOutOnABaseShiftAndRecovers() {
+        val c = ClockCalibrator(rolling = true)
+        var frame = 1_000_000_000L
+        fun feed(n: Int, delayNs: Long) = repeat(n) { frame += 33_000_000L; c.add(frame, frame + delayNs) }
+        feed(30, 40_000_000L)
+        assertEquals(ClockCalibrator.State.COMPARABLE, c.state)
+        // A reconfigure shifts the frame timestamps' base: readings now look seconds old.
+        feed(1, 3_000_000_000L)
+        assertEquals(ClockCalibrator.State.MISMATCH, c.state)
+        assertEquals(1, c.resets)
+        // Back on the boot clock: a full clean window is needed before heading pairing resumes.
+        feed(29, 40_000_000L)
+        assertEquals(ClockCalibrator.State.MISMATCH, c.state)
+        feed(1, 40_000_000L)
+        assertEquals(ClockCalibrator.State.COMPARABLE, c.state)
+        assertTrue(c.everComparable)
+    }
+
+    @Test
+    fun aOneShotClockCalibratorStaysWhereItLanded() {
+        val c = ClockCalibrator()
+        for (i in 0 until 30) c.add(1_000_000_000L + i * 33_000_000L, 1_000_000_000L + i * 33_000_000L + 40_000_000L)
+        c.add(2_000_000_000L, 9_000_000_000L)
+        assertEquals(ClockCalibrator.State.COMPARABLE, c.state)
+        assertEquals(0, c.resets)
     }
 
     @Test

@@ -63,14 +63,6 @@
             android:textColor="@color/brand_foreground"
             android:textSize="14sp" />
 
-        <CheckBox
-            android:id="@+id/scan_toggle_torch"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/scan_toggle_torch"
-            android:textColor="@color/brand_foreground"
-            android:textSize="14sp" />
-
         <TextView
             android:id="@+id/scan_guidance"
             android:layout_width="match_parent"

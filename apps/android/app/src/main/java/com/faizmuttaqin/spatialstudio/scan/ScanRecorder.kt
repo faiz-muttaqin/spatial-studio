@@ -110,9 +110,6 @@ class ScanRecorder(
         warnings.add(WARNING_TORCH_CONFIGURE_FAILED)
     }
 
-    fun torchToggledMidScan() {
-        if (selector.count > 0) warnings.add(WARNING_TORCH_MID_SCAN)
-    }
 
     /** Set by the scan screen; off when the sensors toggle is off or the mode is DISABLED. */
     @Volatile
@@ -631,7 +628,6 @@ class ScanRecorder(
         const val WARNING_SKIPPED_FAST = "keyframes-skipped-fast"
         const val WARNING_TORCH_UNSUPPORTED = "torch-unsupported"
         const val WARNING_TORCH_CONFIGURE_FAILED = "torch-configure-failed"
-        const val WARNING_TORCH_MID_SCAN = "torch-toggled-mid-scan"
         private const val MAX_POSE_JUMPS = 50
         private const val COVERAGE_DEPTH_INTERVAL_NS = 250_000_000L
         private const val GUIDANCE_INTERVAL_NS = 250_000_000L

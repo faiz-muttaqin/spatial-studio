@@ -165,6 +165,8 @@ class TrueNorthResult(
     val declinationDeg: Double?,
     /** False when the offsets of separate tracking segments disagree (a world-frame jump or a bent field). */
     val segmentsAgree: Boolean = true,
+    /** True when the segments disagreed and this is the best supported segment alone. */
+    val fromSegment: Boolean = false,
 ) {
     val method: String get() = if (trueReference) "compass-median-true" else "compass-median-magnetic"
     val reference: String get() = if (trueReference) "true" else "magnetic"
@@ -233,10 +235,41 @@ object NorthEstimator {
         val withDeclination = usable.filter { it.azimuthTrueDeg != null && it.declinationDeg != null }
         if (withDeclination.size >= MIN_SAMPLES) {
             val declination = withDeclination.sumOf { it.declinationDeg!! } / withDeclination.size
-            return result(withDeclination, true, declination)
+            return bySegments(withDeclination, true, declination)
         }
-        if (usable.size >= MIN_SAMPLES) return result(usable, false, null)
+        if (usable.size >= MIN_SAMPLES) return bySegments(usable, false, null)
         return null
+    }
+
+    /**
+     * When the tracking segments agree, all samples are used. When they disagree (a world-frame jump
+     * between segments), each segment with enough samples is estimated alone and the best supported one
+     * is returned, flagged `segmentsAgree = false` and with [TrueNorthResult.fromSegment] set, instead of
+     * one low-confidence figure across segments that do not share a frame.
+     */
+    private fun bySegments(samples: List<HeadingData>, trueReference: Boolean, declination: Double?): TrueNorthResult {
+        val overall = result(samples, trueReference, declination)
+        if (overall.segmentsAgree) return overall
+        val candidates = splitSegments(samples).filter { it.size >= MIN_SAMPLES }
+        val best = candidates
+            .map { result(it, trueReference, declination) }
+            .maxWithOrNull(compareBy<TrueNorthResult> { it.confidence }.thenBy { it.sampleCount })
+            ?: return overall
+        return TrueNorthResult(
+            best.worldYawDeg, best.confidence, best.trueReference, best.spreadDeg, best.sampleCount,
+            best.declinationDeg, segmentsAgree = false, fromSegment = true,
+        )
+    }
+
+    private fun splitSegments(samples: List<HeadingData>): List<List<HeadingData>> {
+        val segments = ArrayList<MutableList<HeadingData>>()
+        var previous = Long.MIN_VALUE
+        for (s in samples) {
+            if (previous == Long.MIN_VALUE || s.timestampNs - previous > SEGMENT_GAP_NS) segments.add(ArrayList())
+            segments.last().add(s)
+            previous = s.timestampNs
+        }
+        return segments
     }
 
     private fun offset(s: HeadingData, trueReference: Boolean): Double =
@@ -315,6 +348,13 @@ class ClockCalibrator(
     private val minDeltaNs: Long = -5_000_000L,
     private val maxDeltaNs: Long = 250_000_000L,
     private val maxSpreadNs: Long = 100_000_000L,
+    /**
+     * Keep checking after the first verdict. A camera reconfigure can shift the frame timestamps' base
+     * mid-scan: the first out-of-range reading then drops the state to [State.MISMATCH], and a full clean
+     * window of [required] readings is needed to be [State.COMPARABLE] again. Consumers pair data only
+     * while the state is COMPARABLE.
+     */
+    private val rolling: Boolean = false,
 ) {
     enum class State { PENDING, COMPARABLE, MISMATCH }
 
@@ -326,18 +366,43 @@ class ClockCalibrator(
     private var lowest = Long.MAX_VALUE
     private var highest = Long.MIN_VALUE
 
+    /** True once a window passed, even if a later one failed. */
+    @Volatile
+    var everComparable = false
+        private set
+
+    /** How many times a verified clock dropped out of range (a base shift). */
+    @Volatile
+    var resets = 0
+        private set
+
     /** [readingNs] is the callback's timestamp, [elapsedNs] the boot-time clock on arrival. */
     fun add(readingNs: Long, elapsedNs: Long) {
-        if (state != State.PENDING || readingNs <= 0L) return
+        if (readingNs <= 0L) return
+        if (!rolling && state != State.PENDING) return
         val delta = elapsedNs - readingNs
         if (delta < minDeltaNs || delta > maxDeltaNs) {
+            if (state == State.COMPARABLE) resets++
             state = State.MISMATCH
+            startWindow()
             return
         }
         lowest = min(lowest, delta)
         highest = max(highest, delta)
         count++
-        if (count >= required) state = if (highest - lowest <= maxSpreadNs) State.COMPARABLE else State.MISMATCH
+        if (count >= required) {
+            val passed = highest - lowest <= maxSpreadNs
+            if (!passed && state == State.COMPARABLE) resets++
+            state = if (passed) State.COMPARABLE else State.MISMATCH
+            if (passed) everComparable = true
+            if (rolling) startWindow()
+        }
+    }
+
+    private fun startWindow() {
+        count = 0
+        lowest = Long.MAX_VALUE
+        highest = Long.MIN_VALUE
     }
 }
 
