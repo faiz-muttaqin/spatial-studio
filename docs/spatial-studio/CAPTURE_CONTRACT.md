@@ -40,9 +40,9 @@ A bundle is one `CaptureSessionManifest` schema version 2 (`packages/core/src/ca
 | `depth-keyframes` | `depth` | artifact `application/json` index `{ frames: [entry, ...] }`, plus one `application/octet-stream` artifact per frame | Entry: `{ id, rgbKeyframeId, timestamp, width, height, intrinsics: { fx, fy, cx, cy }, depth: { uri, sha256 }, confidence: { uri, sha256 } | null }`. Depth is raw uint16 little-endian millimetres, row-major, `width` x `height`; confidence is uint8 in the same layout. Only when ARCore reports Depth API support. |
 | `plane-set` | `planes` | artifact `application/json` `{ planes: [plane, ...] }` | ARCore planes: `{ id, orientation: "horizontal-up" | "horizontal-down" | "vertical", centerPose: number[16], extent: [x, z], polygon: [[x, z], ...] (plane-local metres, at least 3 points), subsumedBy: string | null }`. Primary input for wall, floor and ceiling candidates. |
 | `manual-measurements` | `measurements` | artifact `application/json` | `{ units: "m", room: { width, length, height } (each positive or null), openings: [{ kind: "door" | "window", wall: string | null, width, height, sill }], notes, source: "manual" }`. Opening `width`, `height` and `sill` are nullable; an unknown value stays null. |
-| `device-capabilities` | `capabilities` | inline | `{ probedAt (unix ms), browser: BrowserCapabilities | null, native: capabilities.get result | null }`. `browser` reports secure context, camera, WebXR `immersive-ar` (`supported`, `unsupported` or `unknown`; optional features stay `unknown` because they are only negotiated at session start), and orientation and motion permission state. |
+| `device-capabilities` | `capabilities` | inline | `{ probedAt (unix ms), browser: BrowserCapabilities | null, native: capabilities.get result | null }`. `browser` reports secure context, camera, WebXR `immersive-ar` (`supported`, `unsupported` or `unknown`; optional features stay `unknown` because they are only negotiated at session start), orientation and motion permission state, and the browser family and major version (for example `Chrome 140`), never the full user agent. |
 
-`metadata` on the manifest: `{ provider, appVersion, bridgeVersion?, device: { manufacturer, model, os } (each nullable), createdAt (ISO 8601), trackingLossCount, warnings: string[] }`.
+`metadata` on the manifest: `{ provider, appVersion, bridgeVersion?, device: { manufacturer, model, os } (each nullable), createdAt (ISO 8601), trackingLossCount, warnings: string[] }`. Browser providers record only the OS family (`os`) and leave `manufacturer` and `model` null; shared scenes can expose their artifacts.
 
 The payload schemas live in `packages/core/src/capture/streams.ts` (exported from `@pascal-app/core/capture`); a bundle that fails them is invalid.
 
@@ -63,6 +63,8 @@ type BridgeReply =
   | { v: 1; id: string; ok: false; error: { code: string; message: string } }
 type BridgeEvent = { v: 1; event: 'scan.state' | 'scan.progress' | 'upload.progress'; data: unknown }
 ```
+
+Event `data` is an object that carries the `sessionId` it belongs to. The page extends a pending `scan.upload` timeout only on `upload.progress` events for that upload's session.
 
 Error codes: `forbidden`, `invalid_request`, `unknown_method`, `unsupported`, `permission_denied`, `busy`, `not_found`, `upload_failed`, `internal`.
 
