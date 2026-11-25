@@ -1,0 +1,546 @@
+package com.faizmuttaqin.spatialstudio.scan
+
+import android.Manifest
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
+import android.opengl.GLES20
+import android.opengl.GLSurfaceView
+import android.os.Build
+import android.os.Bundle
+import android.os.SystemClock
+import android.util.Log
+import android.view.Surface
+import android.view.View
+import android.view.WindowManager
+import android.widget.Button
+import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.ActivityCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import com.faizmuttaqin.spatialstudio.BuildConfig
+import com.faizmuttaqin.spatialstudio.R
+import com.faizmuttaqin.spatialstudio.bridge.BridgeErrorCode
+import com.faizmuttaqin.spatialstudio.bridge.NativeBridge
+import com.faizmuttaqin.spatialstudio.capabilities.CapabilityProbe
+import com.faizmuttaqin.spatialstudio.scan.gl.CameraBackground
+import com.faizmuttaqin.spatialstudio.scan.gl.PointOverlay
+import com.google.ar.core.ArCoreApk
+import com.google.ar.core.CameraConfig
+import com.google.ar.core.CameraConfigFilter
+import com.google.ar.core.Config
+import com.google.ar.core.Session
+import com.google.ar.core.TrackingFailureReason
+import com.google.ar.core.TrackingState
+import com.google.ar.core.exceptions.CameraNotAvailableException
+import com.google.ar.core.exceptions.SessionPausedException
+import com.google.ar.core.exceptions.UnavailableDeviceNotCompatibleException
+import com.google.ar.core.exceptions.UnavailableException
+import com.google.ar.core.exceptions.UnavailableUserDeclinedInstallationException
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import java.util.concurrent.Executors
+import javax.microedition.khronos.egl.EGLConfig
+import javax.microedition.khronos.opengles.GL10
+
+/**
+ * Native ARCore scan screen. Runs only while visible: the camera stops on
+ * pause, and leaving with Back or Cancel discards the partial scan.
+ */
+class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
+
+    private enum class Phase { STARTING, SCANNING, FINALIZING, DONE }
+
+    private lateinit var scan: ScanCoordinator.ActiveScan
+    private lateinit var store: ScanStore
+    private lateinit var surface: GLSurfaceView
+    private lateinit var statusText: TextView
+    private lateinit var statsText: TextView
+    private lateinit var hintText: TextView
+    private lateinit var finishButton: Button
+    private lateinit var cancelButton: Button
+
+    @Volatile private var phase = Phase.STARTING
+    private var session: Session? = null
+    private var recorder: ScanRecorder? = null
+    private var capabilities: JsonObject? = null
+    private var capabilitiesProbedAtMs = 0L
+    private var cameraConfigJson: JsonObject = JsonObject(emptyMap())
+    private var sensorOrientationDeg: Int? = null
+    private var installRequested = false
+    private var permissionRequested = false
+    private var createdAtMs = 0L
+    private var startedAtElapsed = 0L
+
+    private val background = CameraBackground()
+    private val overlay = PointOverlay()
+    private var textureBound = false
+    private var viewportWidth = 0
+    private var viewportHeight = 0
+    @Volatile private var displayGeometryDirty = false
+    private var lastProgressNs = Long.MIN_VALUE
+    private val view = FloatArray(16)
+    private val projection = FloatArray(16)
+    private val finalizer = Executors.newSingleThreadExecutor()
+
+    private val cameraPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) fail(BridgeErrorCode.PERMISSION_DENIED, getString(R.string.scan_camera_denied))
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val sessionId = intent.getStringExtra(EXTRA_SESSION_ID)
+        val active = ScanCoordinator.active
+        if (sessionId == null || active == null || active.sessionId != sessionId || !ScanCoordinator.markStarted(sessionId)) {
+            // Stale launch (process restarted, or the start watchdog already gave up): nothing to scan for.
+            // Releasing is a no-op unless this launch still holds the scan.
+            sessionId?.let(ScanCoordinator::end)
+            finish()
+            return
+        }
+        scan = active
+        store = ScanStore(scansRoot(this))
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        setContentView(R.layout.activity_scan)
+
+        surface = ActivityCompat.requireViewById(this, R.id.scan_surface)
+        statusText = ActivityCompat.requireViewById(this, R.id.scan_status)
+        statsText = ActivityCompat.requireViewById(this, R.id.scan_stats)
+        hintText = ActivityCompat.requireViewById(this, R.id.scan_hint)
+        finishButton = ActivityCompat.requireViewById(this, R.id.scan_finish)
+        cancelButton = ActivityCompat.requireViewById(this, R.id.scan_cancel)
+
+        val hud = ActivityCompat.requireViewById<View>(this, R.id.scan_hud)
+        val controls = ActivityCompat.requireViewById<View>(this, R.id.scan_controls)
+        ViewCompat.setOnApplyWindowInsetsListener(ActivityCompat.requireViewById(this, R.id.scan_root)) { _, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            hud.setPadding(hud.paddingLeft, bars.top + PADDING_PX, hud.paddingRight, hud.paddingBottom)
+            controls.setPadding(controls.paddingLeft, controls.paddingTop, controls.paddingRight, bars.bottom + PADDING_PX)
+            insets
+        }
+
+        surface.preserveEGLContextOnPause = true
+        surface.setEGLContextClientVersion(2)
+        surface.setEGLConfigChooser(8, 8, 8, 8, 16, 0)
+        surface.setRenderer(this)
+        surface.renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
+        surface.setWillNotDraw(false)
+
+        finishButton.setOnClickListener { finishScan() }
+        cancelButton.setOnClickListener { cancelScan() }
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() = cancelScan()
+            },
+        )
+        ScanCoordinator.state(scan.sessionId, "starting")
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (phase == Phase.DONE || phase == Phase.FINALIZING || !::scan.isInitialized) return
+        if (session == null && !createSession()) return
+        try {
+            session?.resume()
+        } catch (e: CameraNotAvailableException) {
+            fail(BridgeErrorCode.BUSY, getString(R.string.scan_camera_busy))
+            return
+        } catch (e: SecurityException) {
+            fail(BridgeErrorCode.PERMISSION_DENIED, getString(R.string.scan_camera_denied))
+            return
+        }
+        surface.onResume()
+        displayGeometryDirty = true
+        if (phase == Phase.STARTING) {
+            phase = Phase.SCANNING
+            startedAtElapsed = SystemClock.elapsedRealtime()
+            finishButton.isEnabled = true
+        }
+        ScanCoordinator.state(scan.sessionId, "scanning")
+    }
+
+    override fun onPause() {
+        super.onPause()
+        if (!::scan.isInitialized) return
+        // Stop rendering first, then release the camera. No capture continues in the background.
+        surface.onPause()
+        session?.pause()
+        if (phase == Phase.SCANNING && !isFinishing) ScanCoordinator.state(scan.sessionId, "paused")
+    }
+
+    override fun onDestroy() {
+        if (::scan.isInitialized && phase != Phase.DONE && phase != Phase.FINALIZING) {
+            // Destroyed without Finish (for example the system reclaimed the screen): discard.
+            discardPartial("cancelled", null)
+        }
+        session?.close()
+        session = null
+        finalizer.shutdown()
+        super.onDestroy()
+    }
+
+    /** Creates and configures the ARCore session. Returns false when it must wait or failed. */
+    private fun createSession(): Boolean {
+        if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            if (!permissionRequested) {
+                permissionRequested = true
+                cameraPermission.launch(Manifest.permission.CAMERA)
+            }
+            return false
+        }
+        try {
+            when (ArCoreApk.getInstance().requestInstall(this, !installRequested)) {
+                ArCoreApk.InstallStatus.INSTALL_REQUESTED -> {
+                    installRequested = true
+                    return false
+                }
+                ArCoreApk.InstallStatus.INSTALLED -> Unit
+            }
+        } catch (e: UnavailableUserDeclinedInstallationException) {
+            fail(BridgeErrorCode.UNSUPPORTED, "ARCore installation was declined")
+            return false
+        } catch (e: UnavailableDeviceNotCompatibleException) {
+            fail(BridgeErrorCode.UNSUPPORTED, getString(R.string.scan_arcore_unavailable))
+            return false
+        } catch (e: Exception) {
+            // For example no Play Store to install Google Play Services for AR from.
+            Log.w(TAG, "ARCore install check failed", e)
+            fail(BridgeErrorCode.UNSUPPORTED, getString(R.string.scan_arcore_not_installed))
+            return false
+        }
+        try {
+            val newSession = Session(this)
+            configure(newSession)
+            session = newSession
+        } catch (e: UnavailableUserDeclinedInstallationException) {
+            fail(BridgeErrorCode.UNSUPPORTED, "ARCore installation was declined")
+            return false
+        } catch (e: UnavailableDeviceNotCompatibleException) {
+            fail(BridgeErrorCode.UNSUPPORTED, getString(R.string.scan_arcore_unavailable))
+            return false
+        } catch (e: UnavailableException) {
+            fail(BridgeErrorCode.UNSUPPORTED, "ARCore is unavailable: ${e.javaClass.simpleName}")
+            return false
+        } catch (e: SecurityException) {
+            fail(BridgeErrorCode.PERMISSION_DENIED, getString(R.string.scan_camera_denied))
+            return false
+        } catch (e: Exception) {
+            Log.e(TAG, "Could not start ARCore", e)
+            fail(BridgeErrorCode.INTERNAL, "Could not start ARCore")
+            return false
+        }
+
+        val currentSession = session ?: return false
+        createdAtMs = System.currentTimeMillis()
+        val depthKind = when {
+            !scan.options.depth -> null
+            currentSession.config.depthMode == Config.DepthMode.DISABLED -> null
+            currentSession.isDepthModeSupported(Config.DepthMode.RAW_DEPTH_ONLY) -> ScanRecorder.DEPTH_RAW
+            else -> ScanRecorder.DEPTH_SMOOTHED
+        }
+        val dir = try {
+            store.create(scan.sessionId, scan.projectId, createdAtMs)
+        } catch (e: Exception) {
+            fail(BridgeErrorCode.INTERNAL, "Could not create scan storage")
+            return false
+        }
+        recorder = ScanRecorder(dir, scan.options, depthKind)
+        capabilitiesProbedAtMs = System.currentTimeMillis()
+        capabilities = runCatching { CapabilityProbe(this).probe(session = currentSession) }.getOrNull()
+        return true
+    }
+
+    private fun configure(session: Session) {
+        val configs = session.getSupportedCameraConfigs(
+            CameraConfigFilter(session).setFacingDirection(CameraConfig.FacingDirection.BACK),
+        )
+        val choice = CameraConfigChoice.pick(
+            configs.map { CameraConfigChoice.Candidate(it.imageSize.width, it.imageSize.height, it.fpsRange.upper) },
+        )
+        if (choice >= 0) session.cameraConfig = configs[choice]
+        val chosen = session.cameraConfig
+        sensorOrientationDeg = runCatching {
+            getSystemService(CameraManager::class.java)
+                ?.getCameraCharacteristics(chosen.cameraId)
+                ?.get(CameraCharacteristics.SENSOR_ORIENTATION)
+        }.getOrNull()
+        cameraConfigJson = buildJsonObject {
+            put("imageWidth", chosen.imageSize.width)
+            put("imageHeight", chosen.imageSize.height)
+            put("textureWidth", chosen.textureSize.width)
+            put("textureHeight", chosen.textureSize.height)
+            put("fpsMin", chosen.fpsRange.lower)
+            put("fpsMax", chosen.fpsRange.upper)
+            put("cameraId", chosen.cameraId)
+        }
+
+        val config = Config(session).apply {
+            focusMode = Config.FocusMode.AUTO
+            planeFindingMode = Config.PlaneFindingMode.HORIZONTAL_AND_VERTICAL
+            lightEstimationMode = Config.LightEstimationMode.DISABLED
+            instantPlacementMode = Config.InstantPlacementMode.DISABLED
+            depthMode = when {
+                !scan.options.depth -> Config.DepthMode.DISABLED
+                session.isDepthModeSupported(Config.DepthMode.AUTOMATIC) -> Config.DepthMode.AUTOMATIC
+                session.isDepthModeSupported(Config.DepthMode.RAW_DEPTH_ONLY) -> Config.DepthMode.RAW_DEPTH_ONLY
+                else -> Config.DepthMode.DISABLED
+            }
+        }
+        session.configure(config)
+    }
+
+    // --- GL thread ---
+
+    override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
+        GLES20.glClearColor(0f, 0f, 0f, 1f)
+        background.create()
+        overlay.create()
+        textureBound = false
+    }
+
+    override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
+        GLES20.glViewport(0, 0, width, height)
+        viewportWidth = width
+        viewportHeight = height
+        displayGeometryDirty = true
+    }
+
+    override fun onDrawFrame(gl: GL10?) {
+        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
+        val session = session ?: return
+        val recorder = recorder ?: return
+        if (!textureBound) {
+            session.setCameraTextureName(background.textureId)
+            textureBound = true
+        }
+        if (displayGeometryDirty && viewportWidth > 0) {
+            session.setDisplayGeometry(displayRotation(), viewportWidth, viewportHeight)
+            displayGeometryDirty = false
+        }
+        val frame = try {
+            session.update()
+        } catch (e: SessionPausedException) {
+            return
+        } catch (e: CameraNotAvailableException) {
+            runOnUiThread { fail(BridgeErrorCode.INTERNAL, "The camera became unavailable") }
+            return
+        } catch (e: Exception) {
+            Log.w(TAG, "Frame update failed", e)
+            return
+        }
+        background.draw(frame)
+        val camera = frame.camera
+        if (phase == Phase.SCANNING) {
+            try {
+                recorder.onFrame(session, frame, camera)
+            } catch (e: Exception) {
+                Log.w(TAG, "Frame processing failed", e)
+            }
+        }
+        if (camera.trackingState == TrackingState.TRACKING) {
+            camera.getViewMatrix(view, 0)
+            camera.getProjectionMatrix(projection, 0, 0.1f, 100f)
+            overlay.draw(recorder.overlayPoints, recorder.overlayCount, view, projection)
+        }
+        if (frame.timestamp - lastProgressNs >= PROGRESS_INTERVAL_NS) {
+            lastProgressNs = frame.timestamp
+            reportProgress(recorder, camera.trackingState, camera.trackingFailureReason)
+        }
+    }
+
+    private fun reportProgress(recorder: ScanRecorder, state: TrackingState, failure: TrackingFailureReason) {
+        val elapsedMs = if (startedAtElapsed == 0L) 0L else SystemClock.elapsedRealtime() - startedAtElapsed
+        val keyframes = recorder.selector.count
+        val planes = recorder.planeCount
+        val points = recorder.voxels.size
+        val losses = recorder.trajectory.trackingLossCount
+        ScanCoordinator.progress(
+            buildJsonObject {
+                put("sessionId", scan.sessionId)
+                put("trackingState", state.name.lowercase())
+                put("trackingFailure", failure.takeIf { it != TrackingFailureReason.NONE }?.name?.lowercase())
+                put("keyframes", keyframes)
+                put("maxKeyframes", recorder.selector.maxKeyframes)
+                put("planes", planes)
+                put("points", points)
+                put("trackingLossCount", losses)
+                put("elapsedMs", elapsedMs)
+            },
+        )
+        runOnUiThread {
+            if (phase != Phase.SCANNING) return@runOnUiThread
+            statusText.text = trackingLabel(state, failure)
+            val seconds = elapsedMs / 1000
+            statsText.text = getString(
+                R.string.scan_stats,
+                keyframes, recorder.selector.maxKeyframes, planes, points, seconds / 60, seconds % 60,
+            )
+            if (recorder.selector.limitReached) hintText.setText(R.string.scan_keyframe_limit)
+        }
+    }
+
+    private fun trackingLabel(state: TrackingState, failure: TrackingFailureReason): String = getString(
+        when (state) {
+            TrackingState.TRACKING -> R.string.tracking_ok
+            TrackingState.PAUSED -> when (failure) {
+                TrackingFailureReason.INSUFFICIENT_LIGHT -> R.string.tracking_dark
+                TrackingFailureReason.EXCESSIVE_MOTION -> R.string.tracking_fast
+                TrackingFailureReason.INSUFFICIENT_FEATURES -> R.string.tracking_features
+                TrackingFailureReason.CAMERA_UNAVAILABLE -> R.string.tracking_camera
+                else -> R.string.tracking_searching
+            }
+            TrackingState.STOPPED -> R.string.tracking_stopped
+        },
+    )
+
+    // --- Finish, cancel, fail ---
+
+    private fun finishScan() {
+        if (phase != Phase.SCANNING) return
+        phase = Phase.FINALIZING
+        finishButton.isEnabled = false
+        cancelButton.isEnabled = false
+        statusText.setText(R.string.scan_saving)
+        ScanCoordinator.state(scan.sessionId, "finalizing")
+        val planes = recorder?.latestPlanes.orEmpty()
+        finalizer.execute { finalizeBundle(planes) }
+    }
+
+    private fun finalizeBundle(planes: List<PlaneRecord>) {
+        val recorder = recorder ?: return
+        try {
+            recorder.stop()
+            if (!recorder.drain()) recorder.warnings.add("keyframe-encoding-timeout")
+            val captured = recorder.captured()
+            val keyframes = captured.keyframes
+            if (planes.isEmpty()) recorder.warnings.add("no-planes-detected")
+            if (keyframes.isEmpty()) recorder.warnings.add("no-keyframes")
+            val input = BundleInput(
+                sessionId = scan.sessionId,
+                projectId = scan.projectId,
+                createdAtMs = createdAtMs,
+                appVersion = BuildConfig.VERSION_NAME,
+                device = DeviceInfo(Build.MANUFACTURER, Build.MODEL, "Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})"),
+                nativeCapabilities = capabilities ?: JsonObject(emptyMap()),
+                capabilitiesProbedAtMs = capabilitiesProbedAtMs,
+                trajectory = captured.trajectory,
+                keyframes = keyframes,
+                depth = captured.depth,
+                planes = planes,
+                points = captured.points,
+                voxelSizeM = captured.voxelSizeM,
+                minConfidence = captured.minConfidence,
+                trackingLossCount = captured.trackingLossCount,
+                warnings = recorder.warnings.toList(),
+                startTimestampNs = recorder.startTimestampNs,
+                sensorOrientationDeg = sensorOrientationDeg,
+                arcore = buildJsonObject {
+                    put("cameraConfig", cameraConfigJson)
+                    put("depthKind", recorder.depthKind)
+                    put("keyframeSpacingM", scan.options.keyframeSpacingM)
+                    put("keyframeAngleDeg", scan.options.keyframeAngleDeg)
+                    put("maxKeyframes", scan.options.maxKeyframes)
+                },
+            )
+            val bundle = ScanBundleWriter(store.dir(scan.sessionId)).finalize(input)
+            val record = store.read(scan.sessionId)
+                ?: SessionRecord(scan.sessionId, createdAtMs, scan.projectId, SessionRecord.RECORDING)
+            store.write(
+                record.copy(
+                    state = SessionRecord.READY,
+                    keyframes = keyframes.size,
+                    bytes = bundle.totalBytes,
+                    manifestSha256 = bundle.manifest.sha256,
+                ),
+            )
+            runOnUiThread {
+                phase = Phase.DONE
+                ScanCoordinator.state(scan.sessionId, "ready") {
+                    put("keyframes", keyframes.size)
+                    put("bytes", bundle.totalBytes)
+                }
+                ScanCoordinator.end(scan.sessionId)
+                finish()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Could not save the scan", e)
+            keepFailed("Could not save the scan: ${e.message ?: e.javaClass.simpleName}")
+        } catch (e: OutOfMemoryError) {
+            keepFailed("Could not save the scan: out of memory")
+        }
+    }
+
+    /**
+     * Saving failed after capture (disk full, an artifact over 16 MB, ...). The files stay,
+     * marked `failed` with the reason, so the user can free space and discard or inspect them.
+     * Runs on the finalizer thread.
+     */
+    private fun keepFailed(message: String) {
+        val reason = message.take(300)
+        runCatching {
+            val record = store.read(scan.sessionId)
+                ?: SessionRecord(scan.sessionId, createdAtMs, scan.projectId, SessionRecord.RECORDING)
+            store.write(record.copy(state = SessionRecord.FAILED, error = reason))
+        }
+        runOnUiThread {
+            phase = Phase.DONE
+            Toast.makeText(this, getString(R.string.scan_failed, reason), Toast.LENGTH_LONG).show()
+            ScanCoordinator.state(scan.sessionId, "failed") {
+                put("error", NativeBridge.errorJson(BridgeErrorCode.INTERNAL, reason))
+                put("kept", true)
+            }
+            ScanCoordinator.end(scan.sessionId)
+            finish()
+        }
+    }
+
+    private fun cancelScan() {
+        if (phase == Phase.FINALIZING || phase == Phase.DONE) return
+        discardPartial("cancelled", null)
+        finish()
+    }
+
+    private fun fail(code: BridgeErrorCode, message: String) {
+        if (phase == Phase.DONE) return
+        Toast.makeText(this, getString(R.string.scan_failed, message), Toast.LENGTH_LONG).show()
+        discardPartial("failed", NativeBridge.errorJson(code, message))
+        finish()
+    }
+
+    private fun discardPartial(state: String, error: JsonObject?) {
+        phase = Phase.DONE
+        val sessionId = scan.sessionId
+        val recorder = recorder
+        finalizer.execute {
+            runCatching { recorder?.abort() }
+            runCatching { store.discard(sessionId) }
+        }
+        ScanCoordinator.state(sessionId, state) { error?.let { put("error", it) } }
+        ScanCoordinator.end(sessionId)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun displayRotation(): Int =
+        if (Build.VERSION.SDK_INT >= 30) display?.rotation ?: Surface.ROTATION_0 else windowManager.defaultDisplay.rotation
+
+    companion object {
+        private const val TAG = "ScanActivity"
+        private const val EXTRA_SESSION_ID = "sessionId"
+        private const val PROGRESS_INTERVAL_NS = 500_000_000L
+        private const val PADDING_PX = 32
+
+        fun intent(context: Context, sessionId: String): Intent =
+            Intent(context, ScanActivity::class.java).putExtra(EXTRA_SESSION_ID, sessionId)
+
+        /** App-private scan storage; never external storage. */
+        fun scansRoot(context: Context) = java.io.File(context.filesDir, "scans")
+    }
+}
