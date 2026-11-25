@@ -50,3 +50,8 @@ test('HTML and SVG never get a script-capable type', () => {
     'text/plain; charset=utf-8',
   )
 })
+
+test('PLY files are served as application/ply', () => {
+  expect(artifactMediaType(ascii('ply\nformat binary_little_endian 1.0\n'))).toBe('application/ply')
+  expect(artifactMediaType(ascii('plyx'))).toBe('text/plain; charset=utf-8')
+})

@@ -196,6 +196,11 @@ function SceneEditor({ initialScene, meta: initialMeta }: SceneLoaderProps) {
     () => (renamedTo === null ? initialMeta : { ...initialMeta, name: renamedTo }),
     [initialMeta, renamedTo],
   )
+  const brushDatasetUrl = useCallback(
+    (scanId: string) =>
+      `/api/scans/${encodeURIComponent(meta.id)}/${encodeURIComponent(scanId)}/brush-dataset`,
+    [meta.id],
+  )
   const vr = useWebXRFeature()
   useLocalArtifactStore()
   useThumbnailAutosave({ sceneId: meta.id, enabled: true })
@@ -413,6 +418,7 @@ function SceneEditor({ initialScene, meta: initialMeta }: SceneLoaderProps) {
       )}
       <KitchenCommands />
       <Editor
+        brushDatasetUrl={brushDatasetUrl}
         captureSourceResolver={captureSourceResolver}
         disablePostFx={lightPreview}
         immersive={vr?.session ? vr.immersive : undefined}

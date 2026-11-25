@@ -6385,6 +6385,10 @@ msgid "editor.panels.scanEvidence.device"
 msgstr "Device"
 
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.downloadDataset"
+msgstr "Download Brush dataset (.zip)"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 msgid "editor.panels.scanEvidence.enlarge"
 msgstr "Enlarge photo"
 
@@ -6403,6 +6407,10 @@ msgstr "3D model"
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 msgid "editor.panels.scanEvidence.layer.pointCloud"
 msgstr "Point cloud"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.layer.splat"
+msgstr "Gaussian splat"
 
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 msgid "editor.panels.scanEvidence.layer.surfaceMesh"
@@ -6451,6 +6459,10 @@ msgstr "{part}: not ready yet."
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 msgid "editor.panels.scanEvidence.photoDialog"
 msgstr "Capture photo"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.photoreal"
+msgstr "Photoreal capture"
 
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 msgid "editor.panels.scanEvidence.photos"
@@ -6513,6 +6525,30 @@ msgid "editor.panels.scanEvidence.roomWidth"
 msgstr "Width"
 
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.splatDone"
+msgstr "Splat attached ({count} splats)."
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.splatFailed"
+msgstr "The splat could not be attached."
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.splatInvalid"
+msgstr "This is not a binary 3D Gaussian splat PLY."
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.splatTooLarge"
+msgstr "The file is larger than 96 MiB."
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.splatTrainer"
+msgstr "Trained with"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.splatUploading"
+msgstr "Uploading…"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 msgid "editor.panels.scanEvidence.state.failed"
 msgstr "Failed"
 
@@ -6539,6 +6575,10 @@ msgstr "Tracking losses"
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 msgid "editor.panels.scanEvidence.unavailable"
 msgstr "The capture data could not be loaded."
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.uploadSplat"
+msgstr "Upload trained splat (.ply)"
 
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 msgid "editor.panels.scanEvidence.warnings"
