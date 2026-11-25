@@ -15,6 +15,7 @@ P1–P4 are the MVP. P5–P6 are optional. Costing/RAB, procurement, marketplace
 - [SENSING_RESEARCH.md](SENSING_RESEARCH.md): draft capture phase, orientation, heading, location, sun and radio-signal research.
 - [GLASS_AND_MIRRORS.md](GLASS_AND_MIRRORS.md): glass, mirrors and the physical room boundary without LiDAR.
 - [DEVICE_TESTS.md](DEVICE_TESTS.md): real-device evidence log.
+- [ALGORITHM_STUDY.md](ALGORITHM_STUDY.md): methods learned from reference scanners and the adoption plan.
 - [DEPLOYMENT.md](DEPLOYMENT.md): VM, HTTPS, CI/release safeguards.
 - [ROADMAP.md](ROADMAP.md): phases, tests and acceptance criteria.
 - [STATUS.md](STATUS.md): handoff and next task.
