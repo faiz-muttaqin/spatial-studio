@@ -35,6 +35,21 @@ class VoxelDownsampler(
         }
     }
 
+    /**
+     * Like [addPacked], but only points within [maxDistanceM] of the camera at ([cx], [cy], [cz]):
+     * far feature points are mostly mismatches (glass, reflections) that float away from the walked path.
+     */
+    fun addPackedWithin(values: FloatArray, count: Int, cx: Float, cy: Float, cz: Float, maxDistanceM: Float) {
+        val limit = maxDistanceM * maxDistanceM
+        for (i in 0 until count) {
+            val o = i * 4
+            val dx = values[o] - cx
+            val dy = values[o + 1] - cy
+            val dz = values[o + 2] - cz
+            if (dx * dx + dy * dy + dz * dz <= limit) add(values[o], values[o + 1], values[o + 2], values[o + 3])
+        }
+    }
+
     /** Centroids as `x, y, z` triples. */
     fun positions(): FloatArray {
         val out = FloatArray(cells.size * 3)

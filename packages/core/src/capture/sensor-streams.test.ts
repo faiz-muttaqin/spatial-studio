@@ -187,6 +187,7 @@ describe('true north', () => {
     spreadDeg: 6.2,
     sampleCount: 140,
     declinationDeg: 0.4,
+    segmentsAgree: true,
   }
 
   test('accepts a true and a magnetic result', () => {

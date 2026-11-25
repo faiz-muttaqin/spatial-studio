@@ -1554,15 +1554,15 @@ msgstr "L’application compagnon enregistre la pose, les plans, la profondeur e
 msgid "app.scan.native.location"
 msgstr "Enregistrer la position approximative"
 
-# Source-Hash: 321543d4576859a0
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-sonnet-5-5
-# English: "Off by default. Sets true north and the sun for this place and date. The phone asks for permission, and the location is saved in this scan."
+# English: "Off by default. The location is saved with the scan and used to correct the compass to true north when the scan is processed. The phone asks for permission first."
+# Source-Hash: 321543d4576859a0
+# Review: required
 #: apps/editor/app/scan/native-scan.tsx
 #, fuzzy
 msgid "app.scan.native.locationHint"
-msgstr "Désactivé par défaut. Sert à déterminer le nord vrai et le soleil pour ce lieu et cette date. Le téléphone demande l’autorisation, et la position est enregistrée dans ce scan."
+msgstr "Désactivé par défaut. La position est enregistrée avec le scan et sert à corriger la boussole vers le nord vrai lors du traitement du scan. Le téléphone demande d’abord l’autorisation."
 
 # Source-Hash: e4e15da3db73b81d
 # Review: required

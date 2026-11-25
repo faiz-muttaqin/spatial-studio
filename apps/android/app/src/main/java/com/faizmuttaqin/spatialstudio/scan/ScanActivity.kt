@@ -79,7 +79,10 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
     private var capabilitiesProbedAtMs = 0L
     private var cameraConfigJson: JsonObject = JsonObject(emptyMap())
     private var sensorOrientationDeg: Int? = null
-    private var cameraClockRealtime = false
+    @Volatile private var pendingLightMode: Config.LightEstimationMode? = null
+    private var locationDeclined = false
+    private var locationDialogShown = false
+    private var locationConfirmed = false
     private var sensorRecorder: SensorRecorder? = null
     private var lightMode = Config.LightEstimationMode.DISABLED
     private var locationRequested = false
@@ -147,6 +150,8 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             if (updatingToggles) return@setOnCheckedChangeListener
             sensorRecorder?.setSensorsEnabled(checked)
             recorder?.setLightEnabled(checked, lightMode)
+            // ARCore stops estimating light too; applied on the GL thread before the next frame.
+            pendingLightMode = if (checked) lightMode else Config.LightEstimationMode.DISABLED
             if (!checked) sensorsText.setText(R.string.scan_sensors_off)
         }
         locationToggle.setOnCheckedChangeListener { _, checked ->
@@ -188,6 +193,10 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
 
     override fun onResume() {
         super.onResume()
+        tryStart()
+    }
+
+    private fun tryStart() {
         if (phase == Phase.DONE || phase == Phase.FINALIZING || !::scan.isInitialized) return
         if (session == null && !createSession()) return
         try {
@@ -241,7 +250,11 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             }
             return false
         }
-        if (scan.options.location && !locationRequested &&
+        if (scan.options.location && !locationConfirmed && !locationDeclined) {
+            confirmLocation()
+            return false
+        }
+        if (scan.options.location && !locationDeclined && !locationRequested &&
             checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED
         ) {
             // Only on the page's opt-in, and only the approximate permission: sun and declination need kilometres.
@@ -310,12 +323,11 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         recorder = scanRecorder
         val sensors = SensorRecorder(
             this,
-            clocksComparable = cameraClockRealtime,
             sensors = scan.options.sensors,
-            location = scan.options.location,
+            location = scan.options.location && !locationDeclined,
         )
         // The permission may have been refused while the scan screen was asking for it.
-        if (scan.options.location && !sensors.hasLocationPermission()) {
+        if (scan.options.location && !locationDeclined && !sensors.hasLocationPermission()) {
             locationDenied = true
             sensors.setLocationEnabled(false)
         }
@@ -324,6 +336,25 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         capabilitiesProbedAtMs = System.currentTimeMillis()
         capabilities = runCatching { CapabilityProbe(this).probe(session = currentSession) }.getOrNull()
         return true
+    }
+
+    /** One native confirmation per scan whenever the page asks for location, before any permission prompt. */
+    private fun confirmLocation() {
+        if (locationDialogShown) return
+        locationDialogShown = true
+        android.app.AlertDialog.Builder(this)
+            .setTitle(R.string.scan_location_confirm_title)
+            .setMessage(R.string.scan_location_confirm_message)
+            .setCancelable(false)
+            .setPositiveButton(R.string.scan_location_allow) { _, _ ->
+                locationConfirmed = true
+                tryStart()
+            }
+            .setNegativeButton(R.string.scan_location_decline) { _, _ ->
+                locationDeclined = true
+                tryStart()
+            }
+            .show()
     }
 
     private fun configure(session: Session) {
@@ -340,11 +371,6 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                 ?.getCameraCharacteristics(chosen.cameraId)
                 ?.get(CameraCharacteristics.SENSOR_ORIENTATION)
         }.getOrNull()
-        cameraClockRealtime = runCatching {
-            getSystemService(CameraManager::class.java)
-                ?.getCameraCharacteristics(chosen.cameraId)
-                ?.get(CameraCharacteristics.SENSOR_INFO_TIMESTAMP_SOURCE) == CameraCharacteristics.SENSOR_INFO_TIMESTAMP_SOURCE_REALTIME
-        }.getOrDefault(false)
         cameraConfigJson = buildJsonObject {
             put("imageWidth", chosen.imageSize.width)
             put("imageHeight", chosen.imageSize.height)
@@ -414,6 +440,11 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             session.setDisplayGeometry(displayRotation(), viewportWidth, viewportHeight)
             displayGeometryDirty = false
         }
+        pendingLightMode?.let { mode ->
+            pendingLightMode = null
+            runCatching { session.configure(session.config.apply { lightEstimationMode = mode }) }
+                .onFailure { Log.w(TAG, "Could not change light estimation", it) }
+        }
         val frame = try {
             session.update()
         } catch (e: SessionPausedException) {
@@ -443,7 +474,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             camera.getProjectionMatrix(projection, 0, 0.1f, 100f)
             overlay.draw(recorder.overlayPoints, recorder.overlayCount, view, projection)
         }
-        if (frame.timestamp - lastProgressNs >= PROGRESS_INTERVAL_NS) {
+        if (lastProgressNs == Long.MIN_VALUE || frame.timestamp - lastProgressNs >= PROGRESS_INTERVAL_NS) {
             lastProgressNs = frame.timestamp
             reportProgress(recorder, camera.trackingState, camera.trackingFailureReason)
         }
@@ -554,13 +585,22 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             if (planes.isEmpty()) recorder.warnings.add("no-planes-detected")
             if (keyframes.isEmpty()) recorder.warnings.add("no-keyframes")
             val sensors = sensorRecorder
-            val sensorCapture = sensors?.takeIf { it.sensorsEnabled || it.locationEnabled }?.captured()
+            val rawCapture = sensors?.takeIf { it.sensorsEnabled || it.locationEnabled }?.captured()
+            // Declination is applied here from the retained fixes, never while recording: no fixes, no declination.
+            val declination = rawCapture?.let { Declination.fromFixes(it.fixes, AndroidDeclination) }
+            val sensorCapture = rawCapture?.let {
+                SensorCapture(it.orientation, Declination.apply(it.heading, declination), it.fixes, it.pressure, it.timestampSource, it.warnings)
+            }
             if (sensors != null) {
                 if (sensors.sensorsEnabled && !sensors.hasRotationVector) recorder.warnings.add("rotation-vector-unavailable")
                 if (sensors.sensorsEnabled && NorthEstimator.estimate(sensorCapture?.heading.orEmpty()) == null) {
                     recorder.warnings.add("true-north-unavailable")
                 }
-                if (scan.options.location || sensors.locationEnabled) {
+                if (sensors.sensorsEnabled && NorthEstimator.estimate(sensorCapture?.heading.orEmpty())?.segmentsAgree == false) {
+                    recorder.warnings.add("true-north-segments-disagree")
+                }
+                if (locationDeclined) recorder.warnings.add("location-declined")
+                if (!locationDeclined && (scan.options.location || sensors.locationEnabled)) {
                     if (!sensors.locationEnabled && locationDenied) recorder.warnings.add("location-permission-denied")
                     else if (sensors.locationEnabled && sensorCapture?.fixes.isNullOrEmpty()) recorder.warnings.add("location-unavailable")
                 }
@@ -594,6 +634,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                 // A group the user switched off is empty, so only what was recorded is written.
                 sensors = sensorCapture,
                 lightEstimates = captured.lightEstimates,
+                pointMaxDistanceM = ScanRecorder.POINT_MAX_DISTANCE_M.toDouble(),
             )
             val bundle = ScanBundleWriter(store.dir(scan.sessionId)).finalize(input)
             val record = store.read(scan.sessionId)

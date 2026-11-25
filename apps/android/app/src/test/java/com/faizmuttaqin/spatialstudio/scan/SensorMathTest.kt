@@ -273,3 +273,104 @@ class SensorMathTest {
         assertTrue(series.offer(0, 9))
     }
 }
+
+class SensorTrustTest {
+    private fun sample(tNs: Long, bearing: Double, offset: Double, accuracy: Int = 3) = HeadingData(
+        tNs, Angles.wrap360(bearing - offset), null, null, accuracy, null, Angles.wrap360(bearing),
+    )
+
+    /** [seconds] of 5 Hz samples whose bearing sweeps 0..[sweepDeg]. */
+    private fun run(startS: Double, seconds: Int, offset: Double, sweepDeg: Double = 270.0, accuracy: Int = 3): List<HeadingData> =
+        List(seconds * 5) { i -> sample(((startS + i * 0.2) * 1e9).toLong(), sweepDeg * i / (seconds * 5), offset, accuracy) }
+
+    @Test
+    fun clockCalibratorAcceptsASteadyDeliveryDelay() {
+        val c = ClockCalibrator()
+        for (i in 0 until 30) c.add(1_000_000_000L + i * 33_000_000L, 1_000_000_000L + i * 33_000_000L + 40_000_000L + (i % 3) * 5_000_000L)
+        assertEquals(ClockCalibrator.State.COMPARABLE, c.state)
+    }
+
+    @Test
+    fun clockCalibratorRejectsADifferentClockOrAJitteryOne() {
+        val other = ClockCalibrator()
+        other.add(5_000_000_000L, 90_000_000_000L) // 85 s apart: not the boot-time clock
+        assertEquals(ClockCalibrator.State.MISMATCH, other.state)
+        val future = ClockCalibrator()
+        future.add(10_000_000_000L, 9_000_000_000L) // a reading from the future
+        assertEquals(ClockCalibrator.State.MISMATCH, future.state)
+        val jitter = ClockCalibrator()
+        for (i in 0 until 30) jitter.add(1_000_000_000L, 1_000_000_000L + (if (i % 2 == 0) 10_000_000L else 200_000_000L))
+        assertEquals(ClockCalibrator.State.MISMATCH, jitter.state)
+        val pending = ClockCalibrator()
+        for (i in 0 until 10) pending.add(1_000_000_000L, 1_040_000_000L)
+        assertEquals(ClockCalibrator.State.PENDING, pending.state)
+    }
+
+    @Test
+    fun declinationComesFromTheFixesOnly() {
+        val fixes = listOf(
+            LocationFix(1L, 1.0, 103.0, null, 500.0, "network"),
+            LocationFix(2L, 1.1, 103.1, 30.0, 500.0, "network"),
+        )
+        val source = DeclinationSource { lat, _, alt, _ -> if (alt > 0) 1.0 else 3.0 + lat * 0 }
+        assertEquals(2.0, Declination.fromFixes(fixes, source)!!, 1e-9)
+        assertNull(Declination.fromFixes(emptyList(), source))
+        assertNull(Declination.fromFixes(fixes) { _, _, _, _ -> null })
+        val samples = listOf(sample(0, 10.0, 0.0))
+        assertNull(Declination.apply(samples, null).single().azimuthTrueDeg)
+        assertEquals(12.0, Declination.apply(samples, 2.0).single().azimuthTrueDeg!!, 1e-9)
+    }
+
+    @Test
+    fun bearingSpanIsTheCircularRange() {
+        assertEquals(0.0, NorthEstimator.bearingSpanDeg(listOf(10.0)), 0.0)
+        assertEquals(20.0, NorthEstimator.bearingSpanDeg(listOf(350.0, 10.0, 0.0)), 1e-9)
+        assertEquals(270.0, NorthEstimator.bearingSpanDeg(listOf(0.0, 90.0, 180.0, 270.0)), 1e-9)
+    }
+
+    @Test
+    fun aNarrowRangeOfHeadingsLowersConfidence() {
+        val wide = NorthEstimator.estimate(run(0.0, 60, 20.0, sweepDeg = 300.0))!!
+        val narrow = NorthEstimator.estimate(run(0.0, 60, 20.0, sweepDeg = 30.0))!!
+        assertEquals(20.0, wide.worldYawDeg, 0.5)
+        assertTrue("${wide.confidence} vs ${narrow.confidence}", wide.confidence > narrow.confidence * 3)
+    }
+
+    @Test
+    fun confidenceIsCappedWithoutHighMagnetometerAccuracy() {
+        val high = NorthEstimator.estimate(run(0.0, 80, 20.0, accuracy = 3))!!
+        val medium = NorthEstimator.estimate(run(0.0, 80, 20.0, accuracy = 2))!!
+        assertTrue(high.confidence > 0.9)
+        assertTrue(medium.confidence <= 0.6 + 1e-9)
+    }
+
+    @Test
+    fun fiveHertzSamplesCountOncePerWindow() {
+        // 12 s of dense samples: 60 samples but only 6 two-second windows.
+        val short = NorthEstimator.estimate(run(0.0, 12, 20.0))!!
+        val long = NorthEstimator.estimate(run(0.0, 80, 20.0))!!
+        assertTrue(short.confidence < 0.25)
+        assertTrue(long.confidence > short.confidence)
+    }
+
+    @Test
+    fun aWorldFrameJumpAfterTrackingLossIsFlagged() {
+        // The first minute has north at 20 degrees; after a 5 s tracking loss the world frame is rotated by 60.
+        val samples = run(0.0, 60, 20.0) + run(65.0, 60, 80.0)
+        val result = NorthEstimator.estimate(samples)!!
+        assertFalse(result.segmentsAgree)
+        assertTrue(result.confidence <= 0.3 + 1e-9)
+        assertTrue(NorthEstimator.estimate(run(0.0, 60, 20.0) + run(65.0, 60, 21.0))!!.segmentsAgree)
+    }
+
+    @Test
+    fun boundedSeriesChecksTheGateUnderItsLock() {
+        val series = BoundedSeries<Int>(max = 5, minIntervalUnits = 0)
+        var on = true
+        assertTrue(series.offerIf(1, 1) { on })
+        on = false
+        assertFalse(series.offerIf(2, 2) { on })
+        assertEquals(listOf(1), series.snapshot())
+        assertTrue(series.accepts(3))
+    }
+}

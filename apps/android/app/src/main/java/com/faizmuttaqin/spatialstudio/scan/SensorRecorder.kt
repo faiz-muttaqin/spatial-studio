@@ -3,7 +3,6 @@ package com.faizmuttaqin.spatialstudio.scan
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
-import android.hardware.GeomagneticField
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -14,6 +13,7 @@ import android.location.LocationManager
 import android.os.Build
 import android.os.Bundle
 import android.os.HandlerThread
+import android.os.SystemClock
 import android.util.Log
 
 class DeviceOrientationData(val timestampNs: Long, val q: Quaternion, val headingAccuracyDeg: Double?)
@@ -48,8 +48,6 @@ class SensorCapture(
  */
 class SensorRecorder(
     context: Context,
-    /** Sensor and ARCore camera timestamps are on the same boot-time clock. */
-    private val clocksComparable: Boolean,
     sensors: Boolean,
     location: Boolean,
 ) {
@@ -68,7 +66,8 @@ class SensorRecorder(
 
     @Volatile private var latestOrientation: OrientationReading? = null
     @Volatile private var magnetometerAccuracy = 0
-    @Volatile private var declinationDeg: Double? = null
+    private val frameClock = ClockCalibrator()
+    private val sensorClock = ClockCalibrator()
 
     /** Most recent camera-direction reading for the HUD; null until the phone is held upright. */
     @Volatile var live: HeadingData? = null
@@ -80,8 +79,7 @@ class SensorRecorder(
     @Volatile var hasPressure = false
         private set
 
-    @Volatile var fixCount = 0
-        private set
+    val fixCount: Int get() = fixes.size
 
     private var thread: HandlerThread? = null
     private var sensorsRegistered = false
@@ -131,8 +129,6 @@ class SensorRecorder(
         locationOn = enabled
         if (!enabled) {
             fixes.clear()
-            fixCount = 0
-            declinationDeg = null
         }
         if (running) applyRegistrations()
     }
@@ -142,21 +138,35 @@ class SensorRecorder(
         if (locationOn && hasLocationPermission()) registerLocation() else unregisterLocation()
     }
 
-    /** GL thread, once per frame while tracking. */
-    fun onFrame(frameTimestampNs: Long, pose: FloatArray) {
+    /**
+     * GL thread, once per tracked frame. Headings are paired and stored only once both the ARCore frame
+     * clock and the sensor clock have been verified against the boot-time clock.
+     */
+    fun onFrame(frameTimestampNs: Long, pose: FloatArray, elapsedNs: Long = SystemClock.elapsedRealtimeNanos()) {
         if (!sensorsOn) return
+        frameClock.add(frameTimestampNs, elapsedNs)
+        if (frameClock.state != ClockCalibrator.State.COMPARABLE || sensorClock.state != ClockCalibrator.State.COMPARABLE) return
+        if (!heading.accepts(frameTimestampNs)) return
         val reading = latestOrientation ?: return
+        // Magnetic only: the declination comes from retained fixes at finalisation, so switching location off removes it.
         val sample = HeadingMath.sample(
             frameTimestampNs = frameTimestampNs,
             pose = pose,
             orientation = reading,
             magnetometerAccuracy = magnetometerAccuracy,
-            declinationDeg = declinationDeg,
-            maxAgeNs = if (clocksComparable) MAX_PAIR_AGE_NS else null,
+            declinationDeg = null,
+            maxAgeNs = MAX_PAIR_AGE_NS,
         ) ?: return
         live = sample
-        heading.offer(frameTimestampNs, sample)
+        heading.offerIf(frameTimestampNs, sample) { sensorsOn }
     }
+
+    /** Verified boot-time clocks for both sources, so sensor and camera timestamps can be compared. */
+    val clocksVerified: Boolean
+        get() = frameClock.state == ClockCalibrator.State.COMPARABLE && sensorClock.state == ClockCalibrator.State.COMPARABLE
+
+    private val clockMismatch: Boolean
+        get() = frameClock.state == ClockCalibrator.State.MISMATCH || sensorClock.state == ClockCalibrator.State.MISMATCH
 
     fun captured(): SensorCapture {
         val warnings = ArrayList<String>()
@@ -164,12 +174,13 @@ class SensorRecorder(
         if (heading.truncated) warnings += "heading-truncated"
         if (pressure.truncated) warnings += "barometer-truncated"
         if (fixes.truncated) warnings += "geolocation-truncated"
+        if (sensorsOn && clockMismatch) warnings += "sensor-clock-not-comparable"
         return SensorCapture(
             orientation = orientation.snapshot(),
             heading = heading.snapshot(),
             fixes = fixes.snapshot(),
             pressure = pressure.snapshot(),
-            timestampSource = if (clocksComparable) "realtime" else "unknown",
+            timestampSource = if (clocksVerified) "realtime" else "unknown",
             warnings = warnings,
         )
     }
@@ -194,13 +205,15 @@ class SensorRecorder(
         val q = Quaternion.fromRotationVector(event.values) ?: return
         val accuracyRad = event.values.getOrNull(4)
         val accuracyDeg = accuracyRad?.takeIf { it.isFinite() && it >= 0f }?.let { Math.toDegrees(it.toDouble()) }
+        if (!sensorsOn) return
+        sensorClock.add(event.timestamp, SystemClock.elapsedRealtimeNanos())
         latestOrientation = OrientationReading(event.timestamp, q, accuracyDeg)
-        orientation.offer(event.timestamp, DeviceOrientationData(event.timestamp, q, accuracyDeg))
+        orientation.offerIf(event.timestamp, DeviceOrientationData(event.timestamp, q, accuracyDeg)) { sensorsOn }
     }
 
     private fun onPressure(event: SensorEvent) {
         val hPa = event.values.firstOrNull()?.toDouble() ?: return
-        if (hPa.isFinite() && hPa in MIN_HPA..MAX_HPA) pressure.offer(event.timestamp, PressureSample(event.timestamp, hPa))
+        if (hPa.isFinite() && hPa in MIN_HPA..MAX_HPA) pressure.offerIf(event.timestamp, PressureSample(event.timestamp, hPa)) { sensorsOn }
     }
 
     private fun registerSensors() {
@@ -244,11 +257,8 @@ class SensorRecorder(
         if (!(lat.isFinite() && lng.isFinite() && lat in -90.0..90.0 && lng in -180.0..180.0)) return
         val altitude = if (location.hasAltitude()) location.altitude.takeIf { it.isFinite() } else null
         val time = location.time.takeIf { it > 0 } ?: System.currentTimeMillis()
-        declinationDeg = runCatching {
-            GeomagneticField(lat.toFloat(), lng.toFloat(), (altitude ?: 0.0).toFloat(), time).declination.toDouble()
-        }.getOrNull() ?: declinationDeg
         val fix = LocationFix(time, lat, lng, altitude, location.accuracy.toDouble(), providerName(location.provider))
-        if (fixes.offer(time, fix)) fixCount = fixes.size
+        fixes.offerIf(time, fix) { locationOn }
     }
 
     private fun registerLocation() {
@@ -314,4 +324,12 @@ class SensorRecorder(
         private const val MIN_HPA = 300.0
         private const val MAX_HPA = 1100.0
     }
+}
+
+/** The platform's World Magnetic Model. */
+object AndroidDeclination : DeclinationSource {
+    override fun declination(latitude: Double, longitude: Double, altitudeM: Double, timeMs: Long): Double? =
+        runCatching {
+            android.hardware.GeomagneticField(latitude.toFloat(), longitude.toFloat(), altitudeM.toFloat(), timeMs).declination.toDouble()
+        }.getOrNull()
 }

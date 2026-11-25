@@ -14,7 +14,7 @@
     <string name="scan_failed">Scan failed: %1$s</string>
     <string name="scan_stats">Keyframes %1$d/%2$d  Planes %3$d  Points %4$d  %5$02d:%6$02d</string>
     <string name="tracking_ok">Tracking</string>
-    <string name="tracking_searching">Looking for surfaces…</string>
+    <string name="tracking_searching">Move the phone slowly to start tracking</string>
     <string name="tracking_dark">Too dark: turn on more lights</string>
     <string name="tracking_fast">Moving too fast: slow down</string>
     <string name="tracking_features">Not enough detail: aim at textured surfaces</string>
@@ -36,4 +36,8 @@
     <string name="scan_location_waiting">Location: waiting for a fix</string>
     <string name="scan_location_fixes">Location: %1$d fixes</string>
     <string name="scan_location_denied">Location permission was not granted. The scan continues without location.</string>
+    <string name="scan_location_confirm_title">Record approximate location?</string>
+    <string name="scan_location_confirm_message">The page asked to save your approximate location with this scan. It is used to correct the compass to true north when the scan is processed. You can switch it off while scanning.</string>
+    <string name="scan_location_allow">Allow</string>
+    <string name="scan_location_decline">Not now</string>
 </resources>

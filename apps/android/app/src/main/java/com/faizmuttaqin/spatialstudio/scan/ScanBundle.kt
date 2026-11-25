@@ -84,6 +84,8 @@ class BundleInput(
     /** v1.1 sensor streams; null when the sensors were off for the whole scan. */
     val sensors: SensorCapture? = null,
     val lightEstimates: List<LightRecord> = emptyList(),
+    /** Acquisition filter recorded with the point cloud. */
+    val pointMaxDistanceM: Double? = null,
 )
 
 class ArtifactFile(val path: String, val sha256: String, val byteLength: Long, val mediaType: String) {
@@ -300,6 +302,7 @@ object ScanBundle {
         put("spreadDeg", JsonUtil.rounded(result.spreadDeg, 2))
         put("sampleCount", result.sampleCount)
         put("declinationDeg", nullable(result.declinationDeg, 2))
+        put("segmentsAgree", result.segmentsAgree)
     }
 
     /** Planes the contract can represent: at least three boundary points, finite values. */
@@ -421,6 +424,7 @@ class ScanBundleWriter(private val dir: File) {
                     put("pointCount", input.points.size / 3)
                     put("voxelSizeM", input.voxelSizeM)
                     put("minConfidence", JsonUtil.rounded(input.minConfidence.toDouble(), 3))
+                    input.pointMaxDistanceM?.let { put("maxDistanceFromCameraM", it) }
                 }
             }
         }

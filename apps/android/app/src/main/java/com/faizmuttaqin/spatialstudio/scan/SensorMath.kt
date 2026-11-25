@@ -154,9 +154,34 @@ class TrueNorthResult(
     val spreadDeg: Double,
     val sampleCount: Int,
     val declinationDeg: Double?,
+    /** False when the offsets of separate tracking segments disagree (a world-frame jump or a bent field). */
+    val segmentsAgree: Boolean = true,
 ) {
     val method: String get() = if (trueReference) "compass-median-true" else "compass-median-magnetic"
     val reference: String get() = if (trueReference) "true" else "magnetic"
+}
+
+/** Source of the magnetic declination in degrees (east positive); the real one wraps `GeomagneticField`. */
+fun interface DeclinationSource {
+    fun declination(latitude: Double, longitude: Double, altitudeM: Double, timeMs: Long): Double?
+}
+
+object Declination {
+    /** Mean declination of the retained fixes, or null without a usable one. */
+    fun fromFixes(fixes: List<LocationFix>, source: DeclinationSource): Double? {
+        val values = fixes.mapNotNull { source.declination(it.latitude, it.longitude, it.altitudeM ?: 0.0, it.timestampMs) }
+            .filter { it.isFinite() }
+        return if (values.isEmpty()) null else values.sum() / values.size
+    }
+
+    /** Magnetic-only samples to samples that also carry the true azimuth. */
+    fun apply(samples: List<HeadingData>, declinationDeg: Double?): List<HeadingData> =
+        if (declinationDeg == null) samples else samples.map {
+            HeadingData(
+                it.timestampNs, it.azimuthMagneticDeg, Angles.wrap360(it.azimuthMagneticDeg + declinationDeg), declinationDeg,
+                it.magnetometerAccuracy, it.headingAccuracyDeg, it.worldBearingDeg,
+            )
+        }
 }
 
 /** Median estimate of the bearing of north in the ARCore world; see CAPTURE_CONTRACT.md "True north". */
@@ -164,8 +189,15 @@ object NorthEstimator {
     const val MIN_SAMPLES = 20
     const val MIN_MAGNETOMETER_ACCURACY = 2
     const val MAX_HEADING_ACCURACY_DEG = 25.0
-    private const val FULL_CONFIDENCE_SAMPLES = 150.0
+    private const val FULL_CONFIDENCE_WINDOWS = 30.0
+    private const val WINDOW_NS = 2_000_000_000L
     private const val ZERO_CONFIDENCE_SPREAD_DEG = 30.0
+    private const val FULL_COVERAGE_SPAN_DEG = 180.0
+    private const val MEDIUM_ACCURACY_CAP = 0.6
+    private const val DISAGREE_CAP = 0.3
+    private const val SEGMENT_GAP_NS = 1_000_000_000L
+    private const val MIN_SEGMENT_SAMPLES = 10
+    private const val SEGMENT_DISAGREE_DEG = 15.0
     private const val MAD_TO_SIGMA = 1.4826
 
     fun isUsable(sample: HeadingData): Boolean =
@@ -177,24 +209,57 @@ object NorthEstimator {
      * from all usable samples, else null.
      */
     fun estimate(samples: List<HeadingData>): TrueNorthResult? {
-        val usable = samples.filter(::isUsable)
+        val usable = samples.filter(::isUsable).sortedBy { it.timestampNs }
         val withDeclination = usable.filter { it.azimuthTrueDeg != null && it.declinationDeg != null }
         if (withDeclination.size >= MIN_SAMPLES) {
-            val offsets = withDeclination.map { it.worldBearingDeg - it.azimuthTrueDeg!! }
             val declination = withDeclination.sumOf { it.declinationDeg!! } / withDeclination.size
-            return result(offsets, true, declination)
+            return result(withDeclination, true, declination)
         }
-        if (usable.size >= MIN_SAMPLES) {
-            return result(usable.map { it.worldBearingDeg - it.azimuthMagneticDeg }, false, null)
-        }
+        if (usable.size >= MIN_SAMPLES) return result(usable, false, null)
         return null
     }
 
-    private fun result(offsetsDeg: List<Double>, trueReference: Boolean, declination: Double?): TrueNorthResult {
-        val (center, spread) = circularMedian(offsetsDeg)
-        val sampleFactor = min(1.0, offsetsDeg.size / FULL_CONFIDENCE_SAMPLES)
+    private fun offset(s: HeadingData, trueReference: Boolean): Double =
+        s.worldBearingDeg - (if (trueReference) s.azimuthTrueDeg!! else s.azimuthMagneticDeg)
+
+    private fun result(samples: List<HeadingData>, trueReference: Boolean, declination: Double?): TrueNorthResult {
+        val offsets = samples.map { offset(it, trueReference) }
+        val (center, spread) = circularMedian(offsets)
+
+        // Autocorrelated 5 Hz samples count once per 2 s window.
+        val windows = samples.map { it.timestampNs / WINDOW_NS }.toSet().size
+        val sampleFactor = min(1.0, windows / FULL_CONFIDENCE_WINDOWS)
         val spreadFactor = max(0.0, 1.0 - spread / ZERO_CONFIDENCE_SPREAD_DEG)
-        return TrueNorthResult(Angles.wrap180(center), sampleFactor * spreadFactor, trueReference, spread, offsetsDeg.size, declination)
+        val coverageFactor = min(1.0, bearingSpanDeg(samples.map { it.worldBearingDeg }) / FULL_COVERAGE_SPAN_DEG)
+        val accuracies = samples.map { it.magnetometerAccuracy }.sorted()
+        val accuracyCap = if (accuracies[accuracies.size / 2] >= 3) 1.0 else MEDIUM_ACCURACY_CAP
+
+        val agree = segmentsAgree(samples, offsets, center)
+        var confidence = min(accuracyCap, sampleFactor * spreadFactor * coverageFactor)
+        if (!agree) confidence = min(confidence, DISAGREE_CAP)
+        return TrueNorthResult(Angles.wrap180(center), confidence, trueReference, spread, samples.size, declination, agree)
+    }
+
+    /** Angular range covered by bearings: 360 minus the largest gap between neighbours on the circle. */
+    fun bearingSpanDeg(bearings: List<Double>): Double {
+        if (bearings.size < 2) return 0.0
+        val sorted = bearings.map(Angles::wrap360).sorted()
+        var largestGap = sorted.first() + 360.0 - sorted.last()
+        for (i in 1 until sorted.size) largestGap = max(largestGap, sorted[i] - sorted[i - 1])
+        return 360.0 - largestGap
+    }
+
+    /** Samples are split where more than one second passes (tracking loss); each segment's median must match the overall one. */
+    private fun segmentsAgree(samples: List<HeadingData>, offsets: List<Double>, center: Double): Boolean {
+        val segments = ArrayList<MutableList<Double>>()
+        var previous = Long.MIN_VALUE
+        samples.forEachIndexed { i, s ->
+            if (previous == Long.MIN_VALUE || s.timestampNs - previous > SEGMENT_GAP_NS) segments.add(ArrayList())
+            segments.last().add(offsets[i])
+            previous = s.timestampNs
+        }
+        return segments.filter { it.size >= MIN_SEGMENT_SAMPLES }
+            .all { abs(Angles.wrap180(circularMedian(it).first - center)) <= SEGMENT_DISAGREE_DEG }
     }
 
     /** Circular median in degrees, and the robust spread (1.4826 x median absolute deviation). */
@@ -221,6 +286,42 @@ object NorthEstimator {
 }
 
 /**
+ * Checks that a clock reported by a callback (ARCore frame timestamps, sensor events) is the boot-time
+ * clock, by comparing each reading with `SystemClock.elapsedRealtimeNanos()` taken as it arrives. On the
+ * same clock the difference is the delivery delay: small, non-negative and steady.
+ */
+class ClockCalibrator(
+    private val required: Int = 30,
+    private val minDeltaNs: Long = -5_000_000L,
+    private val maxDeltaNs: Long = 250_000_000L,
+    private val maxSpreadNs: Long = 100_000_000L,
+) {
+    enum class State { PENDING, COMPARABLE, MISMATCH }
+
+    @Volatile
+    var state = State.PENDING
+        private set
+
+    private var count = 0
+    private var lowest = Long.MAX_VALUE
+    private var highest = Long.MIN_VALUE
+
+    /** [readingNs] is the callback's timestamp, [elapsedNs] the boot-time clock on arrival. */
+    fun add(readingNs: Long, elapsedNs: Long) {
+        if (state != State.PENDING || readingNs <= 0L) return
+        val delta = elapsedNs - readingNs
+        if (delta < minDeltaNs || delta > maxDeltaNs) {
+            state = State.MISMATCH
+            return
+        }
+        lowest = min(lowest, delta)
+        highest = max(highest, delta)
+        count++
+        if (count >= required) state = if (highest - lowest <= maxSpreadNs) State.COMPARABLE else State.MISMATCH
+    }
+}
+
+/**
  * Keeps at most [max] items, at least [minIntervalUnits] apart in the caller's timestamp unit.
  * Past the cap nothing more is stored and [truncated] is set, so the bundle can say so.
  */
@@ -243,6 +344,15 @@ class BoundedSeries<T>(private val max: Int, private val minIntervalUnits: Long)
         lastUnits = timestampUnits
         return true
     }
+
+    /** Like [offer], but [allowed] is checked under the same lock as [clear], so a cleared stream cannot regain an item. */
+    @Synchronized
+    fun offerIf(timestampUnits: Long, item: T, allowed: () -> Boolean): Boolean = allowed() && offer(timestampUnits, item)
+
+    /** Cheap pre-check so callers skip work for a sample [offer] would drop for rate. */
+    @Synchronized
+    fun accepts(timestampUnits: Long): Boolean =
+        items.size < max && (lastUnits == Long.MIN_VALUE || timestampUnits - lastUnits >= minIntervalUnits)
 
     @Synchronized
     fun snapshot(): List<T> = ArrayList(items)

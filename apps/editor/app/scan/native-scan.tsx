@@ -160,7 +160,7 @@ export function NativeScan({
             {i18n._({
               id: 'app.scan.native.locationHint',
               message:
-                'Off by default. Sets true north and the sun for this place and date. The phone asks for permission, and the location is saved in this scan.',
+                'Off by default. The location is saved with the scan and used to correct the compass to true north when the scan is processed. The phone asks for permission first.',
             })}
           </span>
         </span>

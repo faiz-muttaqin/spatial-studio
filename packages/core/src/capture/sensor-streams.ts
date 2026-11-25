@@ -184,6 +184,8 @@ export const TrueNorthSchema = z
     spreadDeg: finite.nonnegative(),
     sampleCount: z.number().int().positive(),
     declinationDeg: finite.min(-180).max(180).nullable(),
+    /** False when separate tracking segments disagree on the offset; confidence is then capped. */
+    segmentsAgree: z.boolean(),
   })
   .refine(
     (north) =>

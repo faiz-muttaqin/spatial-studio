@@ -1554,15 +1554,15 @@ msgstr "La aplicación complementaria registra la pose, los planos, la profundid
 msgid "app.scan.native.location"
 msgstr "Registrar la ubicación aproximada"
 
-# Source-Hash: 321543d4576859a0
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-sonnet-5-5
-# English: "Off by default. Sets true north and the sun for this place and date. The phone asks for permission, and the location is saved in this scan."
+# English: "Off by default. The location is saved with the scan and used to correct the compass to true north when the scan is processed. The phone asks for permission first."
+# Source-Hash: 321543d4576859a0
+# Review: required
 #: apps/editor/app/scan/native-scan.tsx
 #, fuzzy
 msgid "app.scan.native.locationHint"
-msgstr "Desactivado por defecto. Sirve para fijar el norte verdadero y el sol en este lugar y fecha. El teléfono pide permiso y la ubicación se guarda en este escaneo."
+msgstr "Desactivado por defecto. La ubicación se guarda con el escaneo y sirve para corregir la brújula al norte verdadero cuando se procesa el escaneo. El teléfono pide permiso primero."
 
 # Source-Hash: e4e15da3db73b81d
 # Review: required

@@ -36,7 +36,7 @@ class ScanRecorder(
 ) {
     val selector = KeyframeSelector(options.keyframeSpacingM, options.keyframeAngleDeg, options.maxKeyframes)
     val trajectory = TrajectoryRecorder()
-    val voxels = VoxelDownsampler()
+    val voxels = VoxelDownsampler(minConfidence = POINT_MIN_CONFIDENCE)
     val keyframes: MutableList<KeyframeRecord> = Collections.synchronizedList(ArrayList())
     val depthFrames: MutableList<DepthRecord> = Collections.synchronizedList(ArrayList())
     val warnings: MutableSet<String> = Collections.synchronizedSet(LinkedHashSet())
@@ -80,6 +80,7 @@ class ScanRecorder(
     private val planeIds = HashMap<Plane, String>()
     private var lastPointCloudTimestamp = -1L
     private var lastPlaneSnapshotNs = Long.MIN_VALUE
+    private var lastLoggedPlanes = -1
     private val pose = FloatArray(16)
     private var stopped = false
 
@@ -119,7 +120,7 @@ class ScanRecorder(
                 if (overlayPoints.size < count * 4) overlayPoints = FloatArray(count * 4)
                 buffer.get(overlayPoints, 0, count * 4)
                 overlayCount = count
-                voxels.addPacked(overlayPoints, count)
+                voxels.addPackedWithin(overlayPoints, count, pose[12], pose[13], pose[14], POINT_MAX_DISTANCE_M)
             }
         }
 
@@ -128,6 +129,10 @@ class ScanRecorder(
             val planes = snapshotPlanes(session)
             latestPlanes = planes
             planeCount = planes.count { it.trackingState == "tracking" && it.subsumedBy == null }
+            if (planes.size != lastLoggedPlanes) {
+                lastLoggedPlanes = planes.size
+                Log.i(TAG, "planes: ${planes.size} known, $planeCount tracking")
+            }
         }
 
         if (selector.limitReached) {
@@ -394,6 +399,9 @@ class ScanRecorder(
 
     companion object {
         private const val TAG = "ScanRecorder"
+        /** Feature points farther than this from the camera, or below this confidence, are dropped at acquisition. */
+        const val POINT_MAX_DISTANCE_M = 8f
+        const val POINT_MIN_CONFIDENCE = 0.5f
         const val DEPTH_RAW = "raw"
         const val DEPTH_SMOOTHED = "smoothed"
         const val WARNING_KEYFRAME_LIMIT = "keyframe-limit-reached"
