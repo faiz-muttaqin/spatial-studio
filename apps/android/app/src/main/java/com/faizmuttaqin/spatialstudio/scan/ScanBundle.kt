@@ -27,6 +27,8 @@ class KeyframeRecord(
     val intrinsics: Intrinsics?,
     val pose: FloatArray?,
     val trackingState: String,
+    /** v1.3: whether the ARCore torch was on for this frame; null when unknown. */
+    val torch: Boolean? = null,
 )
 
 class DepthRecord(
@@ -136,6 +138,7 @@ object ScanBundle {
                     put("intrinsics", frame.intrinsics?.takeIf { it.isValid }?.let(::intrinsicsJson) ?: JsonNull)
                     put("pose", frame.pose?.takeIf(PoseMath::isFinite)?.let(JsonUtil::matrix) ?: JsonNull)
                     put("trackingState", frame.trackingState)
+                    frame.torch?.let { put("torch", it) }
                 }
             }
         }

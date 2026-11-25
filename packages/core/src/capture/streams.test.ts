@@ -51,6 +51,23 @@ describe('rgb keyframe index', () => {
     expect(index.frames[0]?.pose).toHaveLength(16)
   })
 
+  test('accepts the v1.3 torch flag and rejects a non-boolean one', () => {
+    const tracked = { pose: identity, trackingState: 'tracking' as const }
+    const parsed = RgbKeyframeIndexSchema.parse({
+      frames: [
+        photoFrame({ ...tracked, torch: true }),
+        photoFrame({ ...tracked, id: 'b', torch: false }),
+      ],
+    })
+    expect(parsed.frames.map((frame) => frame.torch)).toEqual([true, false])
+    expect(
+      RgbKeyframeIndexSchema.parse({ frames: [photoFrame()] }).frames[0]?.torch,
+    ).toBeUndefined()
+    expect(
+      RgbKeyframeIndexSchema.safeParse({ frames: [photoFrame({ torch: 'on' })] }).success,
+    ).toBe(false)
+  })
+
   test('rejects images over the long-edge bound, bad hashes and duplicate ids', () => {
     expect(
       RgbKeyframeIndexSchema.safeParse({ frames: [photoFrame({ width: 4032 })] }).success,

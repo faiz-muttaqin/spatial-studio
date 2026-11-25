@@ -39,6 +39,7 @@ import com.faizmuttaqin.spatialstudio.bridge.BridgeErrorCode
 import com.faizmuttaqin.spatialstudio.bridge.NativeBridge
 import com.faizmuttaqin.spatialstudio.capabilities.CapabilityProbe
 import com.faizmuttaqin.spatialstudio.scan.gl.CameraBackground
+import com.faizmuttaqin.spatialstudio.scan.gl.CoverageOverlay
 import com.faizmuttaqin.spatialstudio.scan.gl.LineOverlay
 import com.faizmuttaqin.spatialstudio.scan.gl.PointOverlay
 import com.google.ar.core.ArCoreApk
@@ -86,6 +87,9 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
     private lateinit var sensorsText: TextView
     private lateinit var sensorsToggle: CheckBox
     private lateinit var locationToggle: CheckBox
+    private lateinit var torchToggle: CheckBox
+    private lateinit var guidanceText: TextView
+    private lateinit var resumeButton: Button
     private lateinit var markToggle: Button
     private lateinit var markPanel: View
     private lateinit var markStatus: TextView
@@ -123,6 +127,10 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
     private var locationRequested = false
     private var locationDenied = false
     private var updatingToggles = false
+
+    // Torch experiment (v1.3): the toggle states what the user wants; the GL thread applies it to ARCore.
+    @Volatile private var torchWanted = false
+    private val torchChange = java.util.concurrent.atomic.AtomicBoolean(false)
     private val headingPose = FloatArray(16)
     private var installRequested = false
     private var permissionRequested = false
@@ -132,6 +140,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
     private val background = CameraBackground()
     private val overlay = PointOverlay()
     private val lines = LineOverlay()
+    private val coverageOverlay = CoverageOverlay()
     private var textureBound = false
     private var viewportWidth = 0
     private var viewportHeight = 0
@@ -182,6 +191,13 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         sensorsText = ActivityCompat.requireViewById(this, R.id.scan_sensors)
         sensorsToggle = ActivityCompat.requireViewById(this, R.id.scan_toggle_sensors)
         locationToggle = ActivityCompat.requireViewById(this, R.id.scan_toggle_location)
+        torchToggle = ActivityCompat.requireViewById(this, R.id.scan_toggle_torch)
+        guidanceText = ActivityCompat.requireViewById(this, R.id.scan_guidance)
+        resumeButton = ActivityCompat.requireViewById(this, R.id.scan_resume)
+        resumeButton.setOnClickListener {
+            recorder?.requestResume()
+            resumeButton.visibility = View.GONE
+        }
         markToggle = ActivityCompat.requireViewById(this, R.id.scan_mark_toggle)
         markPanel = ActivityCompat.requireViewById(this, R.id.scan_mark_panel)
         markStatus = ActivityCompat.requireViewById(this, R.id.scan_mark_status)
@@ -207,6 +223,12 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             } else {
                 sensors.setLocationEnabled(checked)
             }
+        }
+
+        torchToggle.setOnCheckedChangeListener { _, checked ->
+            if (updatingToggles) return@setOnCheckedChangeListener
+            torchWanted = checked
+            torchChange.set(true)
         }
 
         val hud = ActivityCompat.requireViewById<View>(this, R.id.scan_hud)
@@ -262,6 +284,8 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             markToggle.isEnabled = true
         }
         sensorRecorder?.start()
+        // ARCore keeps its configuration across pause and resume; applyTorch only reconfigures on a mismatch.
+        if (torchWanted) torchChange.set(true)
         ScanCoordinator.state(scan.sessionId, "scanning")
     }
 
@@ -465,6 +489,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         background.create()
         overlay.create()
         lines.create()
+        coverageOverlay.create()
         textureBound = false
     }
 
@@ -492,6 +517,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             runCatching { session.configure(session.config.apply { lightEstimationMode = mode }) }
                 .onFailure { Log.w(TAG, "Could not change light estimation", it) }
         }
+        if (torchChange.getAndSet(false)) applyTorch(session, recorder, torchWanted)
         val frame = try {
             session.update()
         } catch (e: SessionPausedException) {
@@ -521,12 +547,74 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         if (camera.trackingState == TrackingState.TRACKING) {
             camera.getViewMatrix(view, 0)
             camera.getProjectionMatrix(projection, 0, 0.1f, 100f)
+            if (recorder.guidance.jumpHeld.not()) coverageOverlay.draw(recorder.coverage, view, projection)
             overlay.draw(recorder.overlayPoints, recorder.overlayCount, view, projection)
             lines.draw(marks.snapshot(), marks.pending(), candidate, view, projection)
         }
         if (progressGate.ready(frame.timestamp)) {
             reportProgress(recorder, camera.trackingState, camera.trackingFailureReason)
         }
+    }
+
+    /** GL thread. Asks ARCore for the torch, probing support first; falls back to off with a message. */
+    @Suppress("DEPRECATION") // isSupported is the probe the reference uses; the replacement is not in ARCore 1.57.
+    private fun applyTorch(session: Session, recorder: ScanRecorder, want: Boolean) {
+        val config = session.config
+        val mode = if (want) Config.FlashMode.TORCH else Config.FlashMode.OFF
+        if (config.flashMode == mode) {
+            recorder.setTorch(want)
+            return
+        }
+        config.flashMode = mode
+        if (want) {
+            val supported = session.isSupported(config)
+            recorder.torchProbed(supported)
+            if (!supported) {
+                rejectTorch(recorder, R.string.scan_torch_unsupported)
+                return
+            }
+        }
+        try {
+            // Unverified on a device: a mid-scan configure may restart the camera or reset planes.
+            session.configure(config)
+            recorder.setTorch(want)
+            recorder.torchToggledMidScan()
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not change the torch", e)
+            recorder.torchConfigureFailed()
+            rejectTorch(recorder, R.string.scan_torch_failed)
+        }
+    }
+
+    private fun rejectTorch(recorder: ScanRecorder, message: Int) {
+        torchWanted = false
+        recorder.setTorch(false)
+        runOnUiThread {
+            updatingToggles = true
+            torchToggle.isChecked = false
+            updatingToggles = false
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun guidanceLines(g: ScanRecorder.Guidance): String {
+        val floor = g.floorPercent?.let { getString(R.string.scan_floor_covered, it) } ?: getString(R.string.scan_floor_waiting)
+        val alert = when {
+            g.jumpStuck -> getString(R.string.scan_jump_stuck)
+            g.jumpHeld -> getString(R.string.scan_jump_held)
+            g.tooFast -> getString(R.string.scan_slow_down)
+            else -> g.wallSide?.let {
+                getString(
+                    when (it) {
+                        WallSide.AHEAD -> R.string.scan_wall_ahead
+                        WallSide.LEFT -> R.string.scan_wall_left
+                        WallSide.RIGHT -> R.string.scan_wall_right
+                        WallSide.BEHIND -> R.string.scan_wall_behind
+                    },
+                )
+            }
+        }
+        return if (alert == null) floor else getString(R.string.scan_guidance_lines, floor, alert)
     }
 
     private fun reportProgress(recorder: ScanRecorder, state: TrackingState, failure: TrackingFailureReason) {
@@ -556,6 +644,8 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                 R.string.scan_stats,
                 keyframes, recorder.selector.maxKeyframes, planes, points, seconds / 60, seconds % 60,
             )
+            guidanceText.text = guidanceLines(recorder.guidance)
+            resumeButton.visibility = if (recorder.guidance.jumpHeld) View.VISIBLE else View.GONE
             if (recorder.selector.limitReached) hintText.setText(R.string.scan_keyframe_limit)
             sensorRecorder?.let { updateSensorsText(it) }
         }
@@ -811,6 +901,11 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         ScanCoordinator.state(scan.sessionId, "finalizing")
         sensorsToggle.isEnabled = false
         locationToggle.isEnabled = false
+        torchToggle.isEnabled = false
+        resumeButton.visibility = View.GONE
+        // The GL thread switches the torch off; recording stops with the finalizer.
+        torchWanted = false
+        torchChange.set(true)
         markToggle.isEnabled = false
         marking = false
         pendingTap.set(null)
@@ -882,6 +977,8 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                     put("keyframeSpacingM", scan.options.keyframeSpacingM)
                     put("keyframeAngleDeg", scan.options.keyframeAngleDeg)
                     put("maxKeyframes", scan.options.maxKeyframes)
+                    // v1.3: torch state counts and the motion and pose-jump guard events.
+                    recorder.guardMetadata().forEach { (key, value) -> put(key, value) }
                 },
                 // A group the user switched off is empty, so only what was recorded is written.
                 sensors = sensorCapture,
@@ -956,6 +1053,8 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
 
     private fun discardPartial(state: String, error: JsonObject?) {
         phase = Phase.DONE
+        torchWanted = false
+        torchToggle.isEnabled = false
         val sessionId = scan.sessionId
         val recorder = recorder
         finalizer.execute {

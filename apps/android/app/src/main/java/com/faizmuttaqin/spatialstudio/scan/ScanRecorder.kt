@@ -15,7 +15,14 @@ import com.google.ar.core.Plane
 import com.google.ar.core.Session
 import com.google.ar.core.TrackingState
 import com.google.ar.core.exceptions.NotYetAvailableException
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.addJsonObject
 import java.io.ByteArrayOutputStream
+import java.nio.ByteOrder
 import java.io.File
 import java.util.Collections
 import java.util.Locale
@@ -41,6 +48,71 @@ class ScanRecorder(
     val depthFrames: MutableList<DepthRecord> = Collections.synchronizedList(ArrayList())
     val warnings: MutableSet<String> = Collections.synchronizedSet(LinkedHashSet())
     val lightEstimates: MutableList<LightRecord> = Collections.synchronizedList(ArrayList())
+
+    // R3 live guidance. All of it runs on the GL thread; the screen reads [guidance] and [torchActive].
+    private val continuity = PoseContinuity()
+    private val motion = MotionGuard()
+    val coverage = CoverageGrid()
+    private val coverageDepthGate = IntervalGate(COVERAGE_DEPTH_INTERVAL_NS)
+    private val guidanceGate = IntervalGate(GUIDANCE_INTERVAL_NS)
+    private val poseJumps = Collections.synchronizedList(ArrayList<PoseJumpEvent>())
+    private var jumpOpen = false
+    private var lastWasFastSkip = false
+    private var dueSinceNs: Long? = null
+    private val resumeRequested = AtomicBoolean(false)
+    @Volatile var fastKeyframeSkips = 0
+        private set
+
+    /** What the HUD shows about coverage and motion; replaced about four times a second. */
+    @Volatile var guidance = Guidance()
+        private set
+
+    /** Torch state per keyframe. [setTorch] is called on the GL thread after ARCore accepted the configuration. */
+    @Volatile var torchActive = false
+        private set
+
+    /** Null until the torch was asked for; then what `session.isSupported(config)` said. */
+    @Volatile var torchSupported: Boolean? = null
+        private set
+
+    class Guidance(
+        val floorPercent: Int? = null,
+        val tooFast: Boolean = false,
+        val jumpHeld: Boolean = false,
+        val jumpStuck: Boolean = false,
+        val wallSide: WallSide? = null,
+    )
+
+    class PoseJumpEvent(
+        val timestampNs: Long,
+        val metres: Float,
+        val degrees: Float,
+        var recoveredTimestampNs: Long? = null,
+        var manualResume: Boolean = false,
+    )
+
+    /** The user says the pose is fine: resume recording from here. Handled on the next GL frame. */
+    fun requestResume() = resumeRequested.set(true)
+
+    /** GL thread, after ARCore accepted (or the user switched off) the torch configuration. */
+    fun setTorch(active: Boolean) {
+        torchActive = active
+    }
+
+    /** What `session.isSupported` said; false adds `torch-unsupported`. */
+    fun torchProbed(supported: Boolean) {
+        torchSupported = supported
+        if (!supported) warnings.add(WARNING_TORCH_UNSUPPORTED)
+    }
+
+    fun torchConfigureFailed() {
+        torchActive = false
+        warnings.add(WARNING_TORCH_CONFIGURE_FAILED)
+    }
+
+    fun torchToggledMidScan() {
+        if (selector.count > 0) warnings.add(WARNING_TORCH_MID_SCAN)
+    }
 
     /** Set by the scan screen; off when the sensors toggle is off or the mode is DISABLED. */
     @Volatile
@@ -110,6 +182,26 @@ class ScanRecorder(
             overlayCount = 0
             return
         }
+        // Pose-jump guard: while ARCore's pose is off the trajectory the scan was built on, nothing is
+        // recorded (no keyframes, depth or points). The trajectory above keeps recording.
+        val quat = QuatPose.fromMatrix(pose)
+        if (resumeRequested.getAndSet(false) && continuity.isSlipped) {
+            continuity.resume()
+            jumpOpen = false
+            poseJumps.lastOrNull { it.recoveredTimestampNs == null }?.let {
+                it.recoveredTimestampNs = timestamp
+                it.manualResume = true
+            }
+        }
+        val step = continuity.step(timestamp, quat)
+        trackJump(step, timestamp)
+        motion.update(timestamp, quat)
+        if (!step.integrates) {
+            overlayCount = 0
+            publishGuidance(timestamp, pose)
+            return
+        }
+        coverage.walls.addCamera(pose[12], pose[14])
 
         frame.acquirePointCloud().use { cloud ->
             if (cloud.timestamp != lastPointCloudTimestamp) {
@@ -120,6 +212,11 @@ class ScanRecorder(
                 buffer.get(overlayPoints, 0, count * 4)
                 overlayCount = count
                 voxels.addPackedWithin(overlayPoints, count, pose[12], pose[13], pose[14], POINT_MAX_DISTANCE_M)
+                for (i in 0 until count) {
+                    if (overlayPoints[i * 4 + 3] >= POINT_MIN_CONFIDENCE) {
+                        coverage.addPoint(overlayPoints[i * 4], overlayPoints[i * 4 + 1], overlayPoints[i * 4 + 2])
+                    }
+                }
             }
         }
 
@@ -128,13 +225,101 @@ class ScanRecorder(
             latestPlanes = planes
             planeCount = planes.count { it.trackingState == "tracking" && it.subsumedBy == null }
             Log.i(TAG, "planes: ${planes.size} known, $planeCount tracking")
+            updateFloor(planes)
         }
+        if (coverageDepthGate.ready(timestamp)) sampleCoverageDepth(frame, camera)
+        publishGuidance(timestamp, pose)
 
         if (selector.limitReached) {
             warnings.add(WARNING_KEYFRAME_LIMIT)
-        } else if (pending.get() < MAX_PENDING_ENCODES && selector.shouldCapture(timestamp, true, pose)) {
+            return
+        }
+        val due = selector.shouldCapture(timestamp, true, pose)
+        if (!due) dueSinceNs = null else if (dueSinceNs == null) dueSinceNs = timestamp
+        val decision = KeyframeGate.decide(
+            due = due,
+            integrates = true,
+            blocked = motion.keyframesBlocked,
+            encoderBusy = pending.get() >= MAX_PENDING_ENCODES,
+            dueForNs = dueSinceNs?.let { timestamp - it } ?: 0L,
+        )
+        // One count per episode: a due keyframe held back while the camera is too fast, not one per frame.
+        if (decision == KeyframeGate.Decision.SKIP_FAST && !lastWasFastSkip) fastKeyframeSkips++
+        lastWasFastSkip = decision == KeyframeGate.Decision.SKIP_FAST
+        if (decision == KeyframeGate.Decision.CAPTURE) {
+            dueSinceNs = null
             captureKeyframe(frame, camera, timestamp)
         }
+    }
+
+    private fun trackJump(step: PoseStep, timestamp: Long) {
+        when (step) {
+            PoseStep.Slipped -> if (!jumpOpen) {
+                jumpOpen = true
+                if (poseJumps.size < MAX_POSE_JUMPS) {
+                    poseJumps.add(PoseJumpEvent(timestamp, continuity.lastJumpMetres, continuity.lastJumpDegrees))
+                }
+                warnings.add(WARNING_POSE_JUMP)
+            }
+            PoseStep.Recovered -> {
+                jumpOpen = false
+                poseJumps.lastOrNull { it.recoveredTimestampNs == null }?.recoveredTimestampNs = timestamp
+            }
+            else -> Unit
+        }
+    }
+
+    private fun updateFloor(planes: List<PlaneRecord>) {
+        val floorY = planes
+            .filter { it.orientation == "horizontal-up" && it.trackingState == "tracking" && it.subsumedBy == null && it.centerPose.size == 16 }
+            .minOfOrNull { it.centerPose[13] } ?: return
+        coverage.setFloor(floorY)
+        coverage.setExtent(FloorExtent.cells(planes, floorY, coverage.cellMetres))
+    }
+
+    /** About four times a second, a strided sample of depth near the floor and walls. */
+    private fun sampleCoverageDepth(frame: Frame, camera: Camera) {
+        if (coverage.floorY == null) return
+        val kind = depthKind ?: return
+        try {
+            val sink = FloorSampler.Sink { x, y, z -> coverage.addPoint(x, y, z) }
+            if (kind == DEPTH_RAW) {
+                frame.acquireRawDepthImage16Bits().use { depth ->
+                    frame.acquireRawDepthConfidenceImage().use { confidence -> sampleImage(depth, confidence, camera, sink) }
+                }
+            } else {
+                frame.acquireDepthImage16Bits().use { depth -> sampleImage(depth, null, camera, sink) }
+            }
+        } catch (e: Exception) {
+            // No depth this frame (not yet available, or transient): coverage just waits for the next sample.
+        }
+    }
+
+    private fun sampleImage(depth: Image, confidence: Image?, camera: Camera, sink: FloorSampler.Sink) {
+        val k = intrinsicsFor(camera.textureIntrinsics, depth.width, depth.height) ?: return
+        val dp = depth.planes[0]
+        val db = dp.buffer.duplicate().order(ByteOrder.LITTLE_ENDIAN)
+        val conf = confidence?.takeIf { it.width == depth.width && it.height == depth.height }?.planes?.get(0)
+        val cb = conf?.buffer?.duplicate()
+        FloorSampler.sample(
+            depth.width, depth.height, k.fx, k.fy, k.cx, k.cy, pose, COVERAGE_DEPTH_STRIDE,
+            depthMmAt = { x, y -> db.getShort(y * dp.rowStride + x * dp.pixelStride).toInt() and 0xFFFF },
+            confidenceAt = if (cb != null && conf != null) { x, y -> cb.get(y * conf.rowStride + x * conf.pixelStride).toInt() and 0xFF } else null,
+            sink = sink,
+        )
+    }
+
+    private fun publishGuidance(timestamp: Long, pose: FloatArray) {
+        if (!guidanceGate.ready(timestamp)) return
+        val floor = coverage.floorY
+        guidance = Guidance(
+            floorPercent = if (floor == null || coverage.coveredCount == 0) null else Math.round(coverage.coveredShare() * 100f),
+            tooFast = motion.tooFast,
+            jumpHeld = continuity.isSlipped,
+            jumpStuck = continuity.isStuck,
+            // The camera looks along its -Z axis: world forward is minus the third matrix column.
+            wallSide = coverage.walls.missingSide(-pose[8], -pose[10]),
+        )
     }
 
     private fun captureKeyframe(frame: Frame, camera: Camera, timestamp: Long) {
@@ -164,6 +349,7 @@ class ScanRecorder(
         val light = lightRecord(frame, timestamp)
 
         val keyframePose = pose.copyOf()
+        val torch = torchActive
         val id = "kf-%04d".format(Locale.ROOT, selector.reserve(timestamp, keyframePose))
         pending.incrementAndGet()
         encoder.execute {
@@ -181,6 +367,7 @@ class ScanRecorder(
                         intrinsics = scaledIntrinsics,
                         pose = keyframePose,
                         trackingState = "tracking",
+                        torch = torch,
                     ),
                 )
                 depthRecord?.let(depthFrames::add)
@@ -349,8 +536,42 @@ class ScanRecorder(
         stopped = true
     }
 
+    /** `metadata.arcore.torch` and `metadata.arcore.motionGuard` (contract v1.3). Call after [captured]. */
+    fun guardMetadata(): JsonObject = buildJsonObject {
+        val stored = keyframes.toList()
+        put("torch", buildJsonObject {
+            // Null: the torch was never asked for, so support was never probed.
+            put("supported", torchSupported)
+            put("framesOn", stored.count { it.torch == true })
+            put("framesOff", stored.count { it.torch == false })
+        })
+        put("motionGuard", buildJsonObject {
+            put("maxSpeedMps", MotionGuard.MAX_SPEED_MPS)
+            put("maxTurnDegPerSecond", MotionGuard.MAX_TURN_DEG_PER_SECOND)
+            put("keyframeMaxSpeedMps", MotionGuard.KEYFRAME_MAX_SPEED_MPS)
+            put("keyframeMaxTurnDegPerSecond", MotionGuard.KEYFRAME_MAX_TURN_DEG_PER_SECOND)
+            put("keyframeMaxHoldMs", MotionGuard.KEYFRAME_MAX_HOLD_NS / 1_000_000L)
+            put("fastKeyframeSkips", fastKeyframeSkips)
+            putJsonArray("poseJumps") {
+                synchronized(poseJumps) {
+                    for (jump in poseJumps) {
+                        addJsonObject {
+                            put("timestampNs", jump.timestampNs)
+                            put("metres", jump.metres.toDouble())
+                            put("degrees", jump.degrees.toDouble())
+                            put("recoveredTimestampNs", jump.recoveredTimestampNs)
+                            put("manualResume", jump.manualResume)
+                        }
+                    }
+                }
+            }
+        })
+    }
+
     @Synchronized
     fun captured(): Captured {
+        if (fastKeyframeSkips > 0) warnings.add(WARNING_SKIPPED_FAST)
+        if (jumpOpen) warnings.add(WARNING_POSE_JUMP_UNRECOVERED)
         if (trajectory.decimated) warnings.add("trajectory-decimated")
         val keyframes = keyframes.toList().sortedBy { it.timestampNs }
         val ids = keyframes.mapTo(HashSet()) { it.id }
@@ -405,6 +626,16 @@ class ScanRecorder(
         const val DEPTH_SMOOTHED = "smoothed"
         const val WARNING_KEYFRAME_LIMIT = "keyframe-limit-reached"
         const val WARNING_OUT_OF_MEMORY = "keyframe-out-of-memory"
+        const val WARNING_POSE_JUMP = "pose-jump"
+        const val WARNING_POSE_JUMP_UNRECOVERED = "pose-jump-unrecovered"
+        const val WARNING_SKIPPED_FAST = "keyframes-skipped-fast"
+        const val WARNING_TORCH_UNSUPPORTED = "torch-unsupported"
+        const val WARNING_TORCH_CONFIGURE_FAILED = "torch-configure-failed"
+        const val WARNING_TORCH_MID_SCAN = "torch-toggled-mid-scan"
+        private const val MAX_POSE_JUMPS = 50
+        private const val COVERAGE_DEPTH_INTERVAL_NS = 250_000_000L
+        private const val GUIDANCE_INTERVAL_NS = 250_000_000L
+        private const val COVERAGE_DEPTH_STRIDE = 6
         private const val MAX_LONG_EDGE = 1920
         private const val JPEG_QUALITY = 90
         private const val MAX_PENDING_ENCODES = 3
