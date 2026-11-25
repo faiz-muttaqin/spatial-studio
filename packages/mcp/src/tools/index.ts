@@ -23,6 +23,7 @@ import { registerMeasure } from './measure'
 import { registerPhotoToSceneTool } from './photo-to-scene'
 import { registerRedo } from './redo'
 import { registerRoomTools } from './room-tools'
+import { registerScanMapTool } from './scan-map-tool'
 import { type CaptureArtifactHost, registerScanTools } from './scan-tools'
 import { registerSceneLifecycleTools } from './scene-lifecycle'
 import { registerSetZone } from './set-zone'
@@ -84,7 +85,10 @@ export function registerTools(
   registerGetSource(server, operations, geometryScripts)
   registerMeasure(server, operations)
   registerViewScene(server, operations, sceneViews)
-  if (captureArtifacts) registerScanTools(server, operations, captureArtifacts)
+  if (captureArtifacts) {
+    registerScanTools(server, operations, captureArtifacts)
+    registerScanMapTool(server, operations, captureArtifacts)
+  }
   registerConstructionTools(server, operations)
   registerRoomTools(server, operations, geometryScripts)
   registerApplyPatch(server, operations)
