@@ -1922,6 +1922,14 @@ msgstr "窗 {number}"
 msgid "app.scan.native.attach"
 msgstr "附加"
 
+# Source-Hash: 875e8b17daace2b3
+# Review: required
+# English: "Check again"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.checkAgain"
+msgstr "重新检查"
+
 # Source-Hash: fa798a178c7c3128
 # Review: required
 # English: "Checking…"
@@ -1929,6 +1937,14 @@ msgstr "附加"
 #, fuzzy
 msgid "app.scan.native.checking"
 msgstr "正在检查…"
+
+# Source-Hash: 1700facb2f015fed
+# Review: required
+# English: "Delete from phone"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.deleteFromPhone"
+msgstr "从手机删除"
 
 # Source-Hash: f89744026cb4ffb5
 # Review: required
@@ -1978,6 +1994,14 @@ msgstr "{keyframes, plural, other {# 个关键帧}}，{state}"
 msgid "app.scan.native.failed"
 msgstr "配套应用报告了错误：{code}"
 
+# Source-Hash: 591087ea83a48ead
+# Review: required
+# English: "Hide"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.hide"
+msgstr "隐藏"
+
 # Source-Hash: 6270972be99e74e0
 # Review: required
 # AI-Provider: claude-code
@@ -2016,13 +2040,13 @@ msgstr "记录大致位置"
 msgid "app.scan.native.locationHint"
 msgstr "默认关闭。位置信息会与扫描一起保存，并在处理扫描时用于将指南针校正为真北。手机会先请求权限。"
 
-# Source-Hash: 008df04307a93de8
+# Source-Hash: c36f40587389e367
 # Review: required
-# English: "New project"
+# English: "Mark attached"
 #: apps/editor/app/scan/native-scan.tsx
 #, fuzzy
-msgid "app.scan.native.newProject"
-msgstr "新项目"
+msgid "app.scan.native.markAttached"
+msgstr "标记为已附加"
 
 # Source-Hash: aba25fa394039e44
 # Review: required
@@ -2032,13 +2056,13 @@ msgstr "新项目"
 msgid "app.scan.native.projectLabel"
 msgstr "项目：{project}"
 
-# Source-Hash: 9469a102f04ea196
+# Source-Hash: 1ca91cd28528f704
 # Review: required
-# English: "Remove"
+# English: "Delete this scan from the phone? It is not on this site, so this cannot be undone."
 #: apps/editor/app/scan/native-scan.tsx
 #, fuzzy
-msgid "app.scan.native.remove"
-msgstr "移除"
+msgid "app.scan.native.removeConfirm"
+msgstr "要从手机删除此扫描吗？它不在此站点上，删除后无法恢复。"
 
 # Source-Hash: e4e15da3db73b81d
 # Review: required
@@ -2076,6 +2100,14 @@ msgstr "使用手电筒（实验）"
 msgid "app.scan.native.torchHint"
 msgstr "在扫描前选择，并全程保持开启。开启手电筒时跟踪可能不够稳定。"
 
+# Source-Hash: 7b4c9586b0ee1fe3
+# Review: required
+# English: "Could not check this scan. Try again."
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.unknown"
+msgstr "无法检查此扫描，请重试。"
+
 # Source-Hash: ceedca8a2b02b006
 # Review: required
 # AI-Provider: claude-code
@@ -2086,13 +2118,13 @@ msgstr "在扫描前选择，并全程保持开启。开启手电筒时跟踪可
 msgid "app.scan.native.upload"
 msgstr "上传此扫描"
 
-# Source-Hash: 3eb37861f2f38005
+# Source-Hash: 2187770cce6dcd76
 # Review: required
-# English: "Uploaded, not attached yet"
+# English: "Scans uploaded from the phone"
 #: apps/editor/app/scan/native-scan.tsx
 #, fuzzy
-msgid "app.scan.native.uploadedList"
-msgstr "已上传，尚未附加"
+msgid "app.scan.native.uploadedHeading"
+msgstr "从手机上传的扫描"
 
 # Source-Hash: e3bf9221d58e34e5
 # Review: required

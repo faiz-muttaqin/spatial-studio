@@ -1922,6 +1922,14 @@ msgstr "窓 {number}"
 msgid "app.scan.native.attach"
 msgstr "添付"
 
+# Source-Hash: 875e8b17daace2b3
+# Review: required
+# English: "Check again"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.checkAgain"
+msgstr "再確認"
+
 # Source-Hash: fa798a178c7c3128
 # Review: required
 # English: "Checking…"
@@ -1929,6 +1937,14 @@ msgstr "添付"
 #, fuzzy
 msgid "app.scan.native.checking"
 msgstr "確認中…"
+
+# Source-Hash: 1700facb2f015fed
+# Review: required
+# English: "Delete from phone"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.deleteFromPhone"
+msgstr "スマートフォンから削除"
 
 # Source-Hash: f89744026cb4ffb5
 # Review: required
@@ -1978,6 +1994,14 @@ msgstr "{keyframes, plural, other {キーフレーム #枚}}、{state}"
 msgid "app.scan.native.failed"
 msgstr "コンパニオンアプリがエラーを報告しました: {code}"
 
+# Source-Hash: 591087ea83a48ead
+# Review: required
+# English: "Hide"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.hide"
+msgstr "非表示"
+
 # Source-Hash: 6270972be99e74e0
 # Review: required
 # AI-Provider: claude-code
@@ -2016,13 +2040,13 @@ msgstr "おおよその位置情報を記録"
 msgid "app.scan.native.locationHint"
 msgstr "既定ではオフです。位置情報はスキャンと一緒に保存され、スキャンの処理時にコンパスを真北に補正するために使われます。最初にスマートフォンが許可を求めます。"
 
-# Source-Hash: 008df04307a93de8
+# Source-Hash: c36f40587389e367
 # Review: required
-# English: "New project"
+# English: "Mark attached"
 #: apps/editor/app/scan/native-scan.tsx
 #, fuzzy
-msgid "app.scan.native.newProject"
-msgstr "新しいプロジェクト"
+msgid "app.scan.native.markAttached"
+msgstr "添付済みにする"
 
 # Source-Hash: aba25fa394039e44
 # Review: required
@@ -2032,13 +2056,13 @@ msgstr "新しいプロジェクト"
 msgid "app.scan.native.projectLabel"
 msgstr "プロジェクト: {project}"
 
-# Source-Hash: 9469a102f04ea196
+# Source-Hash: 1ca91cd28528f704
 # Review: required
-# English: "Remove"
+# English: "Delete this scan from the phone? It is not on this site, so this cannot be undone."
 #: apps/editor/app/scan/native-scan.tsx
 #, fuzzy
-msgid "app.scan.native.remove"
-msgstr "削除"
+msgid "app.scan.native.removeConfirm"
+msgstr "このスキャンをスマートフォンから削除しますか？このサイトにはないため、元に戻せません。"
 
 # Source-Hash: e4e15da3db73b81d
 # Review: required
@@ -2076,6 +2100,14 @@ msgstr "トーチを使う（実験）"
 msgid "app.scan.native.torchHint"
 msgstr "スキャン前に選び、最後まで点灯したままにします。トーチを点けるとトラッキングが不安定になることがあります。"
 
+# Source-Hash: 7b4c9586b0ee1fe3
+# Review: required
+# English: "Could not check this scan. Try again."
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.unknown"
+msgstr "このスキャンを確認できませんでした。もう一度お試しください。"
+
 # Source-Hash: ceedca8a2b02b006
 # Review: required
 # AI-Provider: claude-code
@@ -2086,13 +2118,13 @@ msgstr "スキャン前に選び、最後まで点灯したままにします。
 msgid "app.scan.native.upload"
 msgstr "このスキャンをアップロード"
 
-# Source-Hash: 3eb37861f2f38005
+# Source-Hash: 2187770cce6dcd76
 # Review: required
-# English: "Uploaded, not attached yet"
+# English: "Scans uploaded from the phone"
 #: apps/editor/app/scan/native-scan.tsx
 #, fuzzy
-msgid "app.scan.native.uploadedList"
-msgstr "アップロード済み、未添付"
+msgid "app.scan.native.uploadedHeading"
+msgstr "スマートフォンからアップロードしたスキャン"
 
 # Source-Hash: e3bf9221d58e34e5
 # Review: required

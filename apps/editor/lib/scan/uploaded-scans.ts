@@ -11,6 +11,8 @@ export type UploadedScanStatus =
   | { kind: 'attachable' }
   | { kind: 'elsewhere' }
   | { kind: 'in-project'; sceneId: string; name: string }
+  /** The checks could not finish (rate limit, server error, offline): fail closed, no Attach. */
+  | { kind: 'unknown' }
 
 export type UploadedScanReport = {
   statuses: Map<string, UploadedScanStatus>
@@ -39,40 +41,68 @@ export function findScanNodeFor(
 
 /** Newest projects checked for an existing scan node; older ones are not searched. */
 const MAX_PROJECTS_SEARCHED = 30
+const MAX_CONCURRENT_CHECKS = 4
+const MANIFEST_URL = /^\/api\/artifacts\/([0-9a-f]{64})$/
+
+type ManifestCheck = 'present' | 'missing' | 'unknown'
+
+/** Definitive answers only, by manifest sha: a 404 or a 200 does not change within a visit. */
+const manifestCache = new Map<string, 'present' | 'missing'>()
 
 /**
- * Classifies uploaded scans before the page offers "Attach". An entry without `uploadedOrigin` (an older
- * record) has its manifest fetched from this site: only a 404 proves it is elsewhere; a network error
- * leaves it attachable rather than hiding a real scan.
+ * Classifies uploaded scans before the page offers "Attach". Every entry is checked, whatever origin the
+ * companion recorded: its manifest must exist on this site (a same-site path only, never an absolute URL),
+ * and no project may already hold the scan. Anything that cannot be settled (429, 5xx, offline) is
+ * `unknown`, never `attachable`.
  */
 export async function classifyUploadedScans(
   entries: ScanListEntry[],
-  options: { origin: string; fetchImpl?: typeof fetch },
+  options: { fetchImpl?: typeof fetch; cache?: Map<string, 'present' | 'missing'> },
 ): Promise<UploadedScanReport> {
   const fetchImpl = options.fetchImpl ?? fetch
+  const cache = options.cache ?? manifestCache
   const statuses = new Map<string, UploadedScanStatus>()
   const projectNames = new Map<string, string>()
+
+  const checks = await mapWithLimit(entries, MAX_CONCURRENT_CHECKS, async (entry) => {
+    const match = entry.manifestUrl ? MANIFEST_URL.exec(entry.manifestUrl) : null
+    if (!match?.[1] || !entry.manifestUrl) return 'unknown' as ManifestCheck
+    return checkManifest(match[1], entry.manifestUrl, fetchImpl, cache)
+  })
+
   const candidates: ScanListEntry[] = []
+  entries.forEach((entry, index) => {
+    const check = checks[index]
+    if (check === 'missing') statuses.set(entry.sessionId, { kind: 'elsewhere' })
+    else if (check === 'present') candidates.push(entry)
+    else statuses.set(entry.sessionId, { kind: 'unknown' })
+  })
 
-  for (const entry of entries) {
-    if (entry.uploadedOrigin && entry.uploadedOrigin !== options.origin) {
-      statuses.set(entry.sessionId, { kind: 'elsewhere' })
-    } else if (entry.uploadedOrigin || !entry.manifestUrl) {
-      candidates.push(entry)
-    } else {
-      const present = await manifestPresent(entry.manifestUrl, fetchImpl)
-      if (present) candidates.push(entry)
-      else statuses.set(entry.sessionId, { kind: 'elsewhere' })
-    }
+  const listed = await listScenes(fetchImpl)
+  if (!listed) {
+    for (const entry of candidates) statuses.set(entry.sessionId, { kind: 'unknown' })
+    return { statuses, projectNames }
   }
+  for (const scene of listed) projectNames.set(scene.id, scene.name)
 
-  const scenes = await listScenes(fetchImpl)
-  for (const scene of scenes) projectNames.set(scene.id, scene.name)
+  // The project a scan was started for is the likeliest holder: look there first.
+  const preferred = new Set(
+    candidates.flatMap((entry) => (entry.projectId ? [entry.projectId] : [])),
+  )
+  const scenes = [
+    ...listed.filter((scene) => preferred.has(scene.id)),
+    ...listed.filter((scene) => !preferred.has(scene.id)),
+  ].slice(0, MAX_PROJECTS_SEARCHED)
 
   const pending = new Set(candidates.map((entry) => entry.sessionId))
-  for (const scene of scenes.slice(0, MAX_PROJECTS_SEARCHED)) {
+  let incomplete = false
+  for (const scene of scenes) {
     if (pending.size === 0) break
     const graph = await loadGraph(scene.id, fetchImpl)
+    if (graph === 'failed') {
+      incomplete = true
+      continue
+    }
     if (!graph) continue
     for (const entry of candidates) {
       if (!pending.has(entry.sessionId)) continue
@@ -82,23 +112,62 @@ export async function classifyUploadedScans(
       }
     }
   }
-  for (const id of pending) statuses.set(id, { kind: 'attachable' })
+  // A project that could not be read might hold the scan: fail closed.
+  for (const id of pending)
+    statuses.set(id, incomplete ? { kind: 'unknown' } : { kind: 'attachable' })
   return { statuses, projectNames }
 }
 
-async function manifestPresent(manifestUrl: string, fetchImpl: typeof fetch): Promise<boolean> {
+async function mapWithLimit<T, R>(
+  items: T[],
+  limit: number,
+  work: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let next = 0
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++
+      results[index] = await work(items[index] as T)
+    }
+  })
+  await Promise.all(runners)
+  return results
+}
+
+/** HEAD first; a server that refuses it gets a one-byte ranged GET. Only a definitive answer is cached. */
+async function checkManifest(
+  sha: string,
+  manifestUrl: string,
+  fetchImpl: typeof fetch,
+  cache: Map<string, 'present' | 'missing'>,
+): Promise<ManifestCheck> {
+  const cached = cache.get(sha)
+  if (cached) return cached
   try {
-    const response = await fetchImpl(manifestUrl)
-    return response.status !== 404
+    let response = await fetchImpl(manifestUrl, { method: 'HEAD' })
+    if (response.status === 405 || response.status === 501) {
+      response = await fetchImpl(manifestUrl, { headers: { Range: 'bytes=0-0' } })
+    }
+    if (response.status === 404) {
+      cache.set(sha, 'missing')
+      return 'missing'
+    }
+    if (response.ok) {
+      cache.set(sha, 'present')
+      return 'present'
+    }
+    return 'unknown'
   } catch {
-    return true
+    return 'unknown'
   }
 }
 
-async function listScenes(fetchImpl: typeof fetch): Promise<SceneSummary[]> {
+/** Null when the list could not be read. */
+async function listScenes(fetchImpl: typeof fetch): Promise<SceneSummary[] | null> {
   try {
     const response = await fetchImpl(`/api/scenes?limit=${MAX_PROJECTS_SEARCHED}`)
-    if (!response.ok) return []
+    if (!response.ok) return null
     const body = (await response.json()) as { scenes?: Array<{ id?: unknown; name?: unknown }> }
     return (body.scenes ?? []).flatMap((scene) =>
       typeof scene.id === 'string'
@@ -106,16 +175,21 @@ async function listScenes(fetchImpl: typeof fetch): Promise<SceneSummary[]> {
         : [],
     )
   } catch {
-    return []
+    return null
   }
 }
 
-async function loadGraph(sceneId: string, fetchImpl: typeof fetch): Promise<SceneGraph | null> {
+/** The graph, null when the project is gone (404), `failed` when it could not be read. */
+async function loadGraph(
+  sceneId: string,
+  fetchImpl: typeof fetch,
+): Promise<SceneGraph | null | 'failed'> {
   try {
     const response = await fetchImpl(`/api/scenes/${encodeURIComponent(sceneId)}`)
-    if (!response.ok) return null
+    if (response.status === 404) return null
+    if (!response.ok) return 'failed'
     return ((await response.json()) as { graph: SceneGraph }).graph
   } catch {
-    return null
+    return 'failed'
   }
 }
