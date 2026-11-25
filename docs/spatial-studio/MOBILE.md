@@ -1,6 +1,6 @@
 # Mobile architecture — same repository, browser first
 
-The owner requested single-repo mobile maintenance and a possible WebView wrapper for deeper hardware access. Keep the existing Next.js host and a lightweight mobile scanner route (proposed /scan, not implemented). Do not fork the editor UI or scene graph. Native companion is a conditional enhancement, not required for P1–P4.
+The owner requested single-repo mobile maintenance and a possible WebView wrapper for deeper hardware access. Keep the existing Next.js host and a lightweight mobile scanner route (`/scan`: capability probe, browser-photo provider and bridge v1 client; see STATUS.md for what has been verified). Do not fork the editor UI or scene graph. Native companion is a conditional enhancement, not required for P1–P4.
 
 ## Provider ladder
 - Browser Chrome Android: negotiate immersive-ar, hit-test, pose, depth and optional raw camera access individually. On unsupported devices use MediaDevices photos + manual corner/measurement workflow; do not pretend it is automatic metric scanning. Mobile scanner should not load the entire desktop editor.
