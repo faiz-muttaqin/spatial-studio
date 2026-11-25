@@ -27,8 +27,8 @@ export function PascalLogo({ className }: { className?: string }) {
       className={cn('h-5 w-auto invert', className)}
       height={20}
       priority
-      src="/pascal-logo-full.svg"
-      width={100}
+      src="/pascal-logo-shape.svg"
+      width={20}
     />
   )
 }
