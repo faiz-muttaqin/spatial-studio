@@ -46,13 +46,18 @@ export type OrthomapSource = {
   positions: Float32Array
   /** RGB per point. */
   colors: Uint8Array
+  /** 1 per point that has a real photo colour; omitted means all do. Others draw as shape only. */
+  coloured?: Uint8Array
   count: number
 }
 
 export type Orthomap = {
   width: number
   height: number
-  /** RGBA, row-major, row 0 at the smallest z. Alpha 0 marks cells nothing reached. */
+  /**
+   * RGBA, row-major, row 0 at the smallest z. Alpha 0 marks cells nothing reached, 128 cells whose
+   * top surface was seen but has no photo colour (rgb is 0), 255 coloured cells.
+   */
   rgba: Uint8Array
   /**
    * World transform of the image, in level coordinates: pixel (column i, row j) covers x from
@@ -136,7 +141,8 @@ export function buildOrthomap(source: OrthomapSource, options: OrthomapOptions =
   const lowY = floorY - 0.2
   const highY = layer === 'floor' ? floorY + floorBand : (clipY as number)
 
-  // Extent from the points inside the height window; stray ends are trimmed by quantile.
+  // Extent from the points inside the height window; the outer 0.5 % at each end is trimmed so
+  // stray points cannot inflate the grid. Points outside the extent are not drawn.
   const xs: number[] = []
   const zs: number[] = []
   for (let i = 0; i < source.count; i += 1) {
@@ -148,11 +154,11 @@ export function buildOrthomap(source: OrthomapSource, options: OrthomapOptions =
   if (xs.length === 0) return empty('No points lie between the floor and the clip height.')
   const sx = Float32Array.from(xs).sort()
   const sz = Float32Array.from(zs).sort()
-  const pad = 0.1
-  const minX = quantile(sx, 0.001) - pad
-  const maxX = quantile(sx, 0.999) + pad
-  const minZ = quantile(sz, 0.001) - pad
-  const maxZ = quantile(sz, 0.999) + pad
+  const pad = 0.15
+  const minX = quantile(sx, 0.005) - pad
+  const maxX = quantile(sx, 0.995) + pad
+  const minZ = quantile(sz, 0.005) - pad
+  const maxZ = quantile(sz, 0.995) + pad
 
   const maxPixels = options.maxPixels ?? 2048
   let cell = options.metresPerPixel ?? 0.02
@@ -168,10 +174,12 @@ export function buildOrthomap(source: OrthomapSource, options: OrthomapOptions =
 
   const tolerance = options.topTolerance ?? 0.05
   const top = new Float32Array(width * height).fill(Number.NEGATIVE_INFINITY)
-  const sumR = new Float32Array(width * height)
-  const sumG = new Float32Array(width * height)
-  const sumB = new Float32Array(width * height)
-  const sumW = new Float32Array(width * height)
+  // Light accumulators: colour sums in 16 bits, with the count capped so they cannot overflow.
+  const sumR = new Uint16Array(width * height)
+  const sumG = new Uint16Array(width * height)
+  const sumB = new Uint16Array(width * height)
+  const count = new Uint8Array(width * height)
+  const MAX_PER_CELL = 250
   let used = 0
   for (let i = 0; i < source.count; i += 1) {
     const y = level[i * 3 + 1]!
@@ -186,28 +194,32 @@ export function buildOrthomap(source: OrthomapSource, options: OrthomapOptions =
       sumR[at] = 0
       sumG[at] = 0
       sumB[at] = 0
-      sumW[at] = 0
+      count[at] = 0
     } else if (y < top[at]! - tolerance) {
       continue
     } else if (y > top[at]!) {
       top[at] = y
     }
+    if (source.coloured && !source.coloured[i]) continue
+    if (count[at]! >= MAX_PER_CELL) continue
     sumR[at] = sumR[at]! + source.colors[i * 3]!
     sumG[at] = sumG[at]! + source.colors[i * 3 + 1]!
     sumB[at] = sumB[at]! + source.colors[i * 3 + 2]!
-    sumW[at] = sumW[at]! + 1
+    count[at] = count[at]! + 1
     used += 1
   }
 
   const rgba = new Uint8Array(width * height * 4)
   let covered = 0
   for (let at = 0; at < width * height; at += 1) {
-    if (sumW[at]! > 0) {
-      rgba[at * 4] = Math.round(sumR[at]! / sumW[at]!)
-      rgba[at * 4 + 1] = Math.round(sumG[at]! / sumW[at]!)
-      rgba[at * 4 + 2] = Math.round(sumB[at]! / sumW[at]!)
+    if (count[at]! > 0) {
+      rgba[at * 4] = Math.round(sumR[at]! / count[at]!)
+      rgba[at * 4 + 1] = Math.round(sumG[at]! / count[at]!)
+      rgba[at * 4 + 2] = Math.round(sumB[at]! / count[at]!)
       rgba[at * 4 + 3] = 255
       covered += 1
+    } else if (top[at]! > Number.NEGATIVE_INFINITY) {
+      rgba[at * 4 + 3] = 128
     }
   }
 
@@ -218,7 +230,7 @@ export function buildOrthomap(source: OrthomapSource, options: OrthomapOptions =
     for (let row = 0; row < height; row += 1) {
       for (let column = 0; column < width; column += 1) {
         const at = row * width + column
-        if (rgba[at * 4 + 3] !== 0) continue
+        if (rgba[at * 4 + 3] === 255) continue
         let r = 0
         let g = 0
         let b = 0
@@ -230,7 +242,7 @@ export function buildOrthomap(source: OrthomapSource, options: OrthomapOptions =
             const nc = column + dc
             if (nr < 0 || nc < 0 || nr >= height || nc >= width) continue
             const neighbour = nr * width + nc
-            if (rgba[neighbour * 4 + 3] === 0) continue
+            if (rgba[neighbour * 4 + 3] !== 255) continue
             r += rgba[neighbour * 4]!
             g += rgba[neighbour * 4 + 1]!
             b += rgba[neighbour * 4 + 2]!
@@ -267,31 +279,40 @@ export function buildOrthomap(source: OrthomapSource, options: OrthomapOptions =
   }
 }
 
-/** Box-filter downscale so the longest side is at most `maxSide`; alpha-weighted so empty cells stay empty. */
+/**
+ * Box-filter downscale so the longest side is at most `maxSide`, by a fractional factor so a
+ * 1100 px map becomes 1024 px, not 550. Coloured cells are averaged on their own; a block with
+ * none keeps alpha 128 when any cell was shape only, and stays empty otherwise.
+ */
 export function downscaleOrthomap(map: Orthomap, maxSide: number): Orthomap {
-  const factor = Math.ceil(Math.max(map.width, map.height) / maxSide)
+  const factor = Math.max(map.width, map.height) / maxSide
   if (factor <= 1) return map
-  const width = Math.ceil(map.width / factor)
-  const height = Math.ceil(map.height / factor)
+  const width = Math.max(1, Math.floor(map.width / factor))
+  const height = Math.max(1, Math.floor(map.height / factor))
+  const stepX = map.width / width
+  const stepY = map.height / height
   const rgba = new Uint8Array(width * height * 4)
   for (let row = 0; row < height; row += 1) {
+    const r0 = Math.floor(row * stepY)
+    const r1 = Math.min(map.height, Math.max(r0 + 1, Math.ceil((row + 1) * stepY)))
     for (let column = 0; column < width; column += 1) {
+      const c0 = Math.floor(column * stepX)
+      const c1 = Math.min(map.width, Math.max(c0 + 1, Math.ceil((column + 1) * stepX)))
       let r = 0
       let g = 0
       let b = 0
       let n = 0
-      for (let dr = 0; dr < factor; dr += 1) {
-        const sr = row * factor + dr
-        if (sr >= map.height) break
-        for (let dc = 0; dc < factor; dc += 1) {
-          const sc = column * factor + dc
-          if (sc >= map.width) break
+      let shape = false
+      for (let sr = r0; sr < r1; sr += 1) {
+        for (let sc = c0; sc < c1; sc += 1) {
           const at = (sr * map.width + sc) * 4
-          if (map.rgba[at + 3] === 0) continue
-          r += map.rgba[at]!
-          g += map.rgba[at + 1]!
-          b += map.rgba[at + 2]!
-          n += 1
+          const alpha = map.rgba[at + 3]!
+          if (alpha === 255) {
+            r += map.rgba[at]!
+            g += map.rgba[at + 1]!
+            b += map.rgba[at + 2]!
+            n += 1
+          } else if (alpha === 128) shape = true
         }
       }
       const out = (row * width + column) * 4
@@ -300,8 +321,10 @@ export function downscaleOrthomap(map: Orthomap, maxSide: number): Orthomap {
         rgba[out + 1] = Math.round(g / n)
         rgba[out + 2] = Math.round(b / n)
         rgba[out + 3] = 255
+      } else if (shape) {
+        rgba[out + 3] = 128
       }
     }
   }
-  return { ...map, width, height, rgba, metresPerPixel: map.metresPerPixel * factor }
+  return { ...map, width, height, rgba, metresPerPixel: map.metresPerPixel * stepX }
 }

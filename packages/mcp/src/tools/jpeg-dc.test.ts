@@ -49,4 +49,23 @@ describe('decodeJpegDc', () => {
     expect(decodeJpegDc(new Uint8Array([0xff, 0xd8, 0xff]))).toBeNull()
     expect(decodeJpegDc(new Uint8Array([1, 2, 3, 4]))).toBeNull()
   })
+
+  test('a forged header size is refused before anything is allocated', () => {
+    const forged = bytes('i444').slice()
+    // SOF0 follows DQT and starts with 0xFF 0xC0; patch height and width to 65535.
+    for (let at = 2; at < forged.length - 9; at += 1) {
+      if (forged[at] === 0xff && forged[at + 1] === 0xc0) {
+        forged.set([0xff, 0xff, 0xff, 0xff], at + 5)
+        break
+      }
+    }
+    const started = performance.now()
+    expect(decodeJpegDc(forged)).toBeNull()
+    expect(performance.now() - started).toBeLessThan(50)
+  })
+
+  test('a size that differs from the keyframe is refused, a matching one decodes', () => {
+    expect(decodeJpegDc(bytes('i444'), { width: 128, height: 32 })).toBeNull()
+    expect(decodeJpegDc(bytes('i444'), { width: 64, height: 32 })).not.toBeNull()
+  })
 })

@@ -10,7 +10,8 @@
  *   `confidence/255 * min(1, (1 m / d)^2) * cos(theta)`.
  * - `DenseFusion.kt`: 2 cm voxels holding a weighted mean, saved with 2 or more views. The
  *   coarsening levels are not ported.
- * The back-projection is the official ARCore raw-depth convention (arcore-android-sdk
+ * Pixel-centre convention: integer pixel indices with no +0.5, as in the ARCore sample (the
+ * depth-walls module is moved to the same convention in the R2 change). The back-projection is the official ARCore raw-depth convention (arcore-android-sdk
  * 204ddfd1715e): integer pixel indices, `X = d(x - cx)/fx`, `Y = d(cy - y)/fy`, `Z = -d`, then the
  * keyframe pose (column-major camera-to-world, OpenGL axes, image-readout frame).
  *
@@ -74,6 +75,8 @@ export type DenseCloud = {
   normals: Float32Array
   /** Fused weight per voxel. */
   weights: Float32Array
+  /** 1 when a photo colour reached the voxel, 0 when `colors` holds the grey placeholder. */
+  coloured: Uint8Array
   /** Distinct frames that saw the voxel. */
   views: Uint16Array
   count: number
@@ -189,6 +192,8 @@ function luminance(r: number, g: number, b: number): number {
 }
 
 function evenIndices(total: number, count: number): number[] {
+  if (count <= 0) return []
+  if (count === 1) return total > 0 ? [Math.floor((total - 1) / 2)] : []
   if (total <= count) return Array.from({ length: total }, (_, index) => index)
   return Array.from({ length: count }, (_, index) =>
     Math.round((index * (total - 1)) / (count - 1)),
@@ -445,6 +450,10 @@ export function buildDenseCloud(
     const fused = new Float64Array(voxelCount)
     const fusedWeight = new Float64Array(voxelCount)
     for (let iteration = 0; iteration < GAIN_ITERATIONS; iteration += 1) {
+      if (o.maxMillis !== undefined && Date.now() - started > o.maxMillis) {
+        stats.timedOut = true
+        break
+      }
       fused.fill(0)
       fusedWeight.fill(0)
       for (let at = 0; at < samples.length; at += 1) {
@@ -471,6 +480,8 @@ export function buildDenseCloud(
           denominator[slot]! +
           weight * luminance(samples.red(at), samples.green(at), samples.blue(at))
       }
+      // Only frames that share voxels with others get a gain; the rest stay at exactly 1.
+      const updated = new Uint8Array(frameCount)
       let logSum = 0
       let logCount = 0
       for (let slot = 0; slot < frameCount; slot += 1) {
@@ -479,14 +490,18 @@ export function buildDenseCloud(
             GAIN_MAX,
             Math.max(GAIN_MIN, numerator[slot]! / denominator[slot]!),
           )
+          updated[slot] = 1
           logSum += Math.log(gains[slot]!)
           logCount += 1
         }
       }
-      // Keep the overall brightness: the mean log gain is zero.
+      // Keep the overall brightness: the mean log gain of the updated frames is zero.
       if (logCount > 0) {
         const mean = Math.exp(logSum / logCount)
-        for (let slot = 0; slot < frameCount; slot += 1) gains[slot] = gains[slot]! / mean
+        for (let slot = 0; slot < frameCount; slot += 1) {
+          if (updated[slot])
+            gains[slot] = Math.min(GAIN_MAX, Math.max(GAIN_MIN, gains[slot]! / mean))
+        }
       }
     }
   }
@@ -526,6 +541,7 @@ export function buildDenseCloud(
   const normals = new Float32Array(count * 3)
   const weights = new Float32Array(count)
   const viewCounts = new Uint16Array(count)
+  const coloured = new Uint8Array(count)
   kept.forEach((voxel, out) => {
     const weight = sumWeight[voxel]!
     positions[out * 3] = sumPos[voxel * 3]! / weight
@@ -542,6 +558,7 @@ export function buildDenseCloud(
     viewCounts[out] = views[voxel]!
     const cw = colourWeight[voxel]!
     if (cw > 0) {
+      coloured[out] = 1
       for (let channel = 0; channel < 3; channel += 1) {
         colors[out * 3 + channel] = Math.min(
           255,
@@ -553,5 +570,15 @@ export function buildDenseCloud(
       stats.uncoloured += 1
     }
   })
-  return { positions, colors, normals, weights, views: viewCounts, count, voxelSize, stats }
+  return {
+    positions,
+    colors,
+    normals,
+    weights,
+    coloured,
+    views: viewCounts,
+    count,
+    voxelSize,
+    stats,
+  }
 }

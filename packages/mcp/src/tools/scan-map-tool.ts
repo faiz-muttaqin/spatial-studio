@@ -43,6 +43,11 @@ const MAX_CLOUD_FRAMES = 150
 /** Wall-clock budget for fusing, and for the whole call. */
 const FUSE_MILLIS = 15_000
 const TOTAL_MILLIS = 40_000
+/** Most bytes one photo may occupy; the depth and confidence artifacts must match their size. */
+const MAX_JPEG_BYTES = 8 * 1024 * 1024
+/** Results kept for repeated calls, and for how long. */
+const MEMO_ENTRIES = 4
+const MEMO_MILLIS = 60_000
 const OUTLINE_COLOUR = [255, 0, 255] as const
 const BACKGROUND = 48
 
@@ -73,6 +78,26 @@ async function readJson(host: CaptureArtifactHost, sha256: string): Promise<unkn
   if (!bytes || bytes.byteLength > CAPTURE_MAX_ARTIFACT_BYTES) return null
   return JSON.parse(new TextDecoder().decode(bytes))
 }
+
+/**
+ * An artifact's bytes, after checking its stored size: over `max`, or not `exact` when that is
+ * given, and it is not read at all. A store that cannot report sizes is read and checked after.
+ */
+async function readBounded(
+  host: CaptureArtifactHost,
+  sha256: string,
+  limit: { max?: number; exact?: number },
+): Promise<Uint8Array | null> {
+  const ok = (size: number) =>
+    (limit.exact === undefined || size === limit.exact) &&
+    (limit.max === undefined || size <= limit.max)
+  const size = await host.size?.(sha256)
+  if (size !== undefined && size !== null && !ok(size)) return null
+  const bytes = await host.read(sha256)
+  return bytes && ok(bytes.byteLength) ? bytes : null
+}
+
+const yieldToLoop = () => new Promise<void>((resolve) => setImmediate(resolve))
 
 async function loadManifest(
   host: CaptureArtifactHost,
@@ -184,8 +209,16 @@ function drawLine(
 function flatten(map: Orthomap, outline: ReadonlyArray<readonly [number, number]> | null) {
   const rgb = new Uint8Array(map.width * map.height * 3)
   for (let i = 0; i < map.width * map.height; i += 1) {
-    const opaque = map.rgba[i * 4 + 3] !== 0
-    for (let c = 0; c < 3; c += 1) rgb[i * 3 + c] = opaque ? map.rgba[i * 4 + c]! : BACKGROUND
+    const alpha = map.rgba[i * 4 + 3]!
+    if (alpha === 255) {
+      for (let c = 0; c < 3; c += 1) rgb[i * 3 + c] = map.rgba[i * 4 + c]!
+    } else if (alpha === 128) {
+      // Surface seen but no photo colour: a diagonal hatch of two dark tones, not a real colour.
+      const hatch = ((i % map.width) + Math.floor(i / map.width)) % 4 < 2 ? 78 : 62
+      rgb.fill(hatch, i * 3, i * 3 + 3)
+    } else {
+      rgb.fill(BACKGROUND, i * 3, i * 3 + 3)
+    }
   }
   if (outline && outline.length >= 2) {
     const pixels = outline.map(
@@ -278,8 +311,9 @@ async function viewScanMap(
       unreadable += 1
       continue
     }
-    const bytes = await host.read(depthSha)
-    if (!bytes || bytes.byteLength !== expected * 2) {
+    await yieldToLoop()
+    const bytes = await readBounded(host, depthSha, { exact: expected * 2 })
+    if (!bytes) {
       unreadable += 1
       continue
     }
@@ -289,8 +323,8 @@ async function viewScanMap(
     let confidence: Uint8Array | null = null
     const confidenceSha = entry.confidence ? shaFromReference(entry.confidence) : null
     if (confidenceSha) {
-      const raw = await host.read(confidenceSha)
-      if (raw && raw.byteLength === expected) confidence = Uint8Array.from(raw)
+      const raw = await readBounded(host, confidenceSha, { exact: expected })
+      if (raw) confidence = Uint8Array.from(raw)
     }
     loaded.depthFramesRead += 1
     const base = {
@@ -304,11 +338,15 @@ async function viewScanMap(
     }
     let image: DenseCloudFrame['image'] = null
     const imageSha = shaFromReference(keyframe.image)
-    const jpeg = imageSha ? await host.read(imageSha) : null
-    const decoded = jpeg ? decodeJpegDc(jpeg) : null
+    const jpeg = imageSha ? await readBounded(host, imageSha, { max: MAX_JPEG_BYTES }) : null
+    // The file's own header must match the keyframe's declared size, or it is not used.
+    const decoded = jpeg
+      ? decodeJpegDc(jpeg, { width: keyframe.width, height: keyframe.height })
+      : null
     if (decoded) {
-      const sx = decoded.width / keyframe.width
-      const sy = decoded.height / keyframe.height
+      // Intrinsics are for the keyframe size; the decoded image has one pixel per 8x8 block.
+      const sx = decoded.sourceWidth / keyframe.width / 8
+      const sy = decoded.sourceHeight / keyframe.height / 8
       image = {
         width: decoded.width,
         height: decoded.height,
@@ -339,29 +377,8 @@ async function viewScanMap(
   }
   if (loaded.imagesFailed > 0) {
     notes.push(
-      `${loaded.imagesFailed} photo(s) could not be read (only baseline JPEG is supported here); those frames add shape but no colour.`,
+      `${loaded.imagesFailed} photo(s) could not be read (missing, over the size cap, a different size from the keyframe, or not baseline JPEG); those frames add shape but no colour.`,
     )
-  }
-
-  // The outline: the same proposal propose_room_from_scan would give, on the frames read here.
-  let proposal: RoomProposal | null = null
-  try {
-    const planes: CapturePlane[] | null =
-      planeSet?.planes.map((plane) =>
-        planeFrame
-          ? { ...plane, centerPose: multiplyMatrix4(planeFrame, plane.centerPose) }
-          : plane,
-      ) ?? null
-    const walked = motion ? pathPositions(motion.samples, motionFrame) : null
-    proposal = proposeRoom({
-      planes,
-      measurements: measurements as ManualMeasurements | null,
-      transform,
-      depthFrames: evenSample(loaded.frames, MAX_OUTLINE_FRAMES),
-      walkedPath: walked as Array<readonly [number, number, number]> | null,
-    })
-  } catch {
-    notes.push('The room outline could not be computed, so none is shown.')
   }
 
   const remaining = Math.max(2_000, TOTAL_MILLIS - (Date.now() - started) - 5_000)
@@ -380,12 +397,37 @@ async function viewScanMap(
     notes.push(`Fusing stopped at the time budget after ${cloud.stats.framesUsed} frame(s).`)
   }
 
+  // The outline: the same proposal propose_room_from_scan would give, on the frames read here.
+  let proposal: RoomProposal | null = null
+  if (Date.now() - started > TOTAL_MILLIS * 0.6) {
+    notes.push('The room outline was skipped at the time budget.')
+  } else {
+    try {
+      const planes: CapturePlane[] | null =
+        planeSet?.planes.map((plane) =>
+          planeFrame
+            ? { ...plane, centerPose: multiplyMatrix4(planeFrame, plane.centerPose) }
+            : plane,
+        ) ?? null
+      const walked = motion ? pathPositions(motion.samples, motionFrame) : null
+      proposal = proposeRoom({
+        planes,
+        measurements: measurements as ManualMeasurements | null,
+        transform,
+        depthFrames: evenSample(loaded.frames, MAX_OUTLINE_FRAMES),
+        walkedPath: walked as Array<readonly [number, number, number]> | null,
+      })
+    } catch {
+      notes.push('The room outline could not be computed, so none is shown.')
+    }
+  }
+
   const floorY = proposal?.floorY ?? null
   const ceilingY =
     proposal?.depth?.ceilingY ??
     (floorY !== null && proposal?.height ? floorY + proposal.height.value : null)
   const layer = input.layer ?? 'top'
-  const full = buildOrthomap(cloud, { floorY, ceilingY, transform, layer, maxPixels: 4096 })
+  const full = buildOrthomap(cloud, { floorY, ceilingY, transform, layer, maxPixels: 2048 })
   if (full.width === 0) refuse('no_map', `Scan ${scan.id}: ${full.notes.join(' ')}`)
   const outline =
     input.outline === false || !proposal?.polygon
@@ -396,7 +438,7 @@ async function viewScanMap(
   let side = MAP_MAX_SIDE
   let map = downscaleOrthomap(full, side)
   let png = encodePng(map.width, map.height, flatten(map, outline))
-  while (png.byteLength > MAP_MAX_BYTES && side > 128) {
+  while (png.byteLength > MAP_MAX_BYTES && side > 128 && Date.now() - started < TOTAL_MILLIS) {
     side = Math.floor(side * 0.7)
     map = downscaleOrthomap(full, side)
     png = encodePng(map.width, map.height, flatten(map, outline))
@@ -411,7 +453,7 @@ async function viewScanMap(
       height: map.height,
       bytes: png.byteLength,
       metresPerPixel: round(map.metresPerPixel, 4),
-      axes: 'Column increases with +x, row increases with +z, as a plan seen from above. Dark grey (48, 48, 48) marks cells nothing reached.',
+      axes: 'Column increases with +x, row increases with +z, as a plan seen from above. Flat dark grey (48, 48, 48) marks cells nothing reached; a diagonal hatch of slightly lighter greys marks surface that was seen but has no photo colour.',
       topLeftLevel: { x: round(map.origin[0]), z: round(map.origin[1]) },
       pixelToLevel:
         'x = topLeftLevel.x + column * metresPerPixel; z = topLeftLevel.z + row * metresPerPixel (the pixel corner).',
@@ -447,6 +489,8 @@ async function viewScanMap(
   }
 }
 
+type MapResult = Awaited<ReturnType<typeof viewScanMap>>
+
 /** `view_scan_map`; registered beside the scan tools when the host can read capture artifacts. */
 export function registerScanMapTool(
   server: McpServer,
@@ -454,6 +498,35 @@ export function registerScanMapTool(
   host: CaptureArtifactHost,
 ): void {
   const contract = viewScanMapTool
+  // One run per scan and setting at a time; a repeated call within a minute reuses the result.
+  const inFlight = new Map<string, Promise<MapResult>>()
+  const memo = new Map<string, { at: number; result: MapResult }>()
+  const keyOf = (input: Parameters<typeof viewScanMap>[2]): string | null => {
+    const node = (
+      operations.getNodes() as Record<
+        string,
+        | {
+            type?: string
+            captureSession?: { manifestUrl?: string }
+            position?: unknown
+            rotation?: unknown
+            scale?: unknown
+          }
+        | undefined
+      >
+    )[input.scanId]
+    if (node?.type !== 'scan') return null
+    return JSON.stringify([
+      input.scanId,
+      node.captureSession?.manifestUrl,
+      node.position,
+      node.rotation,
+      node.scale,
+      input.layer ?? 'top',
+      input.outline !== false,
+      input.minConfidence ?? 128,
+    ])
+  }
   server.registerTool(
     contract.name,
     {
@@ -462,9 +535,26 @@ export function registerScanMapTool(
       inputSchema: z.object(contract.input),
       annotations: contract.annotations ?? READ_ONLY_TOOL_ANNOTATIONS,
     },
-    async (input) => {
+    async (rawInput) => {
+      const input = rawInput as Parameters<typeof viewScanMap>[2]
       try {
-        return await viewScanMap(operations, host, input as Parameters<typeof viewScanMap>[2])
+        const key = keyOf(input)
+        if (key === null) return await viewScanMap(operations, host, input)
+        const cached = memo.get(key)
+        if (cached && Date.now() - cached.at < MEMO_MILLIS) return cached.result
+        let running = inFlight.get(key)
+        if (!running) {
+          running = viewScanMap(operations, host, input)
+          inFlight.set(key, running)
+          running
+            .then((result) => {
+              memo.set(key, { at: Date.now(), result })
+              while (memo.size > MEMO_ENTRIES) memo.delete(memo.keys().next().value as string)
+            })
+            .catch(() => {})
+            .finally(() => inFlight.delete(key))
+        }
+        return await running
       } catch (error) {
         return refusalResult(error)
       }

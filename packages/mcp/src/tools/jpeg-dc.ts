@@ -8,7 +8,7 @@
  * one interleaved scan, any sampling factors up to 4x4, restart intervals, JFIF YCbCr. Progressive,
  * arithmetic and multi-scan files return null.
  */
-import type { RgbImage } from '@pascal-app/core/capture'
+import { CAPTURE_MAX_IMAGE_LONG_EDGE, type RgbImage } from '@pascal-app/core/capture'
 
 type Huffman = { maxCode: Int32Array; valPtr: Int32Array; minCode: Int32Array; values: Uint8Array }
 
@@ -45,8 +45,20 @@ function buildHuffman(counts: Uint8Array, values: Uint8Array): Huffman {
 /** Pixels per block edge: the decoded image is `ceil(width / 8)` x `ceil(height / 8)`. */
 export const JPEG_DC_SCALE = 8
 
+export type JpegDcLimits = {
+  /** The size the keyframe declares; a file that says otherwise is refused. */
+  width?: number
+  height?: number
+}
+
+/**
+ * The header size is checked before anything is allocated: a file over the contract's longest
+ * edge, or one that differs from the declared size, is refused (a forged header could otherwise
+ * ask for gigabytes).
+ */
 export function decodeJpegDc(
   bytes: Uint8Array,
+  limits: JpegDcLimits = {},
 ): (RgbImage & { sourceWidth: number; sourceHeight: number }) | null {
   if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return null
   const quant: Array<Uint16Array | undefined> = []
@@ -96,6 +108,13 @@ export function decodeJpegDc(
       width = (bytes[body + 3]! << 8) | bytes[body + 4]!
       const count = bytes[body + 5]!
       if (bytes[body] !== 8 || (count !== 1 && count !== 3) || !width || !height) return null
+      if (Math.max(width, height) > CAPTURE_MAX_IMAGE_LONG_EDGE) return null
+      if (
+        (limits.width !== undefined && limits.width !== width) ||
+        (limits.height !== undefined && limits.height !== height)
+      ) {
+        return null
+      }
       components = []
       for (let i = 0; i < count; i += 1) {
         const at = body + 6 + i * 3

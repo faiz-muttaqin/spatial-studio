@@ -295,6 +295,40 @@ describe('buildDenseCloud', () => {
   })
 })
 
+describe('edge cases', () => {
+  test('maxFrames of 1 uses one frame and does not divide by zero', () => {
+    const cloudOne = buildDenseCloud(roomFrames().slice(0, 4), { maxFrames: 1, minViews: 1 })
+    expect(cloudOne.stats.framesUsed).toBe(1)
+    expect(cloudOne.count).toBeGreaterThan(0)
+    expect(buildDenseCloud(roomFrames().slice(0, 4), { maxFrames: 0 }).count).toBe(0)
+  })
+
+  test('a frame sharing no voxels keeps a gain of exactly 1, and gains stay in range', () => {
+    const shared = roomFrames().slice(0, 8)
+    // A frame far outside the room shares nothing with the others.
+    const alone = renderFrame('alone', poseAt([0, 1.4, 0], 0, 0.45))
+    alone.pose = alone.pose.map((v, i) => (i === 12 ? v + 500 : v))
+    const result = buildDenseCloud([...shared, alone], { minViews: 1 })
+    expect(result.stats.gains.alone).toBe(1)
+    for (const gain of Object.values(result.stats.gains)) {
+      expect(gain).toBeGreaterThanOrEqual(0.6)
+      expect(gain).toBeLessThanOrEqual(1.7)
+    }
+  })
+
+  test('the coloured mask marks voxels a photo reached', () => {
+    const withPhotos = buildDenseCloud(roomFrames().slice(0, 12), { minViews: 2 })
+    expect(withPhotos.coloured.every((flag) => flag === 1)).toBe(true)
+    const bare = buildDenseCloud(
+      roomFrames()
+        .slice(0, 12)
+        .map((frame) => ({ ...frame, image: null })),
+      { minViews: 2 },
+    )
+    expect(bare.coloured.every((flag) => flag === 0)).toBe(true)
+  })
+})
+
 describe('buildOrthomap', () => {
   const cloud = buildDenseCloud(roomFrames(), cloudOptions)
 
@@ -356,6 +390,36 @@ describe('buildOrthomap', () => {
     expect(small.metresPerPixel).toBeGreaterThan(fine.metresPerPixel)
     expect(small.rgba.length).toBe(small.width * small.height * 4)
     near(pixelAt(small, 1, 0.75), FLOOR_PX_PZ)
+  })
+
+  test('downscales by a fractional factor, not by whole halvings', () => {
+    const fine = buildOrthomap(cloud, { floorY: 0, layer: 'floor', metresPerPixel: 0.0035 })
+    expect(Math.max(fine.width, fine.height)).toBeGreaterThan(1024)
+    expect(Math.max(fine.width, fine.height)).toBeLessThan(2048)
+    const small = downscaleOrthomap(fine, 1024)
+    expect(Math.max(small.width, small.height)).toBeGreaterThan(900)
+    expect(Math.max(small.width, small.height)).toBeLessThanOrEqual(1024)
+  })
+
+  test('uncoloured points draw as shape only, and far outliers do not inflate the grid', () => {
+    const count = 2000
+    const positions = new Float32Array(count * 3)
+    for (let i = 0; i < count; i += 1) {
+      positions[i * 3] = (i % 50) * 0.04
+      positions[i * 3 + 1] = 0
+      positions[i * 3 + 2] = Math.floor(i / 50) * 0.04
+    }
+    // One stray point 500 m away.
+    positions[0] = 500
+    const colors = new Uint8Array(count * 3).fill(200)
+    const coloured = new Uint8Array(count).fill(1)
+    coloured.fill(0, 0, 1000)
+    const map = buildOrthomap({ positions, colors, coloured, count }, { floorY: 0, layer: 'floor' })
+    expect(map.width * map.metresPerPixel).toBeLessThan(5)
+    const alphas = new Set<number>()
+    for (let i = 0; i < map.width * map.height; i += 1) alphas.add(map.rgba[i * 4 + 3]!)
+    expect(alphas.has(128)).toBe(true)
+    expect(alphas.has(255)).toBe(true)
   })
 
   test('an empty cloud gives an empty map with a note', () => {

@@ -275,7 +275,10 @@ async function roomBundle(options: { withDepth?: boolean; progressive?: boolean 
   })
 }
 
-async function connect(scans: Array<{ id: string; manifest: string }>) {
+async function connect(
+  scans: Array<{ id: string; manifest: string }>,
+  host: Pick<DiskArtifactStore, 'read' | 'size'> = store,
+) {
   const bridge = new SceneBridge()
   bridge.setScene({}, [])
   bridge.loadDefault()
@@ -298,7 +301,7 @@ async function connect(scans: Array<{ id: string; manifest: string }>) {
   level.children = [...(level.children ?? []), ...scans.map((scan) => scan.id)]
   bridge.loadJSON({ ...json, nodes })
   const server = new McpServer({ name: 'test', version: '0.0.0' })
-  registerScanMapTool(server, bridge, store)
+  registerScanMapTool(server, bridge, host)
   const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
   const client = new Client({ name: 'test-client', version: '0.0.0' })
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
@@ -397,5 +400,48 @@ describe('view_scan_map', () => {
     const missing = await call(client, { scanId: 'scan_missing01' })
     expect(missing.isError).toBe(true)
     expect(missing.content[0]!.text).toContain('scan_not_found')
+  })
+
+  test('checks stored sizes before reading, and answers a repeated call without reading again', async () => {
+    const manifest = await roomBundle({})
+    let reads = 0
+    const sizes: string[] = []
+    const counting = {
+      read: async (sha: string) => {
+        reads += 1
+        return store.read(sha)
+      },
+      size: async (sha: string) => {
+        sizes.push(sha)
+        return store.size(sha)
+      },
+    }
+    const client = await connect([{ id: 'scan_memomemo', manifest }], counting)
+    const first = await call(client, { scanId: 'scan_memomemo', layer: 'floor' })
+    const readsAfterFirst = reads
+    expect(sizes.length).toBeGreaterThan(40)
+    const again = await call(client, { scanId: 'scan_memomemo', layer: 'floor' })
+    expect(reads).toBe(readsAfterFirst)
+    expect(again.content[0]!.text).toBe(first.content[0]!.text)
+    // A different setting is a different run.
+    await call(client, { scanId: 'scan_memomemo', layer: 'floor', minConfidence: 100 })
+    expect(reads).toBeGreaterThan(readsAfterFirst)
+  })
+
+  test('skips artifacts whose stored size is wrong, without reading them', async () => {
+    const manifest = await roomBundle({})
+    const oversize = {
+      read: async (sha: string) => store.read(sha),
+      size: async (sha: string) => {
+        const real = await store.size(sha)
+        // Every photo (about 3 KB each here) claims to be huge.
+        return real !== null && real > 2_000 && real < 14_000 ? 50 * 1024 * 1024 : real
+      },
+    }
+    const client = await connect([{ id: 'scan_bigphoto1', manifest }], oversize)
+    const { content } = await call(client, { scanId: 'scan_bigphoto1', layer: 'floor' })
+    const info = JSON.parse(content[0]!.text!)
+    expect(info.cloud.photosDecoded).toBe(0)
+    expect(info.notes.join(' ')).toContain('size cap')
   })
 })
