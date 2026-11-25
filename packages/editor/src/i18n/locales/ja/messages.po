@@ -1544,6 +1544,26 @@ msgstr "コンパニオンアプリがエラーを報告しました: {code}"
 msgid "app.scan.native.hint"
 msgstr "コンパニオンアプリは ARCore で姿勢、平面、深度、キーフレームを記録し、このサイトにアップロードします。"
 
+# Source-Hash: 3177d0e4a4ca7c04
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Record approximate location"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.location"
+msgstr "おおよその位置情報を記録"
+
+# Source-Hash: 321543d4576859a0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Off by default. Sets true north and the sun for this place and date. The phone asks for permission, and the location is saved in this scan."
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.locationHint"
+msgstr "既定ではオフです。この場所と日付の真北と太陽を設定するために使います。スマートフォンが許可を求め、位置情報はこのスキャンに保存されます。"
+
 # Source-Hash: e4e15da3db73b81d
 # Review: required
 # AI-Provider: claude-code

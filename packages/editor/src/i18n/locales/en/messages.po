@@ -620,6 +620,14 @@ msgid "app.scan.native.hint"
 msgstr "The companion app records pose, planes, depth and keyframes with ARCore, then uploads them to this site."
 
 #: apps/editor/app/scan/native-scan.tsx
+msgid "app.scan.native.location"
+msgstr "Record approximate location"
+
+#: apps/editor/app/scan/native-scan.tsx
+msgid "app.scan.native.locationHint"
+msgstr "Off by default. Sets true north and the sun for this place and date. The phone asks for permission, and the location is saved in this scan."
+
+#: apps/editor/app/scan/native-scan.tsx
 msgid "app.scan.native.start"
 msgstr "Start companion scan"
 

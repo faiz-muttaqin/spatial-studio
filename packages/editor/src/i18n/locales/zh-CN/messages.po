@@ -1544,6 +1544,26 @@ msgstr "配套应用报告了错误：{code}"
 msgid "app.scan.native.hint"
 msgstr "配套应用使用 ARCore 记录位姿、平面、深度和关键帧，然后将其上传到本站。"
 
+# Source-Hash: 3177d0e4a4ca7c04
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Record approximate location"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.location"
+msgstr "记录大致位置"
+
+# Source-Hash: 321543d4576859a0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Off by default. Sets true north and the sun for this place and date. The phone asks for permission, and the location is saved in this scan."
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.locationHint"
+msgstr "默认关闭。用于确定此地点和日期的真北与太阳位置。手机会请求权限，位置信息会保存在此次扫描中。"
+
 # Source-Hash: e4e15da3db73b81d
 # Review: required
 # AI-Provider: claude-code

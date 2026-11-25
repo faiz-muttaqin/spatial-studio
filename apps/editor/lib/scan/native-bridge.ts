@@ -98,6 +98,10 @@ export type ScanStartOptions = {
   depth?: boolean
   keyframeSpacingM?: number
   maxKeyframes?: number
+  /** Contract v1.1: compass, orientation, light and pressure streams. The app's default is on. */
+  sensors?: boolean
+  /** Contract v1.1: approximate location for geolocation and compass declination. Off unless set. */
+  location?: boolean
 }
 
 const ReplySchema = z.union([
