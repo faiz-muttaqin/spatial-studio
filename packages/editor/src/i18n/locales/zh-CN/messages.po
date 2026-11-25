@@ -1494,6 +1494,14 @@ msgstr "宽度 (m)"
 msgid "app.scan.measure.windowTitle"
 msgstr "窗 {number}"
 
+# Source-Hash: 9511a3005483b68b
+# Review: required
+# English: "Attach"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.attach"
+msgstr "附加"
+
 # Source-Hash: f89744026cb4ffb5
 # Review: required
 # AI-Provider: claude-code
@@ -1593,6 +1601,14 @@ msgstr "正在打开扫描器…"
 #, fuzzy
 msgid "app.scan.native.upload"
 msgstr "上传此扫描"
+
+# Source-Hash: 3eb37861f2f38005
+# Review: required
+# English: "Uploaded, not attached yet"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.uploadedList"
+msgstr "已上传，尚未附加"
 
 # Source-Hash: 756844bbc7a4b1cf
 # Review: required
@@ -15365,9 +15381,9 @@ msgstr "设备"
 
 # AI-Provider: claude-code
 # AI-Model: claude-sonnet-5-5
-# English: "Download Brush dataset (.zip)"
 # Source-Hash: 68788f72f02d1842
 # Review: required
+# English: "Download Brush dataset (.zip)"
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 #, fuzzy
 msgid "editor.panels.scanEvidence.downloadDataset"
@@ -15425,9 +15441,9 @@ msgstr "点云"
 
 # AI-Provider: claude-code
 # AI-Model: claude-sonnet-5-5
-# English: "Gaussian splat"
 # Source-Hash: 304dd23179d91e45
 # Review: required
+# English: "Gaussian splat"
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 #, fuzzy
 msgid "editor.panels.scanEvidence.layer.splat"
@@ -15555,9 +15571,9 @@ msgstr "采集照片"
 
 # AI-Provider: claude-code
 # AI-Model: claude-sonnet-5-5
-# English: "Photoreal capture"
 # Source-Hash: 4e9342f662a95727
 # Review: required
+# English: "Photoreal capture"
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 #, fuzzy
 msgid "editor.panels.scanEvidence.photoreal"
@@ -15715,9 +15731,9 @@ msgstr "宽度"
 
 # AI-Provider: claude-code
 # AI-Model: claude-sonnet-5-5
-# English: "Splat attached ({count} splats)."
 # Source-Hash: f33d15ea7956c64b
 # Review: required
+# English: "Splat attached ({count} splats)."
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 #, fuzzy
 msgid "editor.panels.scanEvidence.splatDone"
@@ -15725,9 +15741,9 @@ msgstr "已附加泼溅（{count} 个）。"
 
 # AI-Provider: claude-code
 # AI-Model: claude-sonnet-5-5
-# English: "The splat could not be attached."
 # Source-Hash: 9070224792ab9475
 # Review: required
+# English: "The splat could not be attached."
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 #, fuzzy
 msgid "editor.panels.scanEvidence.splatFailed"
@@ -15735,9 +15751,9 @@ msgstr "无法附加泼溅。"
 
 # AI-Provider: claude-code
 # AI-Model: claude-sonnet-5-5
-# English: "This is not a binary 3D Gaussian splat PLY."
 # Source-Hash: f2534ebaf313782e
 # Review: required
+# English: "This is not a binary 3D Gaussian splat PLY."
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 #, fuzzy
 msgid "editor.panels.scanEvidence.splatInvalid"
@@ -15745,18 +15761,19 @@ msgstr "这不是二进制 3D 高斯泼溅 PLY 文件。"
 
 # AI-Provider: claude-code
 # AI-Model: claude-sonnet-5-5
-# English: "The file is larger than 96 MiB."
 # Source-Hash: fa1c6614b0e3c53e
 # Review: required
+# English: "The file is larger than 96 MiB."
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 #, fuzzy
 msgid "editor.panels.scanEvidence.splatTooLarge"
 msgstr "文件超过 96 MiB。"
 
-# English: "Trained with"
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-sonnet-5-5
+# English: "Trained with"
+# Source-Hash: e3ab4c8cbb893524
+# Review: required
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 #, fuzzy
 msgid "editor.panels.scanEvidence.splatTrainer"
@@ -15764,9 +15781,9 @@ msgstr "训练工具"
 
 # AI-Provider: claude-code
 # AI-Model: claude-sonnet-5-5
-# English: "Uploading…"
 # Source-Hash: 756844bbc7a4b1cf
 # Review: required
+# English: "Uploading…"
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 #, fuzzy
 msgid "editor.panels.scanEvidence.splatUploading"
@@ -15844,9 +15861,9 @@ msgstr "无法加载采集数据。"
 
 # AI-Provider: claude-code
 # AI-Model: claude-sonnet-5-5
-# English: "Upload trained splat (.ply)"
 # Source-Hash: 2ec763e855791550
 # Review: required
+# English: "Upload trained splat (.ply)"
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 #, fuzzy
 msgid "editor.panels.scanEvidence.uploadSplat"

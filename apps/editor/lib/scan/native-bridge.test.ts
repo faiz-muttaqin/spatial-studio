@@ -279,6 +279,65 @@ describe('native bridge client', () => {
   })
 })
 
+describe('uploaded scans in scan.list', () => {
+  test('carries the manifest url of an uploaded scan and the upload.done event is accepted', async () => {
+    const bridge = new FakeBridge()
+    const client = createNativeBridgeClient(bridge, { newId: sequentialIds() })
+    const done: unknown[] = []
+    client.subscribe('upload.done', (event) => done.push(event.data))
+    bridge.onRequest = (request) => {
+      bridge.reply(request.id, [
+        {
+          sessionId: 's1',
+          createdAt: '2026-11-25T00:00:00Z',
+          state: 'ready',
+          keyframes: 84,
+          bytes: 1,
+          uploaded: true,
+          manifestUrl: `/api/artifacts/${manifestSha}`,
+        },
+      ])
+      bridge.emit({ v: 1, event: 'upload.done', data: { sessionId: 's1' } })
+    }
+    const [entry] = await client.listScans()
+    expect(entry?.manifestUrl).toBe(`/api/artifacts/${manifestSha}`)
+    expect(done).toEqual([{ sessionId: 's1' }])
+  })
+})
+
+describe('scan.markAttached', () => {
+  test('sends the session and accepts attached and projectId in the list', async () => {
+    const bridge = new FakeBridge()
+    const client = createNativeBridgeClient(bridge, { newId: sequentialIds() })
+    const methods: string[] = []
+    bridge.onRequest = (request) => {
+      methods.push(request.method)
+      if (request.method === 'scan.markAttached') {
+        expect(request.params).toEqual({ sessionId: 's1' })
+        bridge.reply(request.id, { sessionId: 's1' })
+      } else {
+        bridge.reply(request.id, [
+          {
+            sessionId: 's1',
+            createdAt: '2026-11-25T00:00:00Z',
+            state: 'ready',
+            keyframes: 1,
+            bytes: 1,
+            uploaded: true,
+            attached: true,
+            projectId: null,
+          },
+        ])
+      }
+    }
+    await client.markAttached('s1')
+    const [entry] = await client.listScans()
+    expect(methods).toEqual(['scan.markAttached', 'scan.list'])
+    expect(entry?.attached).toBe(true)
+    expect(entry?.projectId).toBeNull()
+  })
+})
+
 describe('findNativeBridge', () => {
   test('finds only an object with postMessage', () => {
     expect(findNativeBridge({})).toBeNull()

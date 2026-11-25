@@ -63,6 +63,12 @@ export {
   resolveFrameTransform,
 } from './frames'
 export {
+  type CarvedEdge,
+  type CarvedOutline,
+  type CarveOptions,
+  carveRoomOutline,
+} from './free-space-carving'
+export {
   buildOrthomap,
   downscaleOrthomap,
   type Orthomap,
@@ -88,6 +94,7 @@ export {
   type WallSegment,
 } from './plane-analysis'
 export {
+  type CarvingSummary,
   type DepthSummary,
   type EdgeBasis,
   type EdgeConfidence,
