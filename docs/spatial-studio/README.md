@@ -5,13 +5,14 @@ Approved direction: fork Pascal, extend rather than rewrite. Reference baseline:
 ## Goal and scope
 Open a secure website on a phone, capture a room, reconstruct editable architectural geometry, correct dimensions, save the original condition, then redesign manually or with an external AI agent. Preserve observations and verified measurements separately from proposed designs. Single-room first, then connected rooms on one floor. Include walls, floor, ceiling, doors/windows, visible fixtures/lights, surface colors and photo textures, furniture and granular locks. Roof exterior and multi-floor are optional; never infer hidden structure or true total building height from interior photos alone.
 
-P1–P4 are the MVP. P5–P6 are optional. Costing/RAB, procurement, marketplace, RF sensing, custom model training, and mandatory GPU services are excluded. Browser-first; optional native mobile companion is in the same repo, not a separate product or an MVP dependency.
+P1–P4 are the MVP. P5–P6 are optional. Costing/RAB, procurement, marketplace, custom model training, and mandatory GPU services are excluded. Radio-signal sensing (Wi-Fi, Bluetooth, UWB) is optional research only ([SENSING_RESEARCH.md](SENSING_RESEARCH.md)), never an MVP dependency. Browser-first; optional native mobile companion is in the same repo, not a separate product or an MVP dependency.
 
 ## Read in order
 - [UPSTREAM_AUDIT.md](UPSTREAM_AUDIT.md): reuse map and license gates.
 - [ARCHITECTURE.md](ARCHITECTURE.md): data, geometry, permissions, MCP.
 - [MOBILE.md](MOBILE.md): browser and optional native bridge.
 - [CAPTURE_CONTRACT.md](CAPTURE_CONTRACT.md): scan bundle, providers and Android bridge protocol v1.
+- [SENSING_RESEARCH.md](SENSING_RESEARCH.md): draft capture phase, orientation, heading, location, sun and radio-signal research.
 - [DEPLOYMENT.md](DEPLOYMENT.md): VM, HTTPS, CI/release safeguards.
 - [ROADMAP.md](ROADMAP.md): phases, tests and acceptance criteria.
 - [STATUS.md](STATUS.md): handoff and next task.

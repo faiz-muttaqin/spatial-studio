@@ -4,14 +4,14 @@
 
 | Phase | State | Next / blocker |
 |---|---|---|
-| P1 | In progress | P1.0 merged (#1). Deployed at https://spatial-studio.faizmuttaqin.com (owner VM, auto-deploys `main`). Remaining: license inventory, MCP self-host test, CI runs on the fork |
-| P2 | In progress | Contract v1 in CAPTURE_CONTRACT.md; web `/scan` route (probe, browser-photo fallback, attach scan node) |
-| P2N | In progress (owner priority) | Android companion `apps/android`: WebView shell, bridge v1, capability probe, native ARCore scan; needs a real device |
-| P3 | Planned | Capture and mutation authority contracts |
-| P4 | Planned | P3a protection + scene reconstruction |
+| P1 | Gate passed except deploy freshness | #1 merged; MCP read/write on the deployment verified 2026-11-25 (below). Deployed build still `96de268` while `main` moved on: owner to check the VM poller. Remaining: license inventory |
+| P2 | P2.1 merged (#3) | `/scan` live once deployed; next: phone run on the deployment, then P2.2 WebXR capture session |
+| P2N | v1 merged (#4) | Install the CI APK on the owner's phone and scan a room; P2N.2 sensors and P2N.3 telemetry spike per [SENSING_RESEARCH.md](SENSING_RESEARCH.md) |
+| P3 | Next | Mount `CaptureRuntime` so capture scans draw in the editor; scan evidence review; P3b scan-to-room proposal |
+| P4 | P4a next | MCP tools that read scan bundles and propose a room for user verification |
 | P5/P6 | Deferred | Optional after MVP |
 
-Next actionable work: P1.0 PR for fork release/registry guard and CI hygiene (do not weaken checks), then locked build and VM/device smoke following DEPLOYMENT.md. Owner deploys VM; record domain only if intentionally public, no secrets. If build fails, capture logs and fix baseline separately. Inspect actual WebXR plugin before duplicate scanner. No mandatory native or GPU service. For each session update date / phase / branch / PR / base SHA / files / commands + actual results / device evidence / blockers / next task.
+Next actionable work: see the latest dated entry below. For each session record date / phase / branch / PR / base SHA / files / commands with actual results / device evidence / blockers / next task.
 
 ### P1.0 fork publishing guards: merged as #1 (2026-11-25)
 
@@ -62,3 +62,13 @@ Branch `p1/fork-publishing-guards` from `96de268`. Guard release, registry publi
 - Not tested: anything that needs ARCore on a real phone (no device was connected; the owner is preparing one): camera background, tracking, keyframe JPEG and depth capture, planes, point cloud, finalizing a real scan, and uploading a real scan to the deployed site. Also not tested: the `Origin` header on the wire (unit tests only), Android 7 to 9, and the Android workflow on GitHub.
 - Review fixes, same branch: pose convention checked against the ARCore `Camera` reference (`getPose()` is relative to the image readout, `getImageIntrinsics()` is unrotated for the CPU image), kept as is and recorded as `metadata.camera` and in CAPTURE_CONTRACT.md. Scan start watchdog (10 s) and a process-wide upload lock; failed saves kept with the reason; bounded trajectory; resumable, deduplicated upload paced at about 90 requests a minute; authority-only origin parsing; keyframes counted after encode; out-of-memory handling; 24-hour sweep of abandoned recordings; a busy camera reported as `busy`. `./gradlew :app:testDebugUnitTest :app:assembleDebug :app:lintDebug`: 87 tests, 0 failures, lint 0 errors. Bundle re-validated against the core schemas and PR #3's `streams.ts`. Emulator: a scan whose camera prompt stayed open for 13 s was not released; after a denial the next `scan.start` was accepted; a start sent while the app was in the background (blocked by Android) was released by the watchdog with `failed`. The resumable upload and pacing were tested in unit tests only.
 - Next: install the CI APK on the owner's phone, scan a room, upload from the deployed site and open the bundle in the web viewer.
+
+### 2026-11-25: integration of #2, #3, #4 and MCP verification (main session)
+
+- Merged after independent reviews and fix rounds: #2 (`ff17fc3`, artifact content types), #4 (`53857f3`, Android companion; 7 CI checks green), #3 (`dd3e283`, `/scan`; 7 CI checks green after classifying the `frameCount` manifest metadata key in `packages/core/src/contracts/reference-inventory.ts`, which the R3 metadata inventory test requires).
+- Cross-check: the Android bundle writer and the core stream schemas agree on index wrappers, `trackingState` values, depth entries, `device-capabilities` shape and `metadata.camera` (OpenGL axes relative to the image readout).
+- MCP on the deployment (`/mcp`, bearer token from the owner's server env, never committed): `initialize` returned `pascal-mcp-server`; 96 tools, 6 resources. Disposable private project `d90f01dd158e` ("MCP smoke test (safe to delete)"): `create_project`, `list_levels`, `create_room` 4 x 3 m, `get_walls`, `verify_scene` all ok; the room persisted (version 2, 10 nodes, 12 m2 zone) and renders in the browser editor (owner signed in). `save_scene` without `name` is refused with `invalid_input` on this build although the agent guide says it saves to the bound project. Scenes return 404 on the public API and embed routes and 401 on the scene API without a session.
+- Deployment: `/api/health` still reported `96de268` at 09:48 UTC while `main` had moved several commits ahead; the VM poller or its build needs checking. The VM also rebuilds the MCP service from `main` (owner).
+- Gaps carried forward: `CaptureRuntime` is not mounted in the editor, so capture-session scans draw nothing in 3D; the MCP surface has no scan-reading tools; the root layout ships the `agentation` dev toolbar to production pages (pre-existing upstream; owner's call).
+- Added [SENSING_RESEARCH.md](SENSING_RESEARCH.md) (owner request): draft capture phase, orientation, true north, location and sun, light, barometer, radio-signal research, live telemetry transport options, privacy. Radio-signal sensing moved from excluded to optional research.
+- Next, in parallel on separate branches: P4a MCP scan tools with a room proposal; mount capture layers and a scan evidence panel in the editor; P2N.2 Android sensor capture (contract v1.1 first).
