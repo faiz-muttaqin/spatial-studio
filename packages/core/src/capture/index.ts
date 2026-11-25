@@ -36,6 +36,12 @@ export {
   resolveFrameTransform,
 } from './frames'
 export {
+  type CarvedEdge,
+  type CarvedOutline,
+  type CarveOptions,
+  carveRoomOutline,
+} from './free-space-carving'
+export {
   analysePlanes,
   captureDirectionToLevel,
   captureToLevel,
@@ -53,6 +59,7 @@ export {
   type WallSegment,
 } from './plane-analysis'
 export {
+  type CarvingSummary,
   type DepthSummary,
   type EdgeBasis,
   type EdgeConfidence,

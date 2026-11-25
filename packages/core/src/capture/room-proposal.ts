@@ -10,6 +10,7 @@ import {
   pathOutside,
   pointInPolygon,
 } from './depth-walls'
+import { type CarvedOutline, carveRoomOutline } from './free-space-carving'
 import {
   analysePlanes,
   captureToLevel,
@@ -32,6 +33,7 @@ export type EdgeBasis =
   | 'plane-estimate'
   | 'depth-fit'
   | 'floor-boundary'
+  | 'carved'
   | 'manual-measurement'
   | 'assumed'
 /** How well the evidence supports an edge. It is not an accuracy in metres. */
@@ -47,7 +49,7 @@ export type RoomProposalEdge = {
   confidence: EdgeConfidence
   /** Plane ids behind the edge; empty for an assumed or manual edge. */
   evidencePlaneIds: string[]
-  /** Every id behind the edge: plane ids, `depth-fit:N` and `floor-boundary:N` candidates. */
+  /** Every id behind the edge: plane ids, `depth-fit:N`, `floor-boundary:N` and `carved:N` candidates. */
   evidenceIds: string[]
   /** Why the confidence is what it is. */
   reason: string
@@ -58,7 +60,7 @@ export type RoomProposalEdge = {
 }
 
 export type RoomProposal = {
-  method: 'planes' | 'depth' | 'planes+depth' | 'manual-measurements' | 'none'
+  method: 'planes' | 'depth' | 'planes+depth' | 'carved' | 'manual-measurements' | 'none'
   /** Corners in level coordinates, `[x, z]` in metres, ordered so the shoelace area in (x, z) is positive, which is clockwise seen from above (+Y). Null when no outline could be made. */
   polygon: Vec2[] | null
   height: {
@@ -111,6 +113,20 @@ export type DepthSummary = {
   seenThrough: Array<{ id: string; behindId: string; gap: number }>
   /** Whether the walked path was used to check the outline. */
   pathChecked: boolean
+  /** The free-space carving pass, when it ran: whether its outline was used and how it compares. */
+  carving?: CarvingSummary
+}
+
+export type CarvingSummary = {
+  used: boolean
+  /** Overlap of the carved and line-based outlines as a share of their union, 0 to 1; null when one is missing. */
+  agreement: number | null
+  /** Why the carved outline was or was not chosen. */
+  decision: string
+  framesUsed: number
+  cellSize: number
+  snapAngleDeg: number | null
+  necksCut: boolean
 }
 
 export type RoomProposalInput = {
@@ -215,8 +231,28 @@ export function proposeRoom(input: RoomProposalInput): RoomProposal {
   const planesClosed =
     Boolean(planesOnly?.polygon) && planesOnly!.edges.every((edge) => edge.basis !== 'assumed')
   const combined = evidence && !planesClosed ? fromAnalysis(analysis, evidence, path) : null
-  const fromPlanes =
+  const fromLines =
     combined && (combined.polygon || !planesOnly?.polygon) ? combined : (planesOnly ?? null)
+
+  // Free-space carving is a third evidence source for the outline. It runs when planes did not close
+  // the outline and is chosen by `chooseOutline`.
+  const carved =
+    depthFrames.length > 0 && !planesClosed
+      ? carveRoomOutline(depthFrames, {
+          transform,
+          floorY: analysis?.floor?.y ?? null,
+          ceilingY: analysis?.ceiling?.y ?? null,
+          typedHeight: manual?.room.height ?? null,
+          path,
+          floorPolygons:
+            analysis?.floor && input.planes
+              ? floorPolygonsFromPlanes(input.planes, transform, analysis.floor.y)
+              : [],
+        })
+      : null
+  const choice = chooseOutline(fromLines, carved, path)
+  const fromPlanes =
+    choice.useCarved && carved ? proposalFromCarved(carved, fromLines, evidence, path) : fromLines
 
   let proposal: RoomProposal
   if (fromPlanes?.polygon) {
@@ -246,6 +282,23 @@ export function proposeRoom(input: RoomProposalInput): RoomProposal {
   }
   if (evidence && proposal.depth === null)
     proposal = { ...proposal, depth: summariseDepth(evidence, [], path.length > 0) }
+  if (carved && proposal.depth) {
+    proposal = {
+      ...proposal,
+      depth: {
+        ...proposal.depth,
+        carving: {
+          used: choice.useCarved,
+          agreement: choice.agreement,
+          decision: choice.decision,
+          framesUsed: carved.stats.framesUsed,
+          cellSize: carved.stats.cellSize,
+          snapAngleDeg: carved.stats.snapAngleDeg,
+          necksCut: carved.stats.necksCut,
+        },
+      },
+    }
+  }
 
   if (analysis) unknowns.push(...analysis.notes)
   if (evidence) unknowns.push(...evidence.notes)
@@ -300,6 +353,168 @@ export function proposeRoom(input: RoomProposalInput): RoomProposal {
       mismatch: evidence?.vertical.floorMismatch ?? null,
     }),
     unknowns: [...proposal.unknowns, ...unknowns],
+  }
+}
+
+/** Most walked-path points that may lie outside a carved outline before it is rejected. */
+const CARVED_PATH_OUTSIDE = 0.02
+/** A carved outline with more than this share of likely-glass edges is mostly open or glass. */
+const CARVED_GLASS_SHARE = 0.5
+
+type OutlineChoice = { useCarved: boolean; agreement: number | null; decision: string }
+
+/**
+ * Which outline to use. The rule:
+ * 1. A carved outline that crosses itself, leaves the walked path outside it, or is mostly
+ *    glass-flagged is never used.
+ * 2. With no outline from planes or fitted lines, the carved outline is used.
+ * 3. With an outline whose every edge rests on a plane or a fitted line and is not rated low, that
+ *    outline is kept: carving only reports how much it overlaps.
+ * 4. Otherwise the walls are sparse (an assumed, floor-boundary or low edge) and the carved outline
+ *    is used. The overlap between the two is reported either way.
+ */
+function chooseOutline(
+  lines: RoomProposal | null,
+  carved: CarvedOutline | null,
+  path: Float32Array,
+): OutlineChoice {
+  if (!carved) return { useCarved: false, agreement: null, decision: '' }
+  const polygon = carved.polygon
+  if (!polygon || polygon.length < 3) {
+    return {
+      useCarved: false,
+      agreement: null,
+      decision: `The carved outline was not used: ${carved.notes.at(-1) ?? 'no outline'}`,
+    }
+  }
+  if (selfIntersects(polygon)) {
+    return {
+      useCarved: false,
+      agreement: null,
+      decision: 'The carved outline was not used: it crosses itself.',
+    }
+  }
+  if (path.length > 0) {
+    // Positions in a part the doorway cut dropped are left out on purpose and reported in the notes.
+    const dropped =
+      carved.stats.positions > 0 ? carved.stats.droppedPositions / carved.stats.positions : 0
+    const { outside, total } = pathOutside(path, polygon)
+    if (total > 0 && outside / total > CARVED_PATH_OUTSIDE + dropped) {
+      return {
+        useCarved: false,
+        agreement: null,
+        decision: `The carved outline was not used: it leaves ${outside} of ${total} walked-path points outside it.`,
+      }
+    }
+  }
+  const agreement = lines?.polygon ? polygonAgreement(lines.polygon, polygon) : null
+  const overlap =
+    agreement === null
+      ? ''
+      : ` It overlaps the outline from planes and lines by ${Math.round(agreement * 100)}%.`
+  const glassShare = carved.edges.filter((edge) => edge.likelyGlass).length / carved.edges.length
+  if (glassShare > CARVED_GLASS_SHARE) {
+    return {
+      useCarved: false,
+      agreement,
+      decision: `The carved outline was not used: most of its edges are likely glass or open sides.${overlap}`,
+    }
+  }
+  if (!lines?.polygon) {
+    return {
+      useCarved: true,
+      agreement,
+      decision: 'Planes and fitted lines gave no outline, so the carved outline was used.',
+    }
+  }
+  const backed = lines.edges.every(
+    (edge) =>
+      (edge.basis === 'plane-estimate' || edge.basis === 'depth-fit') && edge.confidence !== 'low',
+  )
+  if (backed) {
+    return {
+      useCarved: false,
+      agreement,
+      decision: `Every edge of the outline from planes and lines rests on a wall, so it was kept.${overlap}`,
+    }
+  }
+  return {
+    useCarved: true,
+    agreement,
+    decision: `Walls are sparse: the outline from planes and lines has assumed, floor-boundary or low-confidence edges, so the carved outline was used.${overlap}`,
+  }
+}
+
+/** Overlap of two outlines as a share of their union, from points on a 0.1 m grid. */
+function polygonAgreement(a: readonly Vec2[], b: readonly Vec2[]): number {
+  const xs = [...a, ...b].map((p) => p[0])
+  const zs = [...a, ...b].map((p) => p[1])
+  const minX = Math.min(...xs)
+  const minZ = Math.min(...zs)
+  const step = Math.max(0.1, Math.max(Math.max(...xs) - minX, Math.max(...zs) - minZ) / 300)
+  let both = 0
+  let either = 0
+  for (let x = minX + step / 2; x < Math.max(...xs); x += step) {
+    for (let z = minZ + step / 2; z < Math.max(...zs); z += step) {
+      const inA = pointInPolygon([x, z], a)
+      const inB = pointInPolygon([x, z], b)
+      if (inA || inB) either += 1
+      if (inA && inB) both += 1
+    }
+  }
+  return either === 0 ? 0 : round(both / either, 3)
+}
+
+/** The proposal for a carved outline, keeping what the line-based pass found for the rest. */
+function proposalFromCarved(
+  carved: CarvedOutline,
+  lines: RoomProposal | null,
+  evidence: DepthWallEvidence | null,
+  path: Float32Array,
+): RoomProposal {
+  const polygon = carved.polygon!
+  const edges = carved.edges.map(
+    (edge): RoomProposalEdge => ({
+      index: edge.index,
+      from: edge.from,
+      to: edge.to,
+      length: edge.length,
+      basis: 'carved',
+      confidence: edge.confidence,
+      evidencePlaneIds: [],
+      evidenceIds: [`carved:${edge.index}`],
+      reason: edge.reason,
+      likelyGlass: edge.likelyGlass,
+      seenBeyond: edge.beyond,
+    }),
+  )
+  const ordered = counterClockwise(polygon, edges)
+  const { floorY, ceilingY } = carved.vertical
+  const unknowns = [
+    "The outline is the free space the camera's depth rays crossed, traced and squared to the dominant wall direction. It is an inference from where the camera saw empty space, not measured walls; check every edge on site.",
+    ...(carved.stats.snapAngleDeg === null
+      ? ['No clear right-angle wall direction was found, so no wall was squared.']
+      : [
+          `Walls within 12 degrees of the dominant direction (about ${carved.stats.snapAngleDeg} degrees) were squared to it; walls clearly off it keep their own angle.`,
+        ]),
+    ...carved.notes,
+  ]
+  return {
+    method: 'carved',
+    polygon: ordered.points,
+    height:
+      lines?.height ??
+      (floorY !== null && ceilingY !== null
+        ? { value: round(ceilingY - floorY, 2), basis: 'depth-estimate' }
+        : null),
+    edges: ordered.edges,
+    unknowns,
+    floorY: lines?.floorY ?? floorY,
+    planesUsed: [],
+    planesIgnored: lines?.planesIgnored ?? [],
+    depth: lines?.depth ?? (evidence ? summariseDepth(evidence, [], path.length > 0) : null),
+    suggestedScanTransform: null,
+    needsVerification: true,
   }
 }
 
@@ -1132,10 +1347,10 @@ function annotateEdges(
     const hidden = edge.evidenceIds.some((id) => evidence.likelyGlassIds.includes(id))
     const noDepthWall = edge.basis === 'floor-boundary' || edge.basis === 'assumed'
     const strongBeyond = beyond.cells >= BEYOND_MIN_CELLS && beyond.share >= BEYOND_GLASS_SHARE
-    const likelyGlass = hidden || (noDepthWall && strongBeyond)
+    const likelyGlass = edge.likelyGlass || hidden || (noDepthWall && strongBeyond)
     let confidence = edge.confidence
     let capped: string | null = null
-    if (edge.basis === 'depth-fit') {
+    if (edge.basis === 'depth-fit' || edge.basis === 'carved') {
       const far = path.length > 0 ? distanceFromPath(path, edge.from, edge.to) : 0
       const floorSeen = floorSeenAlongEdge(evidence, edge.from, edge.to, [-outward[0], -outward[1]])
       if (far > FAR_FROM_PATH) {
@@ -1146,7 +1361,11 @@ function annotateEdges(
       if (capped) confidence = 'low'
     }
     let note: string | undefined
-    if (likelyGlass) {
+    if (edge.basis === 'carved') {
+      note = strongBeyond
+        ? `Depth also runs ${beyond.maxDistance} m past this edge: a window, a glass section or a mirror may be in it.`
+        : undefined
+    } else if (likelyGlass) {
       note = `Depth reaches ${beyond.maxDistance} m past this edge, where no solid wall was measured: likely clear glass or an open side. The room boundary here is a guess from the ${edge.basis === 'assumed' ? 'closing edge' : 'floor plane edge'}, and what lies beyond may not be part of the room.`
     } else if (edge.basis === 'depth-fit' && strongBeyond) {
       note = `Depth also runs ${beyond.maxDistance} m past this wall: a window, a glass section or a mirror may be in it.`
@@ -1155,12 +1374,22 @@ function annotateEdges(
       ...edge,
       likelyGlass,
       confidence,
-      seenBeyond: { ...beyond, ...(note ? { note } : {}) },
-      reason: [edge.reason, capped, likelyGlass ? note : null].filter(Boolean).join(' '),
+      // A carved edge keeps its own free-space measure, which is what flagged it.
+      seenBeyond:
+        edge.basis === 'carved' && edge.seenBeyond
+          ? { ...edge.seenBeyond, ...(note ? { note } : {}) }
+          : { ...beyond, ...(note ? { note } : {}) },
+      reason: [edge.reason, capped, note && (likelyGlass || edge.basis === 'carved') ? note : null]
+        .filter(Boolean)
+        .join(' '),
     }
   })
   edges.forEach((edge) => {
-    if (edge.likelyGlass) {
+    if (edge.likelyGlass && edge.basis === 'carved') {
+      unknowns.push(
+        `Edge ${edge.index} is likely glass or an open side. ${edge.reason} Confirm the boundary on site.`,
+      )
+    } else if (edge.likelyGlass) {
       unknowns.push(
         `Edge ${edge.index} is likely glass or an open side: depth runs ${edge.seenBeyond?.maxDistance} m past it. Confirm the boundary on site.`,
       )
