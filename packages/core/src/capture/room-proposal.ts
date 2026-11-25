@@ -72,6 +72,17 @@ export type RoomProposal = {
   planesIgnored: Array<{ planeId: string; reason: string }>
   /** What the depth pass found, or null when no depth was read. Fitted lines are inferences, not measured walls. */
   depth: DepthSummary | null
+  /**
+   * A scan-node transform that puts the detected floor at the level floor (y 0), keeping x, z,
+   * rotation and scale, so the polygon stays valid. A suggestion only: nothing is written until the
+   * person confirms. North alignment is not included; it is applied only when asked for.
+   */
+  suggestedScanTransform: {
+    position: [number, number, number]
+    rotation: [number, number, number]
+    scale: number
+    note: string
+  } | null
   /** Always true: every value is an estimate or a guess until a person confirms it on site. */
   needsVerification: true
 }
@@ -257,7 +268,26 @@ export function proposeRoom(input: RoomProposalInput): RoomProposal {
     const mismatch = dimensionMismatch(proposal.polygon, manual)
     if (mismatch) unknowns.push(mismatch)
   }
-  return { ...proposal, unknowns: [...proposal.unknowns, ...unknowns] }
+  const floorY = proposal.floorY ?? analysis?.floor?.y ?? null
+  return {
+    ...proposal,
+    floorY,
+    suggestedScanTransform: suggestTransform(floorY, transform),
+    unknowns: [...proposal.unknowns, ...unknowns],
+  }
+}
+
+function suggestTransform(
+  floorY: number | null,
+  transform: ScanTransform,
+): RoomProposal['suggestedScanTransform'] {
+  if (floorY === null || Math.abs(floorY) < 0.02) return null
+  return {
+    position: [transform.position[0], round(transform.position[1] - floorY), transform.position[2]],
+    rotation: [transform.rotation[0], transform.rotation[1], transform.rotation[2]],
+    scale: transform.scale,
+    note: `The detected floor is at level y ${round(floorY)} m. Moving the scan node's y by ${round(-floorY)} m puts it on the level floor; the polygon's x and z do not change. Apply only after the person confirms.`,
+  }
 }
 
 function emptyProposal(unknowns: string[]): RoomProposal {
@@ -271,6 +301,7 @@ function emptyProposal(unknowns: string[]): RoomProposal {
     planesUsed: [],
     planesIgnored: [],
     depth: null,
+    suggestedScanTransform: null,
     needsVerification: true,
   }
 }
@@ -355,6 +386,7 @@ function manualRectangle(
     planesUsed: [],
     planesIgnored: [],
     depth: null,
+    suggestedScanTransform: null,
     needsVerification: true,
   }
 }
@@ -447,6 +479,7 @@ function fromAnalysis(
     height,
     floorY: analysis?.floor?.y ?? depth?.vertical.floorY ?? null,
     planesIgnored,
+    suggestedScanTransform: null,
     needsVerification: true as const,
   }
   const hasPlaneLine = (indexes: Iterable<number>) =>

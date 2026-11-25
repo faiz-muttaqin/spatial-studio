@@ -245,6 +245,14 @@ export function deriveDepthWalls(
         `The ceiling level (y ${round(estimate.ceilingY, 2)} m) is a peak in the depth heights, not a detected plane.`,
       )
     }
+  } else {
+    // A given floor is cross-checked against where the depth points pile up.
+    const check = estimateVerticalExtent(frames, transform, options)
+    if (check.floorY !== null && Math.abs(check.floorY - vertical.floorY) > 0.25) {
+      notes.push(
+        `Depth points pile up at y ${round(check.floorY, 2)} m, ${round(Math.abs(check.floorY - vertical.floorY), 2)} m from the floor level used (y ${round(vertical.floorY, 2)} m); the floor level may be wrong or there is a step.`,
+      )
+    }
   }
   const floorY = vertical.floorY
   const ceilingY = vertical.ceilingY

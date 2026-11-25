@@ -217,12 +217,24 @@ export function analysePlanes(
       )
     }
   } else {
-    floor = sizable.sort((left, right) => left.y - right.y)[0] ?? null
+    // No wall says where the floor is, so the largest upward plane wins (ties go to the lower one);
+    // a lower, smaller plane is more often a step or a tabletop than the floor.
+    floor = sizable.sort((left, right) => right.area - left.area || left.y - right.y)[0] ?? null
     notes.push(
       floor
-        ? 'The floor plane was not checked against wall bottoms because no wall plane was usable; it may be a table or a step.'
+        ? 'The floor plane was not checked against wall bottoms because no wall plane was usable; it was chosen as the largest upward plane.'
         : 'No upward plane was seen, so the floor level is unknown.',
     )
+    if (floor) {
+      for (const other of floors) {
+        if (other === floor || other.area < 0.4 * floor.area || Math.abs(other.y - floor.y) < 0.3) {
+          continue
+        }
+        notes.push(
+          `A second large upward plane (${other.planeId}, ${other.area} m2) sits at y ${other.y} m, ${round(Math.abs(other.y - floor.y), 2)} m ${other.y < floor.y ? 'below' : 'above'} the chosen floor (y ${floor.y} m): a step or level change is possible. Check on site.`,
+        )
+      }
+    }
   }
   if (floor && floor.area < SMALL_FLOOR_AREA) {
     notes.push(`The floor plane covers only ${floor.area} m2; its level may be wrong.`)

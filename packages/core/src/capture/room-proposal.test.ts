@@ -584,3 +584,51 @@ describe('typed measurements are real metres', () => {
     }
   })
 })
+
+describe('floor choice without wall planes, and the suggested scan transform', () => {
+  // Shaped like a real handheld scan: no vertical planes, two large floors, a small lower one.
+  const planes = () => [
+    horizontal('big', 'horizontal-up', -1.27, [3, 4], [0, 0]),
+    horizontal('second', 'horizontal-up', -1.26, [2.4, 3], [8, 0]),
+    horizontal('lower', 'horizontal-up', -1.77, [2, 3], [-8, 0]),
+    horizontal('ceil', 'horizontal-down', 2.95, [3, 3], [0, 0]),
+  ]
+
+  test('the largest upward plane is the floor, and a second large plane at another level is reported', () => {
+    const analysis = analysePlanes(planes())
+    expect(analysis.floor?.planeId).toBe('big')
+    expect(analysis.height).toBeCloseTo(4.22, 1)
+    expect(analysis.notes.join(' ')).toContain('lower')
+    expect(analysis.notes.join(' ')).toContain('step or level change')
+    expect(analysis.notes.join(' ')).not.toContain('second,')
+  })
+
+  test('the proposal suggests moving the scan node so the floor sits at level y 0, and writes nothing', () => {
+    const proposal = proposeRoom({
+      planes: planes(),
+      measurements: {
+        units: 'm',
+        room: { width: 4, length: 3, height: null },
+        openings: [],
+        notes: '',
+        source: 'manual',
+      },
+      transform: { position: [1, 0.5, 2], rotation: [0, 0.3, 0], scale: 1 },
+    })
+    expect(proposal.floorY).toBeCloseTo(-0.77, 2)
+    expect(proposal.suggestedScanTransform).toMatchObject({
+      position: [1, 1.27, 2],
+      rotation: [0, 0.3, 0],
+      scale: 1,
+    })
+    expect(proposal.suggestedScanTransform?.note).toContain('confirms')
+  })
+
+  test('no suggestion when the floor already sits at level y 0', () => {
+    const proposal = proposeRoom({
+      planes: [horizontal('floor', 'horizontal-up', 0, [3, 3], [0, 0])],
+      measurements: null,
+    })
+    expect(proposal.suggestedScanTransform).toBeNull()
+  })
+})
