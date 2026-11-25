@@ -15,6 +15,7 @@ object TestBundles {
         sessionId: String = SESSION_ID,
         sensors: SensorCapture? = null,
         lightEstimates: List<LightRecord> = emptyList(),
+        boundaryMarks: List<BoundaryMark> = emptyList(),
     ): BundleInput {
         File(dir, "keyframes").mkdirs()
         File(dir, "depth").mkdirs()
@@ -73,6 +74,7 @@ object TestBundles {
             arcore = buildJsonObject { put("depthKind", "raw") },
             sensors = sensors,
             lightEstimates = lightEstimates,
+            boundaryMarks = boundaryMarks,
         )
     }
 }
