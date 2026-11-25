@@ -175,6 +175,24 @@ export {
   type PushCaptureSourceOptions,
 } from './source'
 export {
+  type AttachSplatInput,
+  CAPTURE_MAX_RENDERED_SPLATS,
+  CAPTURE_MAX_SPLAT_ARTIFACT_BYTES,
+  describeSplatPly,
+  GAUSSIAN_SPLAT_KIND,
+  GAUSSIAN_SPLAT_MEDIA_TYPE,
+  GAUSSIAN_SPLAT_ROLE,
+  GAUSSIAN_SPLAT_STREAM_ID,
+  type GaussianSplatData,
+  type GaussianSplatMetadata,
+  GaussianSplatMetadataSchema,
+  parseGaussianSplatPly,
+  readSplatPlyHeader,
+  SplatPlyError,
+  type SplatPlyHeader,
+  withGaussianSplatStream,
+} from './splat'
+export {
   type BrowserCapabilities,
   BrowserCapabilitiesSchema,
   CAPTURE_MAX_ARTIFACT_BYTES,

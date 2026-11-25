@@ -1,3 +1,4 @@
+import { CAPTURE_MAX_SPLAT_ARTIFACT_BYTES } from '@pascal-app/core/capture'
 import { DiskArtifactStore, resolveDefaultDatabasePath } from '@pascal-app/mcp/storage'
 import { artifactMediaType } from '@/lib/artifact-media-type'
 import { MAX_ARTIFACT_BYTES, readBodyWithin } from '@/lib/artifact-upload-limit'
@@ -41,13 +42,14 @@ export async function PUT(request: Request, { params }: { params: Promise<{ sha2
   const { sha256 } = await params
   if (!/^[0-9a-f]{64}$/.test(sha256))
     return sceneApiJson(request, { error: 'invalid_hash' }, { status: 400 })
-  const bytes = await readBodyWithin(request, MAX_ARTIFACT_BYTES)
+  // A trained splat is larger than any other capture artifact; it asks for its own bound.
+  const maxBytes =
+    request.headers.get('x-artifact-kind') === 'gaussian-splat'
+      ? CAPTURE_MAX_SPLAT_ARTIFACT_BYTES
+      : MAX_ARTIFACT_BYTES
+  const bytes = await readBodyWithin(request, maxBytes)
   if (!bytes) {
-    return sceneApiJson(
-      request,
-      { error: 'too_large', maxBytes: MAX_ARTIFACT_BYTES },
-      { status: 413 },
-    )
+    return sceneApiJson(request, { error: 'too_large', maxBytes }, { status: 413 })
   }
   try {
     await new DiskArtifactStore(resolveDefaultDatabasePath()).put(sha256, bytes)
