@@ -61,7 +61,7 @@ class ArtifactUploaderTest {
         assertEquals(expected.map { "https://spatial-studio.faizmuttaqin.com/api/artifacts/$it" }, transport.calls.map { it.url })
         assertEquals("/api/artifacts/${bundle.manifest.sha256}", result.manifestUrl)
         assertEquals(bundle.manifest.sha256, result.manifestSha256)
-        assertEquals((0..expected.size).toList(), progress)
+        assertEquals((0..expected.size).toList(), progress.distinct())
         for (call in transport.calls) {
             assertEquals("https://spatial-studio.faizmuttaqin.com", call.headers["Origin"])
             assertEquals(cookie, call.headers["Cookie"])
@@ -199,8 +199,80 @@ class ArtifactUploaderTest {
 
     @Test
     fun retryDelaysAreBounded() {
-        assertEquals(60_000L, ArtifactUploader.retryDelayMs(429, 3600, 1))
+        assertEquals(30_000L, ArtifactUploader.retryDelayMs(429, 3600, 1))
         assertEquals(1_000L, ArtifactUploader.retryDelayMs(429, 0, 1))
         assertEquals(30_000L, ArtifactUploader.retryDelayMs(500, null, 10))
+    }
+
+    @Test
+    fun capsTotalRetriesAndLogsEachRetryWithoutUrlsOrCookies() {
+        val (dir, bundle) = bundle()
+        val clock = Clock()
+        val lines = ArrayList<String>()
+        val transport = FakeTransport(clock) { _, _ -> ArtifactTransport.Response(503) }
+        val u = ArtifactUploader(transport, { cookie }, sleep = clock::sleep, now = { clock.nowMs }, maxAttempts = 100, minIntervalMs = 0, maxTotalRetries = 3, log = { lines += it })
+        assertThrows(UploadFailedException::class.java) { u.upload(origin, dir, bundle) }
+        assertEquals(4, transport.calls.size)
+        assertEquals(4, lines.size)
+        assertTrue(lines.all { "status=503" in it && "wait=" in it && "http" !in it && "secret" !in it })
+    }
+
+    @Test
+    fun capsTheTimeOneArtifactMayTake() {
+        val (dir, bundle) = bundle()
+        val clock = Clock()
+        val transport = FakeTransport(clock) { _, _ -> ArtifactTransport.Response(500) }
+        val u = ArtifactUploader(transport, { cookie }, sleep = clock::sleep, now = { clock.nowMs }, maxAttempts = 100, minIntervalMs = 0, maxArtifactMs = 10_000)
+        assertThrows(UploadFailedException::class.java) { u.upload(origin, dir, bundle) }
+        // Waits are 1, 2, 4 s: the 8 s wait would end past 10 s, so the fourth failure is final.
+        assertTrue(clock.nowMs <= 10_000)
+        assertEquals(4, transport.calls.size)
+    }
+
+    @Test
+    fun capsTheWholeUpload() {
+        val (dir, bundle) = bundle()
+        val clock = Clock()
+        val transport = FakeTransport(clock) { _, _ -> clock.nowMs += 5_000; ArtifactTransport.Response(200) }
+        val u = ArtifactUploader(transport, { cookie }, sleep = clock::sleep, now = { clock.nowMs }, minIntervalMs = 0, maxTotalMs = 7_000)
+        assertThrows(UploadFailedException::class.java) { u.upload(origin, dir, bundle) }
+        assertEquals(2, transport.calls.size)
+    }
+
+    @Test
+    fun reportsThePhaseAndSendsTheManifestLastInItsOwnPhase() {
+        val (dir, bundle) = bundle()
+        val phases = ArrayList<String>()
+        uploader(FakeTransport { _, _ -> ArtifactTransport.Response(200) }).upload(origin, dir, bundle) { phases += it.phase }
+        assertEquals("artifacts", phases.first())
+        assertEquals("manifest", phases.last())
+        assertTrue(phases.count { it == "manifest" } >= 2)
+    }
+
+    @Test
+    fun aCancelledUploadStopsBetweenArtifacts() {
+        val (dir, bundle) = bundle()
+        val transport = FakeTransport { _, _ -> ArtifactTransport.Response(200) }
+        var cancelled = false
+        val ex = assertThrows(UploadFailedException::class.java) {
+            uploader(transport).upload(origin, dir, bundle, isCancelled = { cancelled }) { if (it.uploaded == 1) cancelled = true }
+        }
+        assertEquals(1, transport.calls.size)
+        assertTrue(ex.message!!.contains("replaced"))
+    }
+
+    @Test
+    fun retriesCountAsActivity() {
+        val (dir, bundle) = bundle()
+        var activity = 0
+        val transport = FakeTransport { n, _ -> if (n <= 2) ArtifactTransport.Response(500) else ArtifactTransport.Response(200) }
+        uploader(transport, Clock()).upload(origin, dir, bundle) { activity++ }
+        val withoutRetries = run {
+            var count = 0
+            val (d2, b2) = bundle("b2")
+            uploader(FakeTransport { _, _ -> ArtifactTransport.Response(200) }).upload(origin, d2, b2) { count++ }
+            count
+        }
+        assertEquals(withoutRetries + 2, activity)
     }
 }

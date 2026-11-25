@@ -38,20 +38,40 @@ class ArtifactUploader(
     private val now: () -> Long = { System.nanoTime() / 1_000_000 },
     private val maxAttempts: Int = 8,
     private val minIntervalMs: Long = DEFAULT_MIN_INTERVAL_MS,
+    /** Longest one artifact may take, retries and waits included. */
+    private val maxArtifactMs: Long = MAX_ARTIFACT_MS,
+    /** Longest the whole upload may take. */
+    private val maxTotalMs: Long = MAX_TOTAL_MS,
+    /** Retries across the whole upload. */
+    private val maxTotalRetries: Int = MAX_TOTAL_RETRIES,
+    /** Status codes and waits only: no URLs, cookies or bodies. */
+    private val log: (String) -> Unit = {},
 ) {
-    class Progress(val uploaded: Int, val total: Int, val bytesUploaded: Long, val bytesTotal: Long)
+    /** [phase]: `artifacts`, then `manifest` while the manifest is sent. */
+    class Progress(
+        val uploaded: Int,
+        val total: Int,
+        val bytesUploaded: Long,
+        val bytesTotal: Long,
+        val phase: String = PHASE_ARTIFACTS,
+    )
 
     class Result(val manifestUrl: String, val manifestSha256: String, val sent: Int, val skipped: Int)
 
     private var lastRequestAt = Long.MIN_VALUE
+    private var startedAt = 0L
+    private var totalRetries = 0
 
     fun upload(
         origin: OriginAllowlist.Origin,
         dir: File,
         bundle: FinalizedBundle,
         log: UploadLog? = null,
+        isCancelled: () -> Boolean = { false },
         onProgress: (Progress) -> Unit = {},
     ): Result {
+        startedAt = now()
+        totalRetries = 0
         // Identical content is one artifact on the server: send each hash once.
         val artifacts = bundle.artifacts.distinctBy { it.sha256 }.filter { it.sha256 != bundle.manifest.sha256 }
         val files = artifacts + bundle.manifest
@@ -63,19 +83,24 @@ class ArtifactUploader(
         var skipped = 0
         onProgress(Progress(0, files.size, 0, bytesTotal))
         for (artifact in files) {
+            if (isCancelled()) throw UploadFailedException("Upload replaced by a newer request")
+            if (now() - startedAt > maxTotalMs) throw UploadFailedException("Upload took too long; finished files are kept, try again")
+            if (artifact === bundle.manifest) onProgress(Progress(done, files.size, bytesDone, bytesTotal, PHASE_MANIFEST))
             // The manifest is always sent: it is the final confirmation that the whole bundle is stored.
             if (artifact !== bundle.manifest && artifact.sha256 in alreadyStored) {
                 skipped++
             } else {
                 val file = File(dir, artifact.path)
                 verify(file, artifact)
-                putWithRetry(origin, file, artifact)
+                putWithRetry(origin, file, artifact, isCancelled) {
+                    onProgress(Progress(done, files.size, bytesDone, bytesTotal, if (artifact === bundle.manifest) PHASE_MANIFEST else PHASE_ARTIFACTS))
+                }
                 log?.record(origin.toString(), artifact.sha256)
                 sent++
             }
             done++
             bytesDone += artifact.byteLength
-            onProgress(Progress(done, files.size, bytesDone, bytesTotal))
+            onProgress(Progress(done, files.size, bytesDone, bytesTotal, if (artifact === bundle.manifest) PHASE_MANIFEST else PHASE_ARTIFACTS))
         }
         return Result(bundle.manifest.uri, bundle.manifest.sha256, sent, skipped)
     }
@@ -94,7 +119,8 @@ class ArtifactUploader(
         lastRequestAt = now()
     }
 
-    private fun putWithRetry(origin: OriginAllowlist.Origin, file: File, artifact: ArtifactFile) {
+    private fun putWithRetry(origin: OriginAllowlist.Origin, file: File, artifact: ArtifactFile, isCancelled: () -> Boolean, onRetry: () -> Unit) {
+        val artifactStart = now()
         val url = "$origin/api/artifacts/${artifact.sha256}"
         val headers = LinkedHashMap<String, String>()
         headers["Origin"] = origin.toString()
@@ -103,6 +129,7 @@ class ArtifactUploader(
 
         var attempt = 0
         while (true) {
+            if (isCancelled()) throw UploadFailedException("Upload replaced by a newer request")
             attempt++
             pace()
             val response = try {
@@ -119,16 +146,31 @@ class ArtifactUploader(
                     if (status == -1) "Network error uploading to $origin" else describe(status, origin),
                 )
             }
-            sleep(retryDelayMs(status, response?.retryAfterSeconds, attempt))
+            val delay = retryDelayMs(status, response?.retryAfterSeconds, attempt)
+            totalRetries++
+            log("retry ${artifact.path} attempt=$attempt status=$status wait=${delay}ms")
+            if (totalRetries > maxTotalRetries || now() - artifactStart + delay > maxArtifactMs || now() - startedAt + delay > maxTotalMs) {
+                throw UploadFailedException(
+                    if (status == -1) "Network error uploading to $origin; finished files are kept, try again" else describe(status, origin),
+                )
+            }
+            onRetry()
+            sleep(delay)
         }
     }
 
     companion object {
         /** About 90 requests a minute, leaving the page headroom under the studio's 120. */
         const val DEFAULT_MIN_INTERVAL_MS = 667L
+        const val PHASE_ARTIFACTS = "artifacts"
+        const val PHASE_MANIFEST = "manifest"
+        const val PHASE_FINALISING = "finalising"
+        const val MAX_ARTIFACT_MS = 120_000L
+        const val MAX_TOTAL_MS = 30L * 60 * 1000
+        const val MAX_TOTAL_RETRIES = 100
 
         fun retryDelayMs(status: Int, retryAfterSeconds: Long?, attempt: Int): Long {
-            if (status == 429 && retryAfterSeconds != null) return retryAfterSeconds.coerceIn(1, 60) * 1000
+            if (status == 429 && retryAfterSeconds != null) return retryAfterSeconds.coerceIn(1, 30) * 1000
             val backoff = 1000L shl (attempt - 1).coerceIn(0, 5)
             return backoff.coerceAtMost(30_000)
         }

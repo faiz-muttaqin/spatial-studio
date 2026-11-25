@@ -73,10 +73,11 @@ class UploadJoinTest {
 
     @Test fun `a second request for the same session joins and gets the same result`() {
         val got = ArrayList<ScanCoordinator.UploadOutcome>()
-        assertEquals(ScanCoordinator.UploadJoin.STARTED, ScanCoordinator.beginOrJoinUpload(a) { got.add(it) })
-        assertEquals(ScanCoordinator.UploadJoin.JOINED, ScanCoordinator.beginOrJoinUpload(a) { got.add(it) })
+        val first = ScanCoordinator.beginOrJoinUpload(a, { got.add(it) }, nowMs = 0)
+        assertEquals(ScanCoordinator.UploadJoin.STARTED, first.join)
+        assertEquals(ScanCoordinator.UploadJoin.JOINED, ScanCoordinator.beginOrJoinUpload(a, { got.add(it) }, nowMs = 1000).join)
         assertTrue(got.isEmpty())
-        ScanCoordinator.finishUpload(a, ok)
+        ScanCoordinator.finishUpload(a, first.token!!, ok)
         assertEquals(2, got.size)
         assertTrue(got.all { it === ok })
         assertNull(ScanCoordinator.uploading)
@@ -84,20 +85,20 @@ class UploadJoinTest {
 
     @Test fun `a different session is busy and is not queued`() {
         val got = ArrayList<ScanCoordinator.UploadOutcome>()
-        ScanCoordinator.beginOrJoinUpload(a) { got.add(it) }
-        assertEquals(ScanCoordinator.UploadJoin.BUSY, ScanCoordinator.beginOrJoinUpload(b) { got.add(it) })
-        ScanCoordinator.finishUpload(a, ok)
+        val first = ScanCoordinator.beginOrJoinUpload(a, { got.add(it) }, nowMs = 0)
+        assertEquals(ScanCoordinator.UploadJoin.BUSY, ScanCoordinator.beginOrJoinUpload(b, { got.add(it) }, nowMs = 10 * 60_000L).join)
+        ScanCoordinator.finishUpload(a, first.token!!, ok)
         assertEquals(1, got.size)
     }
 
     @Test fun `failures reach every waiter and free the slot`() {
         val got = ArrayList<ScanCoordinator.UploadOutcome>()
-        ScanCoordinator.beginOrJoinUpload(a) { got.add(it) }
-        ScanCoordinator.beginOrJoinUpload(a) { got.add(it) }
+        val first = ScanCoordinator.beginOrJoinUpload(a, { got.add(it) }, nowMs = 0)
+        ScanCoordinator.beginOrJoinUpload(a, { got.add(it) }, nowMs = 1)
         val failed = ScanCoordinator.UploadOutcome.Failed(com.faizmuttaqin.spatialstudio.bridge.BridgeErrorCode.UPLOAD_FAILED, "x")
-        ScanCoordinator.finishUpload(a, failed)
+        ScanCoordinator.finishUpload(a, first.token!!, failed)
         assertEquals(listOf<Any>(failed, failed), got)
-        assertEquals(ScanCoordinator.UploadJoin.STARTED, ScanCoordinator.beginOrJoinUpload(a) { })
+        assertEquals(ScanCoordinator.UploadJoin.STARTED, ScanCoordinator.beginOrJoinUpload(a, { }, nowMs = 2).join)
     }
 
     @Test fun `success is emitted as upload done to listeners`() {
@@ -105,20 +106,44 @@ class UploadJoinTest {
         val listener = ScanCoordinator.Listener { event, _ -> events.add(event) }
         ScanCoordinator.addListener(listener)
         try {
-            ScanCoordinator.beginOrJoinUpload(a) { }
-            ScanCoordinator.finishUpload(a, ok)
+            val first = ScanCoordinator.beginOrJoinUpload(a, { }, nowMs = 0)
+            ScanCoordinator.finishUpload(a, first.token!!, ok)
         } finally {
             ScanCoordinator.removeListener(listener)
         }
         assertEquals(listOf("upload.done"), events)
     }
 
-    @Test fun `finishing a session that is not uploading does nothing`() {
+    @Test fun `finishing with the wrong session or token does nothing`() {
         val got = ArrayList<ScanCoordinator.UploadOutcome>()
-        ScanCoordinator.beginOrJoinUpload(a) { got.add(it) }
-        ScanCoordinator.finishUpload(b, ok)
+        val first = ScanCoordinator.beginOrJoinUpload(a, { got.add(it) }, nowMs = 0)
+        ScanCoordinator.finishUpload(b, first.token!!, ok)
+        ScanCoordinator.finishUpload(a, ScanCoordinator.UploadToken(), ok)
         assertTrue(got.isEmpty())
         assertEquals(a, ScanCoordinator.uploading)
+    }
+
+    @Test fun `an upload with no activity for a minute is replaced and the old run is cancelled`() {
+        val got = ArrayList<ScanCoordinator.UploadOutcome>()
+        val first = ScanCoordinator.beginOrJoinUpload(a, { got.add(it) }, nowMs = 0)
+        val second = ScanCoordinator.beginOrJoinUpload(a, { got.add(it) }, nowMs = ScanCoordinator.UPLOAD_STALE_MS)
+        assertEquals(ScanCoordinator.UploadJoin.REPLACED, second.join)
+        assertTrue(first.token!!.cancelled.get())
+        assertFalse(second.token!!.cancelled.get())
+        // The stalled run finally returns: it must not answer or free the replacement.
+        ScanCoordinator.finishUpload(a, first.token!!, ScanCoordinator.UploadOutcome.Failed(com.faizmuttaqin.spatialstudio.bridge.BridgeErrorCode.UPLOAD_FAILED, "replaced"))
+        assertTrue(got.isEmpty())
+        assertEquals(a, ScanCoordinator.uploading)
+        // Both pages get the replacement's result.
+        ScanCoordinator.finishUpload(a, second.token!!, ok)
+        assertEquals(2, got.size)
+    }
+
+    @Test fun `activity keeps an upload from counting as stalled`() {
+        val first = ScanCoordinator.beginOrJoinUpload(a, { }, nowMs = 0)
+        ScanCoordinator.touchUpload(first.token!!, nowMs = 50_000)
+        assertEquals(ScanCoordinator.UploadJoin.JOINED, ScanCoordinator.beginOrJoinUpload(a, { }, nowMs = 100_000).join)
+        assertEquals(ScanCoordinator.UploadJoin.REPLACED, ScanCoordinator.beginOrJoinUpload(a, { }, nowMs = 111_000).join)
     }
 
     @Test fun `a scan with a stored manifest is answered without network work`() {
