@@ -1,147 +1,16 @@
 import { describe, expect, test } from 'bun:test'
-import {
-  type DepthFrameInput,
-  deriveDepthWalls,
-  estimateVerticalExtent,
-  floorPolygonsFromPlanes,
-} from './depth-walls'
+import { deriveDepthWalls, estimateVerticalExtent, floorPolygonsFromPlanes } from './depth-walls'
 import { IDENTITY_SCAN_TRANSFORM, type Vec2 } from './plane-analysis'
 import { proposeRoom } from './room-proposal'
 import type { CapturePlane } from './streams'
-
-// Synthetic depth only: a ray caster over a vertical-wall world, no real capture data.
-
-type Segment = { a: Vec2; b: Vec2 }
-type World = {
-  /** Solid walls: depth returns from them. */
-  walls: Segment[]
-  /** Clear glass: rays pass through it. */
-  glass?: Segment[]
-  height: number
-  /** Floor and ceiling return depth only up to this x, like ground and sky outside a glass wall. */
-  indoorUntilX?: number
-}
-type Camera = { x: number; z: number; yaw: number; pitch: number }
-
-const WIDTH = 160
-const HEIGHT = 90
-const INTRINSICS = { fx: 105, fy: 105, cx: 80, cy: 45 }
-const CAMERA_HEIGHT = 1.4
-
-function rng(seed: number): () => number {
-  let state = seed
-  return () => {
-    state = (Math.imul(state, 1664525) + 1013904223) >>> 0
-    return state / 4294967296
-  }
-}
-
-/** OpenGL camera-to-world, column-major: +X right, +Y up, -Z forward. Yaw turns in XZ, pitch tilts up. */
-function cameraPose(camera: Camera): number[] {
-  const cp = Math.cos(camera.pitch)
-  const sp = Math.sin(camera.pitch)
-  const cy = Math.cos(camera.yaw)
-  const sy = Math.sin(camera.yaw)
-  const forward = [cp * cy, sp, cp * sy]
-  const right = [-sy, 0, cy]
-  const up = [-sp * cy, cp, -sp * sy]
-  const back = forward.map((value) => -value)
-  return [...right, 0, ...up, 0, ...back, 0, camera.x, CAMERA_HEIGHT, camera.z, 1]
-}
-
-function raySegment(origin: Vec2, direction: Vec2, segment: Segment): number | null {
-  const sx = segment.b[0] - segment.a[0]
-  const sz = segment.b[1] - segment.a[1]
-  const cross = direction[0] * sz - direction[1] * sx
-  if (Math.abs(cross) < 1e-9) return null
-  const qx = segment.a[0] - origin[0]
-  const qz = segment.a[1] - origin[1]
-  const t = (qx * sz - qz * sx) / cross
-  const u = (qx * direction[1] - qz * direction[0]) / cross
-  return t > 1e-6 && u >= 0 && u <= 1 ? t : null
-}
-
-function renderFrame(
-  id: string,
-  world: World,
-  camera: Camera,
-  random: () => number,
-): DepthFrameInput {
-  const pose = cameraPose(camera)
-  const depth = new Uint16Array(WIDTH * HEIGHT)
-  const confidence = new Uint8Array(WIDTH * HEIGHT).fill(255)
-  const right = [pose[0]!, pose[1]!, pose[2]!]
-  const up = [pose[4]!, pose[5]!, pose[6]!]
-  const forward = [-pose[8]!, -pose[9]!, -pose[10]!]
-  for (let v = 0; v < HEIGHT; v += 1) {
-    for (let u = 0; u < WIDTH; u += 1) {
-      // Camera-space ray with z = -1, so the hit parameter is the depth along the optical axis.
-      const cx = (u + 0.5 - INTRINSICS.cx) / INTRINSICS.fx
-      const cy = -(v + 0.5 - INTRINSICS.cy) / INTRINSICS.fy
-      const dir = [
-        right[0]! * cx + up[0]! * cy + forward[0]!,
-        right[1]! * cx + up[1]! * cy + forward[1]!,
-        right[2]! * cx + up[2]! * cy + forward[2]!,
-      ]
-      let best = Number.POSITIVE_INFINITY
-      const horizontal: Vec2 = [dir[0]!, dir[2]!]
-      for (const wall of world.walls) {
-        const t = raySegment([camera.x, camera.z], horizontal, wall)
-        if (t === null) continue
-        const y = CAMERA_HEIGHT + dir[1]! * t
-        if (y >= 0 && y <= world.height) best = Math.min(best, t)
-      }
-      const flat = dir[1]! < 0 ? -CAMERA_HEIGHT / dir[1]! : (world.height - CAMERA_HEIGHT) / dir[1]!
-      if (
-        dir[1] !== 0 &&
-        (world.indoorUntilX === undefined || camera.x + dir[0]! * flat <= world.indoorUntilX)
-      ) {
-        best = Math.min(best, flat)
-      }
-      if (!Number.isFinite(best)) continue
-      depth[v * WIDTH + u] = Math.round((best + (random() - 0.5) * 0.02) * 1000)
-    }
-  }
-  return { id, width: WIDTH, height: HEIGHT, intrinsics: INTRINSICS, pose, depth, confidence }
-}
-
-/** A walk along `positions`, turning through `turns` headings at each stop. */
-function walk(world: World, positions: Vec2[], turns = 10, yawFrom = 0, yawSpan = Math.PI * 2) {
-  const random = rng(7)
-  const frames: DepthFrameInput[] = []
-  const path: Array<[number, number, number]> = []
-  positions.forEach(([x, z], stop) => {
-    for (let turn = 0; turn < turns; turn += 1) {
-      const yaw = yawFrom + (yawSpan * turn) / turns
-      const pitch = [-0.35, 0, 0.35][turn % 3]!
-      frames.push(renderFrame(`d${stop}-${turn}`, world, { x, z, yaw, pitch }, random))
-    }
-    path.push([x, CAMERA_HEIGHT, z])
-  })
-  return { frames, path }
-}
-
-function loop(x0: number, z0: number, x1: number, z1: number, step = 0.8): Vec2[] {
-  const out: Vec2[] = []
-  for (let x = x0; x < x1; x += step) out.push([x, z0])
-  for (let z = z0; z < z1; z += step) out.push([x1, z])
-  for (let x = x1; x > x0; x -= step) out.push([x, z1])
-  for (let z = z1; z > z0; z -= step) out.push([x0, z])
-  return out
-}
-
-function polygonWalls(points: Vec2[]): Segment[] {
-  return points.map((a, index) => ({ a, b: points[(index + 1) % points.length]! }))
-}
-
-function area(points: readonly Vec2[]): number {
-  let sum = 0
-  points.forEach(([x1, z1], index) => {
-    const [x2, z2] = points[(index + 1) % points.length]!
-    sum += x1 * z2 - x2 * z1
-  })
-  return Math.abs(sum) / 2
-}
+import {
+  area,
+  CAMERA_HEIGHT,
+  loop,
+  polygonWalls,
+  type World,
+  walk,
+} from './synthetic-depth.test-helpers'
 
 const rectangle: Vec2[] = [
   [0, 0],
@@ -320,13 +189,13 @@ describe('room proposal from depth', () => {
     expect(Math.max(...xs)).toBeLessThan(6.5)
     const glass = proposal.edges.filter((edge) => edge.likelyGlass)
     expect(glass.length).toBeGreaterThan(0)
-    expect(glass[0]!.basis === 'floor-boundary' || glass[0]!.basis === 'assumed').toBe(true)
+    expect(['floor-boundary', 'assumed', 'carved']).toContain(glass[0]!.basis)
     expect(glass[0]!.seenBeyond!.maxDistance).toBeGreaterThan(2)
     expect(proposal.unknowns.join(' ')).toContain('likely glass')
     expect(proposal.depth?.seenThrough.length ?? 0).toBeGreaterThan(0)
   })
 
-  test('sparse coverage keeps assumed sides and never reports a high-confidence edge', () => {
+  test('sparse coverage keeps guessed or low-rated sides and never reports a high-confidence edge', () => {
     const world: World = { walls: polygonWalls(rectangle), height: 2.6 }
     // One stop in a corner, turning through a quarter circle: far sides are never seen.
     const { frames, path } = walk(world, [[1, 1]], 6, 0, Math.PI / 2)
@@ -337,7 +206,13 @@ describe('room proposal from depth', () => {
       walkedPath: path,
     })
     if (proposal.polygon) {
-      expect(proposal.edges.some((edge) => edge.basis === 'assumed')).toBe(true)
+      // Either a guessed closing side, or a carved edge that rests on no seen wall.
+      expect(
+        proposal.edges.some(
+          (edge) =>
+            edge.basis === 'assumed' || (edge.basis === 'carved' && edge.confidence === 'low'),
+        ),
+      ).toBe(true)
       expect(proposal.edges.every((edge) => edge.confidence !== 'high')).toBe(true)
       expect(proposal.unknowns.join(' ')).toContain('not measured walls')
     }
