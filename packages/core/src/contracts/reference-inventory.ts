@@ -1039,6 +1039,10 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     ['frame', 'trainer'],
   ),
   ...described(
+    "A scan bundle manifest's true-north estimate (the Mapping view reads it to draw a north arrow): capture metadata, never a node's.",
+    ['trueNorth'],
+  ),
+  ...described(
     "The CLI's Architect API request metadata (`pascal architect run`): the project the turn targets and its credit cap, sent to the API, never stored on a node.",
     ['pascal_max_credits', 'project_id'],
   ),
