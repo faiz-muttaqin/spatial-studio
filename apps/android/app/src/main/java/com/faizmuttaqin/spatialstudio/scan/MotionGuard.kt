@@ -23,6 +23,13 @@ class MotionGuard(
     var tooFast = false
         private set
 
+    /**
+     * Looser limit for holding back keyframes: ordinary wall sweeps run at 60 to 90 degrees per second, so the
+     * 45 degrees per second of [tooFast] (a hint) must not starve the keyframe stream.
+     */
+    var keyframesBlocked = false
+        private set
+
     val speedMps: Double get() = speed
     val turnDegPerSecond: Double get() = turn
 
@@ -36,6 +43,7 @@ class MotionGuard(
             speed = 0.0
             turn = 0.0
             tooFast = false
+            keyframesBlocked = false
             return
         }
         val seconds = elapsed / 1e9
@@ -47,6 +55,7 @@ class MotionGuard(
         val instantTurn = Math.toDegrees(2 * acos(dot.coerceIn(0f, 1f).toDouble())) / seconds
         speed += SMOOTHING * (instantSpeed - speed)
         turn += SMOOTHING * (instantTurn - turn)
+        keyframesBlocked = speed > KEYFRAME_MAX_SPEED_MPS || turn > KEYFRAME_MAX_TURN_DEG_PER_SECOND
         tooFast = if (tooFast) {
             speed > maxSpeedMps * CLEAR_FRACTION || turn > maxTurnDegPerSecond * CLEAR_FRACTION
         } else {
@@ -59,11 +68,16 @@ class MotionGuard(
         speed = 0.0
         turn = 0.0
         tooFast = false
+        keyframesBlocked = false
     }
 
     companion object {
         const val MAX_SPEED_MPS = 0.5
         const val MAX_TURN_DEG_PER_SECOND = 45.0
+        /** Keyframes are held back only above these, and never longer than [KEYFRAME_MAX_HOLD_NS]. */
+        const val KEYFRAME_MAX_SPEED_MPS = 1.2
+        const val KEYFRAME_MAX_TURN_DEG_PER_SECOND = 90.0
+        const val KEYFRAME_MAX_HOLD_NS = 1_500_000_000L
         const val MAX_POSE_GAP_NS = 250_000_000L
         private const val SMOOTHING = 0.4
         private const val CLEAR_FRACTION = 0.8
@@ -76,11 +90,19 @@ object KeyframeGate {
 
     /**
      * [due]: the movement gate of the [KeyframeSelector] says a keyframe is due.
+     * [blocked]: moving faster than the keyframe limits; a keyframe due for [dueForNs] or longer is taken anyway.
      * [integrates]: the pose guard allows recording. [encoderBusy]: encode queue is full.
      */
-    fun decide(due: Boolean, integrates: Boolean, tooFast: Boolean, encoderBusy: Boolean): Decision = when {
+    fun decide(
+        due: Boolean,
+        integrates: Boolean,
+        blocked: Boolean,
+        encoderBusy: Boolean,
+        dueForNs: Long = 0L,
+        maxHoldNs: Long = MotionGuard.KEYFRAME_MAX_HOLD_NS,
+    ): Decision = when {
         !due || !integrates || encoderBusy -> Decision.SKIP
-        tooFast -> Decision.SKIP_FAST
+        blocked && dueForNs < maxHoldNs -> Decision.SKIP_FAST
         else -> Decision.CAPTURE
     }
 }

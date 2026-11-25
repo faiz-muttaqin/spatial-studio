@@ -65,6 +65,16 @@ class MotionGuardTest {
         assertFalse(guard.tooFast)
     }
 
+    @Test fun `an ordinary wall sweep hints but does not block keyframes`() {
+        // 70 degrees per second: over the 45 hint limit, under the 90 keyframe limit.
+        val guard = walk(0.0, 1.0, turnDegPerSecond = 70.0)
+        assertTrue(guard.tooFast)
+        assertFalse(guard.keyframesBlocked)
+        assertTrue(walk(0.0, 1.0, turnDegPerSecond = 150.0).keyframesBlocked)
+        assertTrue(walk(2.0, 1.0).keyframesBlocked)
+        assertFalse(walk(0.8, 1.0).keyframesBlocked)
+    }
+
     @Test fun `a gap in poses restarts the measurement`() {
         val guard = walk(1.5, 1.0)
         assertTrue(guard.tooFast)
@@ -76,11 +86,17 @@ class MotionGuardTest {
 
 class KeyframeGateTest {
     @Test fun `a due keyframe on a calm tracked frame is captured`() {
-        assertEquals(KeyframeGate.Decision.CAPTURE, KeyframeGate.decide(due = true, integrates = true, tooFast = false, encoderBusy = false))
+        assertEquals(KeyframeGate.Decision.CAPTURE, KeyframeGate.decide(due = true, integrates = true, blocked = false, encoderBusy = false))
     }
 
     @Test fun `a due keyframe while moving too fast is skipped for speed`() {
         assertEquals(KeyframeGate.Decision.SKIP_FAST, KeyframeGate.decide(true, true, true, false))
+    }
+
+    @Test fun `a keyframe held back too long is captured anyway`() {
+        val hold = MotionGuard.KEYFRAME_MAX_HOLD_NS
+        assertEquals(KeyframeGate.Decision.SKIP_FAST, KeyframeGate.decide(true, true, true, false, dueForNs = hold - 1))
+        assertEquals(KeyframeGate.Decision.CAPTURE, KeyframeGate.decide(true, true, true, false, dueForNs = hold))
     }
 
     @Test fun `nothing is captured while the pose is held`() {
@@ -155,6 +171,25 @@ class PoseContinuityTest {
         assertFalse(guard.isStuck)
         repeat(130) { step(quat(x = 0.6f)) }
         assertTrue(guard.isStuck)
+    }
+
+    @Test fun `manual resume lets recording continue from the current pose`() {
+        step(quat())
+        step(quat(x = 0.6f, yawDeg = 80.0))
+        assertTrue(guard.isSlipped)
+        guard.resume()
+        assertFalse(guard.isSlipped)
+        assertEquals(PoseStep.Continuous, step(quat(x = 0.61f, yawDeg = 80.0)))
+    }
+
+    @Test fun `walking back onto the old trajectory recovers without a jump`() {
+        step(quat())
+        step(quat(x = 0.6f, yawDeg = 80.0))
+        // Walk back in small steps (under the jump limits): held until close to the old pose, then recovered.
+        val steps = (1..60).map { step(quat(x = 0.6f - it * 0.0095f, yawDeg = 80.0 - it * 1.3)) }
+        assertEquals(PoseStep.Held, steps.first())
+        assertTrue(PoseStep.Recovered in steps)
+        assertEquals(PoseStep.Continuous, step(quat(x = 0.03f, yawDeg = 2.0)))
     }
 
     @Test fun `angle and distance helpers`() {

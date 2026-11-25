@@ -15,6 +15,7 @@ import com.google.ar.core.Plane
 import com.google.ar.core.Session
 import com.google.ar.core.TrackingState
 import com.google.ar.core.exceptions.NotYetAvailableException
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -57,6 +58,8 @@ class ScanRecorder(
     private val poseJumps = Collections.synchronizedList(ArrayList<PoseJumpEvent>())
     private var jumpOpen = false
     private var lastWasFastSkip = false
+    private var dueSinceNs: Long? = null
+    private val resumeRequested = AtomicBoolean(false)
     @Volatile var fastKeyframeSkips = 0
         private set
 
@@ -80,12 +83,35 @@ class ScanRecorder(
         val wallSide: WallSide? = null,
     )
 
-    class PoseJumpEvent(val timestampNs: Long, val metres: Float, val degrees: Float, var recoveredTimestampNs: Long? = null)
+    class PoseJumpEvent(
+        val timestampNs: Long,
+        val metres: Float,
+        val degrees: Float,
+        var recoveredTimestampNs: Long? = null,
+        var manualResume: Boolean = false,
+    )
 
-    fun setTorch(active: Boolean, supported: Boolean?) {
+    /** The user says the pose is fine: resume recording from here. Handled on the next GL frame. */
+    fun requestResume() = resumeRequested.set(true)
+
+    /** GL thread, after ARCore accepted (or the user switched off) the torch configuration. */
+    fun setTorch(active: Boolean) {
         torchActive = active
-        if (supported != null) torchSupported = supported
-        if (supported == false) warnings.add(WARNING_TORCH_UNSUPPORTED)
+    }
+
+    /** What `session.isSupported` said; false adds `torch-unsupported`. */
+    fun torchProbed(supported: Boolean) {
+        torchSupported = supported
+        if (!supported) warnings.add(WARNING_TORCH_UNSUPPORTED)
+    }
+
+    fun torchConfigureFailed() {
+        torchActive = false
+        warnings.add(WARNING_TORCH_CONFIGURE_FAILED)
+    }
+
+    fun torchToggledMidScan() {
+        if (selector.count > 0) warnings.add(WARNING_TORCH_MID_SCAN)
     }
 
     /** Set by the scan screen; off when the sensors toggle is off or the mode is DISABLED. */
@@ -159,6 +185,14 @@ class ScanRecorder(
         // Pose-jump guard: while ARCore's pose is off the trajectory the scan was built on, nothing is
         // recorded (no keyframes, depth or points). The trajectory above keeps recording.
         val quat = QuatPose.fromMatrix(pose)
+        if (resumeRequested.getAndSet(false) && continuity.isSlipped) {
+            continuity.resume()
+            jumpOpen = false
+            poseJumps.lastOrNull { it.recoveredTimestampNs == null }?.let {
+                it.recoveredTimestampNs = timestamp
+                it.manualResume = true
+            }
+        }
         val step = continuity.step(timestamp, quat)
         trackJump(step, timestamp)
         motion.update(timestamp, quat)
@@ -200,16 +234,22 @@ class ScanRecorder(
             warnings.add(WARNING_KEYFRAME_LIMIT)
             return
         }
+        val due = selector.shouldCapture(timestamp, true, pose)
+        if (!due) dueSinceNs = null else if (dueSinceNs == null) dueSinceNs = timestamp
         val decision = KeyframeGate.decide(
-            due = selector.shouldCapture(timestamp, true, pose),
+            due = due,
             integrates = true,
-            tooFast = motion.tooFast,
+            blocked = motion.keyframesBlocked,
             encoderBusy = pending.get() >= MAX_PENDING_ENCODES,
+            dueForNs = dueSinceNs?.let { timestamp - it } ?: 0L,
         )
         // One count per episode: a due keyframe held back while the camera is too fast, not one per frame.
         if (decision == KeyframeGate.Decision.SKIP_FAST && !lastWasFastSkip) fastKeyframeSkips++
         lastWasFastSkip = decision == KeyframeGate.Decision.SKIP_FAST
-        if (decision == KeyframeGate.Decision.CAPTURE) captureKeyframe(frame, camera, timestamp)
+        if (decision == KeyframeGate.Decision.CAPTURE) {
+            dueSinceNs = null
+            captureKeyframe(frame, camera, timestamp)
+        }
     }
 
     private fun trackJump(step: PoseStep, timestamp: Long) {
@@ -500,13 +540,17 @@ class ScanRecorder(
     fun guardMetadata(): JsonObject = buildJsonObject {
         val stored = keyframes.toList()
         put("torch", buildJsonObject {
-            put("supported", torchSupported ?: false)
+            // Null: the torch was never asked for, so support was never probed.
+            put("supported", torchSupported)
             put("framesOn", stored.count { it.torch == true })
             put("framesOff", stored.count { it.torch == false })
         })
         put("motionGuard", buildJsonObject {
             put("maxSpeedMps", MotionGuard.MAX_SPEED_MPS)
             put("maxTurnDegPerSecond", MotionGuard.MAX_TURN_DEG_PER_SECOND)
+            put("keyframeMaxSpeedMps", MotionGuard.KEYFRAME_MAX_SPEED_MPS)
+            put("keyframeMaxTurnDegPerSecond", MotionGuard.KEYFRAME_MAX_TURN_DEG_PER_SECOND)
+            put("keyframeMaxHoldMs", MotionGuard.KEYFRAME_MAX_HOLD_NS / 1_000_000L)
             put("fastKeyframeSkips", fastKeyframeSkips)
             putJsonArray("poseJumps") {
                 synchronized(poseJumps) {
@@ -516,6 +560,7 @@ class ScanRecorder(
                             put("metres", jump.metres.toDouble())
                             put("degrees", jump.degrees.toDouble())
                             put("recoveredTimestampNs", jump.recoveredTimestampNs)
+                            put("manualResume", jump.manualResume)
                         }
                     }
                 }
@@ -585,6 +630,8 @@ class ScanRecorder(
         const val WARNING_POSE_JUMP_UNRECOVERED = "pose-jump-unrecovered"
         const val WARNING_SKIPPED_FAST = "keyframes-skipped-fast"
         const val WARNING_TORCH_UNSUPPORTED = "torch-unsupported"
+        const val WARNING_TORCH_CONFIGURE_FAILED = "torch-configure-failed"
+        const val WARNING_TORCH_MID_SCAN = "torch-toggled-mid-scan"
         private const val MAX_POSE_JUMPS = 50
         private const val COVERAGE_DEPTH_INTERVAL_NS = 250_000_000L
         private const val GUIDANCE_INTERVAL_NS = 250_000_000L

@@ -89,6 +89,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
     private lateinit var locationToggle: CheckBox
     private lateinit var torchToggle: CheckBox
     private lateinit var guidanceText: TextView
+    private lateinit var resumeButton: Button
     private lateinit var markToggle: Button
     private lateinit var markPanel: View
     private lateinit var markStatus: TextView
@@ -192,6 +193,11 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         locationToggle = ActivityCompat.requireViewById(this, R.id.scan_toggle_location)
         torchToggle = ActivityCompat.requireViewById(this, R.id.scan_toggle_torch)
         guidanceText = ActivityCompat.requireViewById(this, R.id.scan_guidance)
+        resumeButton = ActivityCompat.requireViewById(this, R.id.scan_resume)
+        resumeButton.setOnClickListener {
+            recorder?.requestResume()
+            resumeButton.visibility = View.GONE
+        }
         markToggle = ActivityCompat.requireViewById(this, R.id.scan_mark_toggle)
         markPanel = ActivityCompat.requireViewById(this, R.id.scan_mark_panel)
         markStatus = ActivityCompat.requireViewById(this, R.id.scan_mark_status)
@@ -278,7 +284,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             markToggle.isEnabled = true
         }
         sensorRecorder?.start()
-        // The camera restarted: put the torch back to what the toggle says.
+        // ARCore keeps its configuration across pause and resume; applyTorch only reconfigures on a mismatch.
         if (torchWanted) torchChange.set(true)
         ScanCoordinator.state(scan.sessionId, "scanning")
     }
@@ -554,23 +560,35 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
     @Suppress("DEPRECATION") // isSupported is the probe the reference uses; the replacement is not in ARCore 1.57.
     private fun applyTorch(session: Session, recorder: ScanRecorder, want: Boolean) {
         val config = session.config
-        config.flashMode = if (want) Config.FlashMode.TORCH else Config.FlashMode.OFF
-        if (want && !session.isSupported(config)) {
-            rejectTorch(recorder, R.string.scan_torch_unsupported)
+        val mode = if (want) Config.FlashMode.TORCH else Config.FlashMode.OFF
+        if (config.flashMode == mode) {
+            recorder.setTorch(want)
             return
         }
+        config.flashMode = mode
+        if (want) {
+            val supported = session.isSupported(config)
+            recorder.torchProbed(supported)
+            if (!supported) {
+                rejectTorch(recorder, R.string.scan_torch_unsupported)
+                return
+            }
+        }
         try {
+            // Unverified on a device: a mid-scan configure may restart the camera or reset planes.
             session.configure(config)
-            recorder.setTorch(want, if (want) true else null)
+            recorder.setTorch(want)
+            recorder.torchToggledMidScan()
         } catch (e: Exception) {
             Log.w(TAG, "Could not change the torch", e)
-            rejectTorch(recorder, R.string.scan_torch_unsupported)
+            recorder.torchConfigureFailed()
+            rejectTorch(recorder, R.string.scan_torch_failed)
         }
     }
 
     private fun rejectTorch(recorder: ScanRecorder, message: Int) {
         torchWanted = false
-        recorder.setTorch(false, false)
+        recorder.setTorch(false)
         runOnUiThread {
             updatingToggles = true
             torchToggle.isChecked = false
@@ -627,6 +645,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                 keyframes, recorder.selector.maxKeyframes, planes, points, seconds / 60, seconds % 60,
             )
             guidanceText.text = guidanceLines(recorder.guidance)
+            resumeButton.visibility = if (recorder.guidance.jumpHeld) View.VISIBLE else View.GONE
             if (recorder.selector.limitReached) hintText.setText(R.string.scan_keyframe_limit)
             sensorRecorder?.let { updateSensorsText(it) }
         }
@@ -882,6 +901,11 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         ScanCoordinator.state(scan.sessionId, "finalizing")
         sensorsToggle.isEnabled = false
         locationToggle.isEnabled = false
+        torchToggle.isEnabled = false
+        resumeButton.visibility = View.GONE
+        // The GL thread switches the torch off; recording stops with the finalizer.
+        torchWanted = false
+        torchChange.set(true)
         markToggle.isEnabled = false
         marking = false
         pendingTap.set(null)
@@ -1029,6 +1053,8 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
 
     private fun discardPartial(state: String, error: JsonObject?) {
         phase = Phase.DONE
+        torchWanted = false
+        torchToggle.isEnabled = false
         val sessionId = scan.sessionId
         val recorder = recorder
         finalizer.execute {

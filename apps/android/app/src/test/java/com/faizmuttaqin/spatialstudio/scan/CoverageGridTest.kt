@@ -79,6 +79,24 @@ class CoverageGridTest {
         assertEquals(v0 + 1, g.version)
     }
 
+    @Test fun `small floor jitter does not move the floor`() {
+        val g = grid()
+        val v = g.version
+        g.setFloor(0.02f)
+        assertEquals(0f, g.floorY!!, 0f)
+        assertEquals(v, g.version)
+        g.setFloor(0.05f)
+        assertEquals(0.05f, g.floorY!!, 0f)
+    }
+
+    @Test fun `an unchanged extent does not bump the version`() {
+        val g = grid()
+        g.setExtent(setOf(CoverageGrid.key(0, 0)))
+        val v = g.version
+        g.setExtent(setOf(CoverageGrid.key(0, 0)))
+        assertEquals(v, g.version)
+    }
+
     @Test fun `non finite points are ignored`() {
         val g = grid()
         assertFalse(g.addPoint(Float.NaN, 0f, 0f))

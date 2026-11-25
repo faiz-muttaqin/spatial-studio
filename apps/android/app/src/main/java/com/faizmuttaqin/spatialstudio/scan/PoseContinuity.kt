@@ -108,6 +108,12 @@ class PoseContinuity(
     val isSlipped: Boolean get() = anchor != null
     val isStuck: Boolean get() = anchor != null && lastNow - slipNanos >= stuckAfterNanos
 
+    /** The user says the pose is fine here: recording resumes from the current pose. */
+    fun resume() {
+        anchor = null
+        offset = Offset.IDENTITY
+    }
+
     /** Size of the jump seen by the most recent [Slipped] step. */
     var lastJumpMetres = 0f
         private set
@@ -156,7 +162,15 @@ class PoseContinuity(
                 }
             }
         }
-        if (!jump && !gap) return PoseStep.Held
+        if (!jump && !gap) {
+            // Walked back onto the trajectory the scan was built on.
+            if (distance(held, pose) < recoverMetres && angleDegrees(held, pose) < recoverDegrees) {
+                anchor = null
+                offset = Offset.IDENTITY
+                return PoseStep.Recovered
+            }
+            return PoseStep.Held
+        }
         val composed = Offset.between(previous, pose).then(offset)
         if (composed.degrees() < recoverDegrees && composed.displacementAt(held) < recoverMetres) {
             anchor = null

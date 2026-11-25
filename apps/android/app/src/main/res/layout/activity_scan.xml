@@ -81,6 +81,13 @@
             android:textSize="14sp"
             android:textStyle="bold" />
 
+        <Button
+            android:id="@+id/scan_resume"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/scan_resume"
+            android:visibility="gone" />
+
         <TextView
             android:id="@+id/scan_hint"
             android:layout_width="match_parent"

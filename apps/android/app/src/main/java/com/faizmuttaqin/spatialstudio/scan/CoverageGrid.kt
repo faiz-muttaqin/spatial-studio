@@ -38,13 +38,15 @@ class CoverageGrid(
     val coveredCount: Int get() = covered.size
 
     fun setFloor(y: Float) {
-        if (floorY == y) return
+        val current = floorY
+        if (current != null && kotlin.math.abs(current - y) <= FLOOR_JITTER_M) return
         floorY = y
         version++
     }
 
     /** Cells (see [FloorExtent]) of the floor ARCore has found so far. */
     fun setExtent(cells: Set<Long>) {
+        if (cells == extent) return
         extent = cells
         version++
     }
@@ -100,6 +102,7 @@ class CoverageGrid(
     companion object {
         const val CELL_METRES = 0.25f
         const val MIN_POINTS = 3
+        const val FLOOR_JITTER_M = 0.03f
         const val FLOOR_BAND_M = 0.12f
         const val WALL_MIN_HEIGHT_M = 0.4f
         const val WALL_MAX_HEIGHT_M = 2.0f

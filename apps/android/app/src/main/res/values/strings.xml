@@ -24,6 +24,8 @@
     <string name="scan_torch_unsupported">ARCore cannot use the torch on this phone. It stays off.</string>
     <string name="scan_floor_covered">Floor %1$d%% covered (of the floor found so far)</string>
     <string name="scan_guidance_lines">%1$s\n%2$s</string>
+    <string name="scan_torch_failed">ARCore could not switch the torch. It stays off.</string>
+    <string name="scan_resume">Resume recording here</string>
     <string name="scan_floor_waiting">Floor: looking for the floor</string>
     <string name="scan_slow_down">Slow down: moving too fast for sharp photos</string>
     <string name="scan_jump_held">Tracking jumped. Recording is paused: walk back to where you were.</string>
