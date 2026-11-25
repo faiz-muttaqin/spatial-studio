@@ -172,3 +172,47 @@ describe('withGaussianSplatStream', () => {
     expect(() => withGaussianSplatStream(manifest, { ...input, sha256: 'xyz' })).toThrow()
   })
 })
+
+describe('3DGS PLY hardening', () => {
+  const crlf = (bytes: Uint8Array) => {
+    const text = new TextDecoder('latin1').decode(bytes)
+    const end = text.indexOf('end_header\n') + 11
+    const header = text.slice(0, end).replace(/\n/g, '\r\n')
+    const head = new TextEncoder().encode(header)
+    const out = new Uint8Array(head.length + bytes.length - end)
+    out.set(head)
+    out.set(bytes.subarray(end), head.length)
+    return out
+  }
+
+  test('accepts CRLF headers', () => {
+    expect(readSplatPlyHeader(crlf(makeSplatPly([SPLAT]))).splatCount).toBe(1)
+    expect(parseGaussianSplatPly(crlf(makeSplatPly([SPLAT]))).positions[0]).toBe(1)
+  })
+
+  test('requires vertex to be the first element', () => {
+    const text = new TextDecoder('latin1').decode(makeSplatPly([SPLAT]))
+    const moved = text.replace('element vertex', 'element face 0\nelement vertex')
+    expect(() => readSplatPlyHeader(new TextEncoder().encode(moved))).toThrow('first element')
+  })
+
+  test('requires float types for the splat properties', () => {
+    const bytes = makeSplatPly([SPLAT])
+    const text = new TextDecoder('latin1')
+      .decode(bytes)
+      .replace('property float opacity', 'property uchar opacity')
+    expect(() => readSplatPlyHeader(new TextEncoder().encode(text))).toThrow('must be a float')
+  })
+
+  test('a non-finite splat becomes a transparent one instead of poisoning the render', () => {
+    const bytes = makeSplatPly([SPLAT, SPLAT])
+    const header = readSplatPlyHeader(bytes)
+    new DataView(bytes.buffer).setFloat32(header.dataOffset + header.stride, Number.NaN, true)
+    const data = parseGaussianSplatPly(bytes)
+    expect(data.count).toBe(2)
+    expect(data.positions[3]).toBe(0)
+    expect(data.opacities[1]).toBe(0)
+    expect(data.opacities[0]).toBeCloseTo(0.5)
+    expect(data.scales[3]).toBe(1)
+  })
+})

@@ -150,6 +150,31 @@ describe('exportBrushDataset', () => {
     expect(zip.has('images/k2.jpg')).toBe(false)
   })
 
+  test('names an image by its real type and lists one that is not an image', async () => {
+    const { files, node, hashes } = bundle()
+    files.set(hashes[0]!, new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1]))
+    files.set(hashes[1]!, new TextEncoder().encode('not an image'))
+    const result = await exportBrushDataset(node, memoryHost(files))
+    expect(result.skipped).toEqual([{ keyframeId: 'k2', reason: 'image-unsupported' }])
+    const zip = unzip(await collect(result.stream))
+    expect(zip.has('images/k1.png')).toBe(true)
+  })
+
+  test('errors the stream when an image vanishes after the check', async () => {
+    const { files, node, hashes } = bundle()
+    const host = memoryHost(files)
+    let reads = 0
+    const flaky = {
+      size: host.size,
+      read: async (hash: string) => {
+        if (hash === hashes[1]) reads += 1
+        return reads > 1 ? null : host.read(hash)
+      },
+    }
+    const result = await exportBrushDataset(node, flaky)
+    await expect(collect(result.stream)).rejects.toThrow('disappeared')
+  })
+
   test('refuses a node that is not a scan, has no manifest, or whose manifest is not stored', async () => {
     const { files, node } = bundle()
     const host = memoryHost(files)

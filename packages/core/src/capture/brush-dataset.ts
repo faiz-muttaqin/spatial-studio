@@ -14,6 +14,20 @@ export const BRUSH_IMAGE_DIR = 'images'
 export const BRUSH_TRANSFORMS_FILE = 'transforms.json'
 export const BRUSH_POINTS_FILE = 'points.ply'
 
+/**
+ * The `camera_model` values Brush's nerfstudio loader accepts (`resolve_camera_model`, commit
+ * `d43bd1e6b232`). Any other value, `PINHOLE` included, fails on the first frame. A plain pinhole is
+ * `PERSPECTIVE`.
+ */
+export const BRUSH_ACCEPTED_CAMERA_MODELS = [
+  'PERSPECTIVE',
+  'perspective',
+  'OPENCV',
+  'opencv',
+  'OPENCV_FISHEYE',
+  'opencv_fisheye',
+] as const
+
 export type BrushFrame = {
   file_path: string
   transform_matrix: number[][]
@@ -26,7 +40,7 @@ export type BrushFrame = {
 }
 
 export type BrushTransforms = {
-  camera_model: 'PINHOLE'
+  camera_model: 'PERSPECTIVE'
   ply_file_path?: string
   frames: BrushFrame[]
 }
@@ -45,10 +59,12 @@ export type BrushDatasetInput = {
   cloud?: BrushCloudInput | null
   /** The cloud stream's frame transform into the capture world, when it has one. */
   cloudFrame?: readonly number[] | null
+  /** The real file type of each keyframe's image by id; `jpg` when not given. */
+  imageExtensions?: Readonly<Record<string, 'jpg' | 'png' | 'webp'>>
 }
 
 export type BrushImage = {
-  /** Path inside the zip, `images/<name>.jpg`. */
+  /** Path inside the zip, `images/<name>.<jpg|png|webp>`. */
   path: string
   keyframeId: string
   sha256: string
@@ -118,7 +134,7 @@ export function buildBrushDataset(input: BrushDatasetInput): BrushDataset {
     for (let suffix = 2; usedNames.has(stem); suffix += 1)
       stem = `${safeFileStem(keyframe.id)}_${suffix}`
     usedNames.add(stem)
-    const path = `${BRUSH_IMAGE_DIR}/${stem}.jpg`
+    const path = `${BRUSH_IMAGE_DIR}/${stem}.${input.imageExtensions?.[keyframe.id] ?? 'jpg'}`
     const { fx, fy, cx, cy } = keyframe.intrinsics
     frames.push({
       file_path: path,
@@ -135,7 +151,7 @@ export function buildBrushDataset(input: BrushDatasetInput): BrushDataset {
 
   const cloud = input.cloud ? buildPointsPly(input.cloud, input.cloudFrame ?? null) : null
   const transforms: BrushTransforms = {
-    camera_model: 'PINHOLE',
+    camera_model: 'PERSPECTIVE',
     ...(cloud ? { ply_file_path: BRUSH_POINTS_FILE } : {}),
     frames,
   }

@@ -9,8 +9,10 @@ Open the project, select the scan, and in the **Scan evidence** panel under **Ph
 The zip holds:
 
 - `images/<keyframe id>.jpg`: the stored, unrotated keyframes (at most 1920 px on the long edge), unchanged.
-- `transforms.json`: nerfstudio format, `camera_model: "PINHOLE"`, one frame per tracked keyframe with `file_path`, `fl_x`, `fl_y`, `cx`, `cy`, `w`, `h` in pixels of the stored image, and `transform_matrix` as the four rows of the camera-to-world pose (OpenGL axes, ARCore world, Y up, metres). Brush reads that convention directly, so no axis flip is applied.
+- `transforms.json`: nerfstudio format, `camera_model: "PERSPECTIVE"` (Brush rejects `PINHOLE`; a plain pinhole is `PERSPECTIVE`), one frame per tracked keyframe with `file_path`, `fl_x`, `fl_y`, `cx`, `cy`, `w`, `h` in pixels of the stored image, and `transform_matrix` as the four rows of the camera-to-world pose (OpenGL axes, ARCore world, Y up, metres). Brush reads that convention directly, so no axis flip is applied.
 - `points.ply`: the initial cloud, binary PLY with `x y z red green blue`, named in `transforms.json` as `ply_file_path`. It comes from the bundle's `point-cloud` stream, in the same world as the poses, and is mid grey where the bundle has no colours. The coloured dense cloud from `buildDenseCloud` can replace it through the `cloud` option of `exportBrushDataset`; that is not wired to the route yet.
+
+The download link uses the browser's session cookie. A deployment that only sets `PASCAL_SCENE_API_TOKEN` has no cookie, so fetch the zip with `curl -H "Authorization: Bearer $TOKEN" -o dataset.zip <url>` instead. Images keep their real type (`.jpg`, `.png` or `.webp`).
 
 Keyframes that are not tracking, or lack a pose, intrinsics or a stored image, are left out and counted in the `X-Brush-Skipped-Frames` response header. Nothing in the zip identifies a place beyond the images and poses themselves, so treat it like the scan.
 
@@ -28,7 +30,7 @@ Export the result as PLY. Brush keeps the world it was given, so the splat shoul
 
 ## 3. Upload and view
 
-In the same panel choose **Upload trained splat (.ply)**. The file must be a binary little-endian 3DGS PLY of at most 96 MiB. The editor stores it as an artifact (`PUT /api/artifacts/{sha256}` with `X-Artifact-Kind: gaussian-splat`), writes a new manifest with a `gaussian-splat` stream (see [CAPTURE_CONTRACT.md](CAPTURE_CONTRACT.md), "Gaussian splat stream (v1.4)") and points the scan at it. The project autosaves. A **Gaussian splat** checkbox then appears under Layers.
+In the same panel choose **Upload trained splat (.ply)**. The file must be a binary little-endian 3DGS PLY of at most 96 MiB; the server checks the header too. The "Trained with" field (default `brush`) is recorded as the stream's `trainer`. The editor stores it as an artifact (`PUT /api/artifacts/{sha256}` with `X-Artifact-Kind: gaussian-splat`), writes a new manifest with a `gaussian-splat` stream (see [CAPTURE_CONTRACT.md](CAPTURE_CONTRACT.md), "Gaussian splat stream (v1.4)") and points the scan at it. The project autosaves. A **Gaussian splat** checkbox then appears under Layers.
 
 Uploading again replaces the stream; the old artifacts stay in the store.
 

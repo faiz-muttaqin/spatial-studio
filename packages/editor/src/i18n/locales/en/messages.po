@@ -6325,6 +6325,10 @@ msgid "editor.panels.scanEvidence.splatTooLarge"
 msgstr "The file is larger than 96 MiB."
 
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+msgid "editor.panels.scanEvidence.splatTrainer"
+msgstr "Trained with"
+
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 msgid "editor.panels.scanEvidence.splatUploading"
 msgstr "Uploading…"
 

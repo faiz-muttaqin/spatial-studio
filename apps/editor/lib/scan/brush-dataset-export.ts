@@ -45,6 +45,15 @@ export type BrushExport = {
 
 const SHA256_AT_END = /([0-9a-f]{64})(?:[?#].*)?$/
 
+function imageExtension(bytes: Uint8Array): 'jpg' | 'png' | 'webp' | null {
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'jpg'
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'png'
+  const ascii = (at: number, text: string) =>
+    [...text].every((char, index) => bytes[at + index] === char.charCodeAt(0))
+  if (ascii(0, 'RIFF') && ascii(8, 'WEBP')) return 'webp'
+  return null
+}
+
 function shaOf(reference: { uri?: string; sha256?: string }): string | null {
   if (reference.sha256 && /^[0-9a-f]{64}$/.test(reference.sha256)) return reference.sha256
   return reference.uri?.match(SHA256_AT_END)?.[1] ?? null
@@ -117,10 +126,17 @@ export async function exportBrushDataset(
   // A keyframe whose JPEG is not in the store cannot be trained on; it is listed, not dropped.
   const present: RgbKeyframe[] = []
   const missing: Array<{ keyframeId: string; reason: string }> = []
+  const imageExtensions: Record<string, 'jpg' | 'png' | 'webp'> = {}
   for (const keyframe of rgb.data.frames) {
-    const size = await host.size(keyframe.image.sha256)
-    if (size === null) missing.push({ keyframeId: keyframe.id, reason: 'image-missing' })
-    else present.push(keyframe)
+    // Read once here for the file type, so the zip names each file by what it is.
+    const bytes = await host.read(keyframe.image.sha256)
+    const extension = bytes ? imageExtension(bytes) : null
+    if (!bytes) missing.push({ keyframeId: keyframe.id, reason: 'image-missing' })
+    else if (!extension) missing.push({ keyframeId: keyframe.id, reason: 'image-unsupported' })
+    else {
+      imageExtensions[keyframe.id] = extension
+      present.push(keyframe)
+    }
   }
 
   let cloud: BrushCloudInput | null = options.cloud ?? null
@@ -142,6 +158,7 @@ export async function exportBrushDataset(
     keyframeFrame: frameOf('rgb-keyframes'),
     cloud,
     cloudFrame,
+    imageExtensions,
   })
   if (dataset.transforms.frames.length === 0) {
     throw new BrushExportError('no_keyframes', 'No keyframe has a tracked pose and intrinsics.')
@@ -160,8 +177,10 @@ export async function exportBrushDataset(
     if (dataset.pointsPly) yield { name: BRUSH_POINTS_FILE, data: dataset.pointsPly }
     for (const image of dataset.images) {
       const data = await host.read(image.sha256)
-      // Present when checked above; an artifact deleted since then is left out of the zip.
-      if (data) yield { name: image.path, data }
+      // transforms.json already names this file, so a zip without it must not look complete:
+      // erroring the stream makes the download fail instead of ending in a short, valid archive.
+      if (!data) throw new Error(`Image artifact ${image.sha256} disappeared during the export.`)
+      yield { name: image.path, data }
     }
   }
 

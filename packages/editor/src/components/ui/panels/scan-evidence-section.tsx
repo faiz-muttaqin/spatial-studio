@@ -196,6 +196,7 @@ function PhotorealGroup({
   const datasetUrl = useBrushDatasetUrl()
   const updateNode = useScene((state) => state.updateNode)
   const [upload, setUpload] = useState<SplatUpload>({ status: 'idle' })
+  const [trainer, setTrainer] = useState('brush')
   const manifestUrl = node.captureSession.manifestUrl
   const hasKeyframes = (evidence.keyframes?.frames.length ?? 0) > 0
   if (!(hasKeyframes && manifestUrl)) return null
@@ -204,7 +205,9 @@ function PhotorealGroup({
     if (!file) return
     setUpload({ status: 'uploading' })
     try {
-      const result = await attachSplatToManifest(file, manifestUrl)
+      const result = await attachSplatToManifest(file, manifestUrl, {
+        trainer: trainer.trim().slice(0, 64) || undefined,
+      })
       updateNode(node.id, {
         captureSession: { ...node.captureSession, manifestUrl: result.manifestUrl },
       })
@@ -225,6 +228,16 @@ function PhotorealGroup({
           })}
         </a>
       )}
+      <label className="flex flex-col gap-1 text-xs">
+        {i18n._({ id: 'editor.panels.scanEvidence.splatTrainer', message: 'Trained with' })}
+        <input
+          className="rounded border bg-transparent px-1 py-0.5 text-xs"
+          maxLength={64}
+          onChange={(event) => setTrainer(event.target.value)}
+          type="text"
+          value={trainer}
+        />
+      </label>
       <label className="flex flex-col gap-1 text-xs">
         {i18n._({
           id: 'editor.panels.scanEvidence.uploadSplat',

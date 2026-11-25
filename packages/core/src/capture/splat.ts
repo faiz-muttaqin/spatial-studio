@@ -61,6 +61,8 @@ const TYPE_BYTES: Record<string, number> = {
   float64: 8,
 }
 
+const FLOAT_TYPES = new Set(['float', 'float32', 'double', 'float64'])
+
 const REQUIRED_PROPERTIES = [
   'x',
   'y',
@@ -94,28 +96,34 @@ export class SplatPlyError extends Error {
   }
 }
 
-const HEADER_END = 'end_header\n'
+const HEADER_END = /end_header\r?\n/
 const MAX_HEADER_BYTES = 64 * 1024
 
 /** Reads and checks the header of a binary little-endian 3DGS PLY. Throws {@link SplatPlyError}. */
 export function readSplatPlyHeader(bytes: Uint8Array): SplatPlyHeader {
   const head = new TextDecoder('latin1').decode(bytes.subarray(0, MAX_HEADER_BYTES))
-  const end = head.indexOf(HEADER_END)
-  if (!head.startsWith('ply') || end < 0) throw new SplatPlyError('Not a PLY file.')
+  const endMatch = HEADER_END.exec(head)
+  if (!head.startsWith('ply') || !endMatch) throw new SplatPlyError('Not a PLY file.')
+  const end = endMatch.index
   const lines = head.slice(0, end).split(/\r?\n/)
   if (!lines.includes('format binary_little_endian 1.0')) {
     throw new SplatPlyError('Only binary little-endian PLY files are supported.')
   }
   let splatCount = 0
   let element: string | null = null
+  let elements = 0
   const properties: Array<{ name: string; type: string; offset: number }> = []
   let stride = 0
   for (const line of lines) {
     const parts = line.trim().split(/\s+/)
     if (parts[0] === 'element') {
+      elements += 1
       element = parts[1] ?? null
+      // Splat data starts right after the header, so the vertices must come first.
+      if (elements === 1 && element !== 'vertex') {
+        throw new SplatPlyError('The first element must be vertex.')
+      }
       if (element === 'vertex') splatCount = Number(parts[2])
-      else if (splatCount > 0) element = null
     } else if (parts[0] === 'property' && element === 'vertex') {
       if (parts[1] === 'list') throw new SplatPlyError('List properties are not supported.')
       const type = parts[1] ?? ''
@@ -133,10 +141,18 @@ export function readSplatPlyHeader(bytes: Uint8Array): SplatPlyHeader {
   if (missing.length > 0) {
     throw new SplatPlyError(`Not a 3D Gaussian splat; missing ${missing.join(', ')}.`)
   }
+  for (const property of properties) {
+    const needsFloat =
+      (REQUIRED_PROPERTIES as readonly string[]).includes(property.name) ||
+      property.name.startsWith('f_rest_')
+    if (needsFloat && !FLOAT_TYPES.has(property.type)) {
+      throw new SplatPlyError(`Property ${property.name} must be a float, not ${property.type}.`)
+    }
+  }
   const rest = properties.filter((property) => property.name.startsWith('f_rest_')).length
   const shDegree = [0, 9, 24, 45].indexOf(rest)
   if (shDegree < 0) throw new SplatPlyError(`Unexpected number of f_rest properties: ${rest}.`)
-  const dataOffset = end + HEADER_END.length
+  const dataOffset = end + endMatch[0].length
   if (bytes.byteLength < dataOffset + splatCount * stride) {
     throw new SplatPlyError('The file is shorter than its header says.')
   }
@@ -203,25 +219,41 @@ export function parseGaussianSplatPly(
     const source =
       count === header.splatCount ? index : Math.floor((index * header.splatCount) / count)
     const base = header.dataOffset + source * header.stride
-    positions[index * 3] = read('x', base)
-    positions[index * 3 + 1] = read('y', base)
-    positions[index * 3 + 2] = read('z', base)
-    colors[index * 3] = clamp01(0.5 + SH_C0 * read('f_dc_0', base))
-    colors[index * 3 + 1] = clamp01(0.5 + SH_C0 * read('f_dc_1', base))
-    colors[index * 3 + 2] = clamp01(0.5 + SH_C0 * read('f_dc_2', base))
-    opacities[index] = 1 / (1 + Math.exp(-read('opacity', base)))
-    scales[index * 3] = Math.exp(read('scale_0', base))
-    scales[index * 3 + 1] = Math.exp(read('scale_1', base))
-    scales[index * 3 + 2] = Math.exp(read('scale_2', base))
-    const w = read('rot_0', base)
-    const x = read('rot_1', base)
-    const y = read('rot_2', base)
-    const z = read('rot_3', base)
-    const length = Math.hypot(w, x, y, z) || 1
-    rotations[index * 4] = w / length
-    rotations[index * 4 + 1] = x / length
-    rotations[index * 4 + 2] = y / length
-    rotations[index * 4 + 3] = z / length
+    const x = read('x', base)
+    const y = read('y', base)
+    const z = read('z', base)
+    const sx = read('scale_0', base)
+    const sy = read('scale_1', base)
+    const sz = read('scale_2', base)
+    const rw = read('rot_0', base)
+    const rx = read('rot_1', base)
+    const ry = read('rot_2', base)
+    const rz = read('rot_3', base)
+    const dcr = read('f_dc_0', base)
+    const dcg = read('f_dc_1', base)
+    const dcb = read('f_dc_2', base)
+    const raw = read('opacity', base)
+    if (![x, y, z, sx, sy, sz, rw, rx, ry, rz, dcr, dcg, dcb, raw].every(Number.isFinite)) {
+      // A corrupt splat stays in its slot as a fully transparent one at the origin.
+      scales.fill(1, index * 3, index * 3 + 3)
+      rotations[index * 4] = 1
+      continue
+    }
+    positions[index * 3] = x
+    positions[index * 3 + 1] = y
+    positions[index * 3 + 2] = z
+    colors[index * 3] = clamp01(0.5 + SH_C0 * dcr)
+    colors[index * 3 + 1] = clamp01(0.5 + SH_C0 * dcg)
+    colors[index * 3 + 2] = clamp01(0.5 + SH_C0 * dcb)
+    opacities[index] = 1 / (1 + Math.exp(-raw))
+    scales[index * 3] = Math.exp(sx)
+    scales[index * 3 + 1] = Math.exp(sy)
+    scales[index * 3 + 2] = Math.exp(sz)
+    const length = Math.hypot(rw, rx, ry, rz) || 1
+    rotations[index * 4] = rw / length
+    rotations[index * 4 + 1] = rx / length
+    rotations[index * 4 + 2] = ry / length
+    rotations[index * 4 + 3] = rz / length
   }
   return { count, sourceCount: header.splatCount, positions, colors, opacities, scales, rotations }
 }

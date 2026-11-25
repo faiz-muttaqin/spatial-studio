@@ -2,7 +2,7 @@
 
 import { type GaussianSplatData, parseGaussianSplatPly } from '@pascal-app/core/capture'
 import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   cameraProjectionMatrix,
   dot,
@@ -180,6 +180,8 @@ function createSplatObjects(data: GaussianSplatData, textures: SplatTextures) {
     .mul(opacityUniform)
   material.transparent = true
   material.depthWrite = false
+  // The splat is an overlay on the OVERLAY_LAYER like the point cloud: it is drawn over walls and
+  // furniture, never occluded by them, and writes no depth.
   material.depthTest = false
   material.side = DoubleSide
   material.toneMapped = false
@@ -248,6 +250,11 @@ export function CaptureSplatLayer({
   return <LoadedSplat maxSplats={maxSplats} opacity={opacity} url={artifactUrl} />
 }
 
+function buildLayer(data: GaussianSplatData) {
+  const objects = createSplatObjects(data, buildSplatTextures(data))
+  return { ...objects, scratch: createSortScratch(data.count), positions: data.positions }
+}
+
 function LoadedSplat({
   maxSplats,
   opacity,
@@ -259,12 +266,18 @@ function LoadedSplat({
 }) {
   const data = useSplatData(url, maxSplats)
   const invalidate = useThree((state) => state.invalidate)
-  const built = useMemo(() => {
-    if (!data) return null
-    const objects = createSplatObjects(data, buildSplatTextures(data))
-    return { ...objects, scratch: createSortScratch(data.count), positions: data.positions }
+  // GPU objects are made in an effect, not during render, so a discarded or repeated render
+  // (StrictMode, Suspense) never leaks textures and buffers.
+  const [built, setBuilt] = useState<ReturnType<typeof buildLayer> | null>(null)
+  useEffect(() => {
+    if (!data) return
+    const next = buildLayer(data)
+    setBuilt(next)
+    return () => {
+      setBuilt(null)
+      next.dispose()
+    }
   }, [data])
-  useEffect(() => () => built?.dispose(), [built])
   useEffect(() => {
     if (!built) return
     built.opacityUniform.value = Math.min(1, Math.max(0, opacity))

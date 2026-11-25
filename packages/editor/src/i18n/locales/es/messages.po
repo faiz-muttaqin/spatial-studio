@@ -15363,10 +15363,11 @@ msgstr "Cerrar foto"
 msgid "editor.panels.scanEvidence.device"
 msgstr "Dispositivo"
 
-# English: "Download Brush dataset (.zip)"
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-sonnet-5-5
+# English: "Download Brush dataset (.zip)"
+# Source-Hash: 68788f72f02d1842
+# Review: required
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 #, fuzzy
 msgid "editor.panels.scanEvidence.downloadDataset"
@@ -15422,10 +15423,11 @@ msgstr "Modelo 3D"
 msgid "editor.panels.scanEvidence.layer.pointCloud"
 msgstr "Nube de puntos"
 
-# English: "Gaussian splat"
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-sonnet-5-5
+# English: "Gaussian splat"
+# Source-Hash: 304dd23179d91e45
+# Review: required
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 #, fuzzy
 msgid "editor.panels.scanEvidence.layer.splat"
@@ -15551,10 +15553,11 @@ msgstr "{part}: aún no está listo."
 msgid "editor.panels.scanEvidence.photoDialog"
 msgstr "Foto de la captura"
 
-# English: "Photoreal capture"
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-sonnet-5-5
+# English: "Photoreal capture"
+# Source-Hash: 4e9342f662a95727
+# Review: required
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 #, fuzzy
 msgid "editor.panels.scanEvidence.photoreal"
@@ -15710,46 +15713,60 @@ msgstr "Largo"
 msgid "editor.panels.scanEvidence.roomWidth"
 msgstr "Ancho"
 
-# English: "Splat attached ({count} splats)."
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-sonnet-5-5
+# English: "Splat attached ({count} splats)."
+# Source-Hash: f33d15ea7956c64b
+# Review: required
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 #, fuzzy
 msgid "editor.panels.scanEvidence.splatDone"
 msgstr "Splat adjuntado ({count} splats)."
 
-# English: "The splat could not be attached."
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-sonnet-5-5
+# English: "The splat could not be attached."
+# Source-Hash: 9070224792ab9475
+# Review: required
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 #, fuzzy
 msgid "editor.panels.scanEvidence.splatFailed"
 msgstr "No se pudo adjuntar el splat."
 
-# English: "This is not a binary 3D Gaussian splat PLY."
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-sonnet-5-5
+# English: "This is not a binary 3D Gaussian splat PLY."
+# Source-Hash: f2534ebaf313782e
+# Review: required
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 #, fuzzy
 msgid "editor.panels.scanEvidence.splatInvalid"
 msgstr "No es un PLY binario de Gaussian splat 3D."
 
-# English: "The file is larger than 96 MiB."
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-sonnet-5-5
+# English: "The file is larger than 96 MiB."
+# Source-Hash: fa1c6614b0e3c53e
+# Review: required
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 #, fuzzy
 msgid "editor.panels.scanEvidence.splatTooLarge"
 msgstr "El archivo supera los 96 MiB."
 
-# English: "Uploading…"
+# English: "Trained with"
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.splatTrainer"
+msgstr "Entrenado con"
+
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Uploading…"
+# Source-Hash: 756844bbc7a4b1cf
+# Review: required
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 #, fuzzy
 msgid "editor.panels.scanEvidence.splatUploading"
@@ -15825,10 +15842,11 @@ msgstr "Pérdidas de seguimiento"
 msgid "editor.panels.scanEvidence.unavailable"
 msgstr "No se pudieron cargar los datos de captura."
 
-# English: "Upload trained splat (.ply)"
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-sonnet-5-5
+# English: "Upload trained splat (.ply)"
+# Source-Hash: 2ec763e855791550
+# Review: required
 #: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
 #, fuzzy
 msgid "editor.panels.scanEvidence.uploadSplat"

@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test'
+import type { BrushFrame } from './brush-dataset'
 import {
+  BRUSH_ACCEPTED_CAMERA_MODELS,
   buildBrushDataset,
   buildPointsPly,
   matrixFromRows,
@@ -72,7 +74,9 @@ describe('buildBrushDataset', () => {
     })
     expect(matrixFromRows(frame!.transform_matrix)).toEqual(pose)
     expect(dataset.images).toEqual([{ path: 'images/kf_1.jpg', keyframeId: 'kf 1', sha256: SHA }])
-    expect(dataset.transforms.camera_model).toBe('PINHOLE')
+    expect(BRUSH_ACCEPTED_CAMERA_MODELS as readonly string[]).toContain(
+      dataset.transforms.camera_model,
+    )
     expect(dataset.transforms.ply_file_path).toBeUndefined()
   })
 
@@ -240,5 +244,49 @@ describe('projectToKeyframe reprojection', () => {
     expect(hit.u).toBeCloseTo(96)
     expect(hit.v).toBeCloseTo(54)
     expect(hit.depth).toBeCloseTo(2)
+  })
+})
+
+/**
+ * Brush's load path, emulated from `nerfstudio.rs`: `transform_matrix` rows are flattened, read with
+ * `Mat4::from_cols_slice` and transposed (so the rows are the matrix's rows), then
+ * `opengl_c2w_to_pose` negates the Y and Z axis columns to reach a computer-vision camera
+ * (+X right, +Y down, +Z forward). A view projects a world point as `u = fx x / z + cx`,
+ * `v = fy y / z + cy` in that camera.
+ */
+function brushProject(frame: BrushFrame, point: [number, number, number]) {
+  const flat = frame.transform_matrix.flat()
+  const m = (row: number, column: number) => flat[row * 4 + column]!
+  // Axis columns 1 and 2 negated; the rotation block is orthonormal, so the inverse is a transpose.
+  const axis = (column: number, sign: number) => [0, 1, 2].map((row) => sign * m(row, column))
+  const [ax, ay, az] = [axis(0, 1), axis(1, -1), axis(2, -1)]
+  const d = [point[0] - m(0, 3), point[1] - m(1, 3), point[2] - m(2, 3)]
+  const dot = (a: number[]) => a[0]! * d[0]! + a[1]! * d[1]! + a[2]! * d[2]!
+  const [x, y, z] = [dot(ax!), dot(ay!), dot(az!)]
+  return { u: (frame.fl_x * x) / z + frame.cx, v: (frame.fl_y * y) / z + frame.cy, z }
+}
+
+describe('agreement with Brush load path', () => {
+  test('a known world point lands where Brush projects it, and where projectToKeyframe does', () => {
+    const intrinsics = { fx: 1500, fy: 1490, cx: 950, cy: 530 }
+    const pose = poseOf(0.6, [0.3, 1.4, -0.2])
+    const dataset = buildBrushDataset({
+      keyframes: [keyframe('a', pose, { intrinsics, width: 1920, height: 1080 })],
+    })
+    const frame = dataset.transforms.frames[0]!
+    // A point 3 m ahead of the camera, 0.4 m to its right and 0.25 m above its axis.
+    const right = [pose[0]!, pose[1]!, pose[2]!]
+    const up = [pose[4]!, pose[5]!, pose[6]!]
+    const back = [pose[8]!, pose[9]!, pose[10]!]
+    const point: [number, number, number] = [0, 1, 2].map(
+      (i) => pose[12 + i]! + 0.4 * right[i]! + 0.25 * up[i]! - 3 * back[i]!,
+    ) as [number, number, number]
+    const brush = brushProject(frame, point)
+    expect(brush.z).toBeCloseTo(3)
+    expect(brush.u).toBeCloseTo(950 + (1500 * 0.4) / 3)
+    expect(brush.v).toBeCloseTo(530 - (1490 * 0.25) / 3)
+    const ours = projectToKeyframe(point, pose, intrinsics, 1920, 1080)!
+    expect(ours.u).toBeCloseTo(brush.u)
+    expect(ours.v).toBeCloseTo(brush.v)
   })
 })

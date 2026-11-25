@@ -19,6 +19,24 @@ export async function readBodyWithin(request: Request, limit: number): Promise<U
   if (!request.body) return new Uint8Array(0)
 
   const reader = request.body.getReader()
+  // With an honest Content-Length the body is written into one buffer of that size, so a 96 MiB
+  // splat is held once, not as chunks plus a joined copy.
+  const known = declared !== null && Number.isInteger(Number(declared)) ? Number(declared) : null
+  if (known !== null) {
+    const buffer = new Uint8Array(known)
+    let filled = 0
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (filled + value.byteLength > known) {
+        await reader.cancel()
+        return null
+      }
+      buffer.set(value, filled)
+      filled += value.byteLength
+    }
+    return filled === known ? buffer : buffer.slice(0, filled)
+  }
   const chunks: Uint8Array[] = []
   let total = 0
   for (;;) {
