@@ -8,7 +8,7 @@ import { InMemoryTransport, McpServer } from '@modelcontextprotocol/server'
 import { ScanNode, WallNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '@pascal-app/mcp/bridge'
 import { DiskArtifactStore } from '../storage/disk-artifact-store'
-import { registerScanSemanticsTools } from './scan-semantics-tools'
+import { placeRotation, registerScanSemanticsTools } from './scan-semantics-tools'
 
 // Synthetic bundle only: a 5 x 4 m room with a door in the north wall, ray-cast into raw depth.
 
@@ -147,8 +147,8 @@ async function put(value: unknown): Promise<string> {
 const ref = (sha256: string) => ({ uri: `/api/artifacts/${sha256}`, sha256 })
 
 const VIEWS = [
-  { id: 'kf0', pose: pose(1.5, 2.5, FACING_NORTH) },
-  { id: 'kf1', pose: pose(2.6, 3.4, FACING_NORTH) },
+  { id: 'kf0', pose: pose(1.5, 3.8, FACING_NORTH) },
+  { id: 'kf1', pose: pose(2.7, 3.8, FACING_NORTH) },
   { id: 'kf2', pose: pose(4, 3.2, Math.PI / 2) },
 ]
 
@@ -418,5 +418,36 @@ describe('lift_scan_semantics', () => {
       })
       .catch((error: unknown) => ({ isError: true, error }))
     expect((tooMany as { isError?: boolean }).isError).toBe(true)
+  })
+})
+
+describe('place_items rotation', () => {
+  test('is the negated yaw, because a positive Y rotation turns +X toward -Z', () => {
+    expect(placeRotation(30)).toBe(-30)
+    expect(placeRotation(0)).toBe(0)
+    expect(placeRotation(170)).toBe(-170)
+    expect(placeRotation(-170)).toBe(170)
+    expect(placeRotation(180)).toBe(180)
+  })
+})
+
+describe('input validation', () => {
+  test('refuses a box with zero or negative size, or a non-finite coordinate', async () => {
+    const client = await connect(manifest, true)
+    const attempt = (box2d: unknown[]) =>
+      client
+        .callTool({
+          name: 'lift_scan_semantics',
+          arguments: {
+            scanId: 'scan_semantic',
+            detections: [{ frameId: 'kf0', label: 'door', kind: 'door', box2d, confidence: 0.5 }],
+          },
+        })
+        .then((result) => result.isError === true)
+        .catch(() => true)
+    expect(await attempt([100, 100, 100, 200])).toBe(true)
+    expect(await attempt([300, 100, 200, 200])).toBe(true)
+    expect(await attempt([100, 300, 200, 200])).toBe(true)
+    expect(await attempt([100, 100, 200, 200])).toBe(false)
   })
 })

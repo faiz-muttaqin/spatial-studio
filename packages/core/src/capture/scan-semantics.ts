@@ -53,7 +53,9 @@ export type LiftFrame = {
   id: string
   imageWidth: number
   imageHeight: number
-  /** The depth frame with the pose of that keyframe. */
+  /** Intrinsics of the RGB image, in its own pixels. Boxes are mapped to depth through these. */
+  rgbIntrinsics: CameraIntrinsics
+  /** The depth frame with the pose of that keyframe; its own intrinsics may differ in field of view. */
   depth: DepthFrameInput
 }
 
@@ -71,17 +73,33 @@ const DEFAULT_FLOOR_Y = 0
 const DEFAULT_MIN_CONFIDENCE = 64
 const MAX_DEPTH_MM = 10_000
 /** Fewer valid depth pixels than this in a box (or its ring) cannot place anything. */
-const MIN_SAMPLES = 4
+const MIN_SAMPLES = 12
 /** A box whose valid depth share is below this sits over a depth hole. */
-const MIN_VALID_FRACTION = 0.1
+const MIN_VALID_FRACTION = 0.3
+/** Wall evidence thresholds: past these an opening is flagged doubtful. */
+const MAX_WALL_OFFSET = 0.15
+const MIN_RING_SUPPORT = 0.6
+/** Least a furniture box may be refused as a whole-frame or runaway box. */
+const MAX_BOX_AREA_FRACTION = 0.6
+/** Furniture boxes lifted per frame; the rest are refused. */
+const MAX_FURNITURE_PER_FRAME = 20
+const MAX_BOX_PIXELS = 2500
+const FIT_POINTS = 600
+/** Two views confirm each other only from this far apart or this much turned. */
+const MIN_BASELINE = 0.5
+/** Padding added to furniture footprints when comparing views, metres. */
+const MATCH_PAD = 0.4
+const MIN_TURN = (15 * Math.PI) / 180
 /** Points further than this from a wall plane do not belong to it. */
 const WALL_SNAP_METRES = 0.3
 const WALL_SUPPORT_FRACTION = 0.4
 /** Furniture points this close to a wall plane or the floor are surface, not furniture. */
-const SURFACE_MARGIN = 0.08
+const SURFACE_MARGIN = 0.06
+/** A base within this of the floor stands on it; higher is flagged floating. */
+const FLOOR_CONTACT = 0.15
 /** Depth behind the nearest part of a box that still counts as the object. */
-const OBJECT_DEPTH_SLACK = 1.2
-const MAX_POINTS = 1500
+const OBJECT_DEPTH_SLACK = 0.6
+const MAX_POINTS = 600
 const WALL_YAW_SNAP = (10 * Math.PI) / 180
 
 const round = (value: number, places = 3): number => {
@@ -147,13 +165,16 @@ function inWallFrame(frame: WallFrame, x: number, z: number): { d: number; s: nu
 function rayHitsWall(
   frame: WallFrame,
   ray: { origin: Vec3; dir: Vec3 },
+  /** Shift of the plane along the wall normal, metres: where depth says the wall really is. */
+  offset = 0,
 ): { s: number; y: number } | null {
   const denom = ray.dir[0] * frame.n[0] + ray.dir[2] * frame.n[1]
   const norm = Math.hypot(ray.dir[0], ray.dir[1], ray.dir[2])
   if (Math.abs(denom) / norm < 0.12) return null
   const t =
     ((frame.wall.a[0] - ray.origin[0]) * frame.n[0] +
-      (frame.wall.a[1] - ray.origin[2]) * frame.n[1]) /
+      (frame.wall.a[1] - ray.origin[2]) * frame.n[1] +
+      offset) /
     denom
   if (t <= 0) return null
   const x = ray.origin[0] + t * ray.dir[0]
@@ -305,6 +326,8 @@ export type UnliftReason =
   | 'frame_not_found'
   | 'no_walls'
   | 'box_outside_image'
+  | 'box_too_large'
+  | 'too_many_boxes_in_frame'
   | 'no_depth'
   | 'no_wall_near'
   | 'no_object_points'
@@ -320,22 +343,35 @@ export type LiftedOpening = {
   sill: number
   /** True when the opening would reach past either end of the wall. */
   beyondWallEnds: boolean
-  /** Median signed offset of the depth points beside the box from the wall line, metres. */
+  /** Median signed offset of the depth points beside the box from the plan wall line, metres. Rays are cast at the offset plane. */
   wallOffset: number
+  /** Share of the usable depth points beside the box that lie on the wall. */
+  ringSupport: number
+  /** Share of the depth pixels around the box edges that were usable. */
+  validFraction: number
   ringSamples: number
+  /** Reasons to trust it less; any one keeps a result `uncertain`. */
+  doubts: string[]
 }
 
 export type LiftedBox = {
   /** Footprint centre `[x, z]` in level metres. */
   centre: Vec2
+  /** Lowest seen surface, level Y; snapped to the floor when within 0.15 m of it. */
   baseY: number
+  topY: number
   /** Radians about +Y of the width axis, measured from +X toward +Z, in `[0, pi)`. */
   yaw: number
   width: number
   depth: number
+  /** Top minus base. */
   height: number
+  /** True when the lowest seen surface is well above the floor (wall-mounted, or its legs unseen). */
+  floating: boolean
   yawSnappedToWall: string | null
   pointCount: number
+  validFraction: number
+  doubts: string[]
 }
 
 export type LiftOutcome =
@@ -350,7 +386,12 @@ export type LiftOutcome =
       points?: undefined
     }
 
-export type LiftedDetection = { index: number; detection: SemanticDetection } & LiftOutcome
+export type LiftedDetection = {
+  index: number
+  detection: SemanticDetection
+  /** Where the camera stood and which way it looked (level `[x, z]`, radians). */
+  view?: { position: Vec2; heading: number }
+} & LiftOutcome
 
 type DepthSamples = {
   points: Vec3[]
@@ -390,26 +431,64 @@ function depthPoints(
 }
 
 type DepthBox = { x0: number; y0: number; x1: number; y1: number }
+type RgbBox = { left: number; top: number; right: number; bottom: number; truncated: boolean }
 
-function depthBox(frame: LiftFrame, box: SemanticDetection['box2d']): DepthBox | null {
-  const sx = frame.depth.width / frame.imageWidth
-  const sy = frame.depth.height / frame.imageHeight
-  const left = Math.max(0, Math.min(box[0], box[2]))
-  const right = Math.min(frame.imageWidth, Math.max(box[0], box[2]))
-  const top = Math.max(0, Math.min(box[1], box[3]))
-  const bottom = Math.min(frame.imageHeight, Math.max(box[1], box[3]))
-  if (right - left < 2 || bottom - top < 2) return null
-  const x0 = Math.min(frame.depth.width - 1, Math.floor(left * sx))
-  const y0 = Math.min(frame.depth.height - 1, Math.floor(top * sy))
-  const x1 = Math.max(x0, Math.min(frame.depth.width - 1, Math.ceil(right * sx) - 1))
-  const y1 = Math.max(y0, Math.min(frame.depth.height - 1, Math.ceil(bottom * sy) - 1))
+/** The box clamped to the image, and whether it touched the image edge. */
+function clampRgbBox(frame: LiftFrame, box: SemanticDetection['box2d']): RgbBox | null {
+  const raw = {
+    left: Math.min(box[0], box[2]),
+    right: Math.max(box[0], box[2]),
+    top: Math.min(box[1], box[3]),
+    bottom: Math.max(box[1], box[3]),
+  }
+  const left = Math.max(0, raw.left)
+  const right = Math.min(frame.imageWidth, raw.right)
+  const top = Math.max(0, raw.top)
+  const bottom = Math.min(frame.imageHeight, raw.bottom)
+  if (!(right - left >= 2) || !(bottom - top >= 2)) return null
+  const edge = 2
+  return {
+    left,
+    right,
+    top,
+    bottom,
+    truncated:
+      raw.left <= edge ||
+      raw.top <= edge ||
+      raw.right >= frame.imageWidth - edge ||
+      raw.bottom >= frame.imageHeight - edge,
+  }
+}
+
+/**
+ * The depth pixels a box covers. RGB and depth can have different fields of view, so corners go
+ * through normalised rays: u_d = cx_d + fx_d * (u - cx_rgb) / fx_rgb, not a plain size ratio.
+ */
+function depthBox(frame: LiftFrame, box: RgbBox): DepthBox | null {
+  const k = frame.rgbIntrinsics
+  const d = frame.depth.intrinsics
+  const toU = (u: number) => d.cx + (d.fx * (u - k.cx)) / k.fx
+  const toV = (v: number) => d.cy + (d.fy * (v - k.cy)) / k.fy
+  const u0 = toU(box.left)
+  const u1 = toU(box.right)
+  const v0 = toV(box.top)
+  const v1 = toV(box.bottom)
+  const w = frame.depth.width
+  const h = frame.depth.height
+  if (u1 <= 0 || v1 <= 0 || u0 >= w || v0 >= h) return null
+  const x0 = Math.max(0, Math.floor(u0))
+  const y0 = Math.max(0, Math.floor(v0))
+  const x1 = Math.min(w - 1, Math.max(x0, Math.ceil(u1) - 1))
+  const y1 = Math.min(h - 1, Math.max(y0, Math.ceil(v1) - 1))
   return { x0, y0, x1, y1 }
 }
 
 function boxPixels(box: DepthBox): Array<[number, number]> {
+  const count = (box.x1 - box.x0 + 1) * (box.y1 - box.y0 + 1)
+  const step = Math.max(1, Math.ceil(Math.sqrt(count / MAX_BOX_PIXELS)))
   const out: Array<[number, number]> = []
-  for (let y = box.y0; y <= box.y1; y += 1)
-    for (let x = box.x0; x <= box.x1; x += 1) out.push([x, y])
+  for (let y = box.y0; y <= box.y1; y += step)
+    for (let x = box.x0; x <= box.x1; x += step) out.push([x, y])
   return out
 }
 
@@ -449,6 +528,7 @@ function thin<T>(items: readonly T[], max: number): T[] {
 function liftOpening(
   detection: SemanticDetection,
   frame: LiftFrame,
+  rgb: RgbBox,
   box: DepthBox,
   walls: WallFrame[],
   options: SemanticsOptions,
@@ -459,7 +539,7 @@ function liftOpening(
     return {
       ok: false,
       reason: 'no_depth',
-      detail: `Only ${ring.points.length} of ${ring.total} depth pixels around the box edges are usable, so the wall beside it was not seen.`,
+      detail: `Only ${ring.points.length} of ${ring.total} depth pixels around the box edges are usable (at least ${MIN_SAMPLES} needed), so the wall beside it was not seen.`,
     }
   }
   // The wall that most of the edge points lie on.
@@ -482,17 +562,13 @@ function liftOpening(
       detail: `No known wall lies within ${WALL_SNAP_METRES} m of the depth points beside the box (best support ${round(best?.support ?? 0, 2)}).`,
     }
   }
-  const sx = frame.depth.width / frame.imageWidth
-  const sy = frame.depth.height / frame.imageHeight
-  const left = Math.min(detection.box2d[0], detection.box2d[2])
-  const right = Math.max(detection.box2d[0], detection.box2d[2])
-  const top = Math.min(detection.box2d[1], detection.box2d[3])
-  const bottom = Math.max(detection.box2d[1], detection.box2d[3])
   const basis = cameraBasis(frame.depth.pose, options.transform)
+  // Rays use the RGB intrinsics the box was drawn in, and meet the plane depth puts the wall on.
   const cast = (u: number, v: number) =>
-    rayHitsWall(best!.wall, rayThrough(basis, frame.depth.intrinsics, u * sx, v * sy))
+    rayHitsWall(best!.wall, rayThrough(basis, frame.rgbIntrinsics, u, v), best!.offset)
   // Corners and edge midpoints, so a photo in sensor orientation (rolled a quarter turn) works too:
   // width is the extent along the wall and height the extent in Y, whichever way the image runs.
+  const { left, right, top, bottom } = rgb
   const midU = (left + right) / 2
   const midV = (top + bottom) / 2
   const hits = [
@@ -521,6 +597,22 @@ function liftOpening(
   let sill = Math.min(...up) - floorY
   // A door whose bottom edge is within a few centimetres of the floor stands on it.
   if (detection.kind !== 'window' && sill < 0.1) sill = 0
+  const validFraction = ring.points.length / ring.total
+  const doubts: string[] = []
+  if (Math.abs(best.offset) > MAX_WALL_OFFSET) {
+    doubts.push(
+      `depth puts the wall ${round(Math.abs(best.offset), 2)} m from the plan wall, so the plan wall may have drifted`,
+    )
+  }
+  if (best.support < MIN_RING_SUPPORT) {
+    doubts.push(
+      `only ${Math.round(best.support * 100)}% of the depth beside the box lies on the wall`,
+    )
+  }
+  if (validFraction < MIN_VALID_FRACTION) {
+    doubts.push(`only ${Math.round(validFraction * 100)}% of the pixels around the box had depth`)
+  }
+  if (rgb.truncated) doubts.push('the box touches the image edge, so the opening may be cut off')
   return {
     ok: true,
     opening: {
@@ -531,40 +623,50 @@ function liftOpening(
       sill: round(Math.max(0, sill)),
       beyondWallEnds: centre - width / 2 < -0.05 || centre + width / 2 > best.wall.length + 0.05,
       wallOffset: round(best.offset),
+      ringSupport: round(best.support, 2),
+      validFraction: round(validFraction, 2),
       ringSamples: ring.points.length,
+      doubts,
     },
   }
 }
 
 /**
  * Smallest-area yawed rectangle around the footprint, on trimmed extents (3rd to 97th percentile)
- * so stray points do not stretch it. Yaw snaps to a wall direction when within ten degrees.
+ * so stray points do not stretch it. A coarse 5 degree search is refined to 1 degree; points are
+ * thinned first, so cost does not grow with the box. Yaw snaps to a wall within ten degrees.
  */
 export function fitOrientedBox(
-  points: readonly Vec3[],
+  input: readonly Vec3[],
   walls: readonly SemanticWall[],
   floorY = DEFAULT_FLOOR_Y,
 ): LiftedBox | null {
-  if (points.length < MIN_SAMPLES) return null
+  if (input.length < MIN_SAMPLES) return null
+  const points = thin(input, FIT_POINTS)
   const extent = (yaw: number) => {
     const c = Math.cos(yaw)
     const s = Math.sin(yaw)
-    const along = sortNumbers(points.map((p) => p[0] * c + p[2] * s))
-    const across = sortNumbers(points.map((p) => -p[0] * s + p[2] * c))
-    const a0 = percentile(along, 0.03)
-    const a1 = percentile(along, 0.97)
-    const b0 = percentile(across, 0.03)
-    const b1 = percentile(across, 0.97)
+    const along = Float64Array.from(points, (p) => p[0] * c + p[2] * s).sort()
+    const across = Float64Array.from(points, (p) => -p[0] * s + p[2] * c).sort()
+    const a0 = percentile(along as unknown as number[], 0.03)
+    const a1 = percentile(along as unknown as number[], 0.97)
+    const b0 = percentile(across as unknown as number[], 0.03)
+    const b1 = percentile(across as unknown as number[], 0.97)
     return { a0, a1, b0, b1, area: (a1 - a0) * (b1 - b0) }
   }
   let yaw = 0
   let fit = extent(0)
-  for (let degrees = 1; degrees < 90; degrees += 1) {
+  const consider = (degrees: number) => {
     const candidate = extent((degrees * Math.PI) / 180)
     if (candidate.area < fit.area - 1e-9) {
       fit = candidate
       yaw = (degrees * Math.PI) / 180
     }
+  }
+  for (let degrees = 5; degrees < 90; degrees += 5) consider(degrees)
+  const coarse = Math.round((yaw * 180) / Math.PI)
+  for (let degrees = coarse - 4; degrees <= coarse + 4; degrees += 1) {
+    if (degrees !== coarse) consider(degrees)
   }
   let snapped: string | null = null
   let bestTurn = WALL_YAW_SNAP
@@ -592,41 +694,60 @@ export function fitOrientedBox(
     yaw += Math.PI / 2
   }
   yaw = ((yaw % Math.PI) + Math.PI) % Math.PI
-  const top = percentile(sortNumbers(points.map((p) => p[1])), 0.97)
+  const heights = sortNumbers(points.map((p) => p[1]))
+  const top = percentile(heights, 0.97)
+  let base = percentile(heights, 0.03)
+  const floating = base - floorY > FLOOR_CONTACT
+  if (!floating) base = floorY
   return {
     centre: [round(centre[0]), round(centre[1])],
-    baseY: round(floorY),
+    baseY: round(base),
+    topY: round(top),
     yaw: round(yaw, 4),
     width: round(width),
     depth: round(depth),
-    height: round(Math.max(0.05, top - floorY)),
+    height: round(Math.max(0.05, top - base)),
+    floating,
     yawSnappedToWall: snapped,
-    pointCount: points.length,
+    pointCount: input.length,
+    validFraction: 1,
+    doubts: [],
   }
+}
+
+/** The nearest depth that a real share of the samples sit at, so stray near pixels do not set it. */
+function nearDepth(depths: readonly number[]): number {
+  const bins = new Map<number, number>()
+  for (const d of depths) bins.set(Math.floor(d * 10), (bins.get(Math.floor(d * 10)) ?? 0) + 1)
+  const need = 0.12 * depths.length
+  for (const bin of [...bins.keys()].sort((a, b) => a - b)) {
+    if ((bins.get(bin) ?? 0) + (bins.get(bin + 1) ?? 0) >= need) return bin / 10
+  }
+  return percentile(sortNumbers(depths), 0.2)
 }
 
 function liftFurniture(
   frame: LiftFrame,
+  rgb: RgbBox,
   box: DepthBox,
   walls: WallFrame[],
   options: SemanticsOptions,
 ): LiftOutcome {
   const floorY = options.floorY ?? DEFAULT_FLOOR_Y
   const samples = depthPoints(frame, options, boxPixels(box))
-  if (
-    samples.points.length < MIN_SAMPLES ||
-    samples.points.length / samples.total < MIN_VALID_FRACTION
-  ) {
+  const validFraction = samples.total === 0 ? 0 : samples.points.length / samples.total
+  if (samples.points.length < MIN_SAMPLES || validFraction < MIN_VALID_FRACTION) {
     return {
       ok: false,
       reason: 'no_depth',
-      detail: `${samples.points.length} of ${samples.total} depth pixels in the box are usable: the box sits over a depth hole (dark, shiny or glass surface, or out of range).`,
+      detail: `${samples.points.length} of ${samples.total} depth pixels in the box are usable (at least ${MIN_SAMPLES} and ${Math.round(MIN_VALID_FRACTION * 100)}% needed): the box sits over a depth hole (dark, shiny or glass surface, or out of range).`,
     }
   }
-  // Keep what is near the camera end of the box, then drop wall and floor surface.
-  const nearest = percentile(sortNumbers(samples.depths), 0.2)
+  // The dominant near depth cluster is the object; drop floor and wall surface.
+  const near = nearDepth(samples.depths)
   const kept = samples.points.filter((point, index) => {
-    if (samples.depths[index]! > nearest + OBJECT_DEPTH_SLACK) return false
+    const d = samples.depths[index]!
+    if (d > near + OBJECT_DEPTH_SLACK || d < near - 0.15) return false
     if (point[1] < floorY + SURFACE_MARGIN) return false
     return !walls.some((wall) => Math.abs(inWallFrame(wall, point[0], point[2]).d) < SURFACE_MARGIN)
   })
@@ -634,7 +755,7 @@ function liftFurniture(
     return {
       ok: false,
       reason: 'no_object_points',
-      detail: 'Everything in the box was floor, wall surface or far behind the object.',
+      detail: 'Too few points were left after dropping floor, wall surface and far background.',
     }
   }
   const fit = fitOrientedBox(
@@ -645,14 +766,16 @@ function liftFurniture(
   if (!fit) {
     return { ok: false, reason: 'no_object_points', detail: 'Too few points to fit a box.' }
   }
+  fit.validFraction = round(validFraction, 2)
+  if (rgb.truncated) fit.doubts.push('the box touches the image edge, so the object may be cut off')
   return { ok: true, box: fit, points: thin(kept, MAX_POINTS) }
 }
 
 /**
  * Lifts each detection with its keyframe's raw depth. Doors and windows snap to the wall most of
  * the depth points around the box edges lie on, and take their extent from the viewing rays at the
- * box edges meeting that wall; furniture gets an oriented box from the depth points inside the box.
- * A detection that cannot be lifted says why instead of guessing.
+ * box edges meeting the plane depth puts that wall on; furniture gets an oriented box from the
+ * depth points inside the box. A detection that cannot be lifted says why instead of guessing.
  */
 export function liftDetections(
   detections: readonly SemanticDetection[],
@@ -662,6 +785,7 @@ export function liftDetections(
 ): LiftedDetection[] {
   const byId = new Map(frames.map((frame) => [frame.id, frame]))
   const wallFrames = walls.map(wallFrame).filter((frame): frame is WallFrame => frame !== null)
+  const furnitureInFrame = new Map<string, number>()
   return detections.map((detection, index) => {
     const base = { index, detection }
     const frame = byId.get(detection.frameId)
@@ -673,28 +797,45 @@ export function liftDetections(
         detail: `No depth for keyframe ${detection.frameId}.`,
       }
     }
-    const box = depthBox(frame, detection.box2d)
-    if (!box) {
-      return {
-        ...base,
-        ok: false as const,
-        reason: 'box_outside_image' as const,
-        detail: 'The box is empty or outside the image.',
-      }
-    }
+    const basis = cameraBasis(frame.depth.pose, options.transform)
+    const heading = Math.atan2(-basis.back[2], -basis.back[0])
+    const view = { position: [basis.origin[0], basis.origin[2]] as Vec2, heading }
+    const fail = (reason: UnliftReason, detail: string) => ({
+      ...base,
+      view,
+      ok: false as const,
+      reason,
+      detail,
+    })
+    const rgb = clampRgbBox(frame, detection.box2d)
+    const box = rgb ? depthBox(frame, rgb) : null
+    if (!rgb || !box) return fail('box_outside_image', 'The box is empty or outside the image.')
     if (detection.kind !== 'furniture' && wallFrames.length === 0) {
-      return {
-        ...base,
-        ok: false as const,
-        reason: 'no_walls' as const,
-        detail: 'Doors and windows need walls to snap to.',
+      return fail('no_walls', 'Doors and windows need walls to snap to.')
+    }
+    if (detection.kind === 'furniture') {
+      const area =
+        ((rgb.right - rgb.left) * (rgb.bottom - rgb.top)) / (frame.imageWidth * frame.imageHeight)
+      if (area > MAX_BOX_AREA_FRACTION) {
+        return fail(
+          'box_too_large',
+          `The box covers ${Math.round(area * 100)}% of the image; a piece of furniture is boxed tighter than that.`,
+        )
+      }
+      const used = (furnitureInFrame.get(frame.id) ?? 0) + 1
+      furnitureInFrame.set(frame.id, used)
+      if (used > MAX_FURNITURE_PER_FRAME) {
+        return fail(
+          'too_many_boxes_in_frame',
+          `At most ${MAX_FURNITURE_PER_FRAME} furniture boxes are lifted per keyframe.`,
+        )
       }
     }
     const lifted =
       detection.kind === 'furniture'
-        ? liftFurniture(frame, box, wallFrames, options)
-        : liftOpening(detection, frame, box, wallFrames, options)
-    return { ...base, ...lifted } as LiftedDetection
+        ? liftFurniture(frame, rgb, box, wallFrames, options)
+        : liftOpening(detection, frame, rgb, box, wallFrames, options)
+    return { ...base, view, ...lifted } as LiftedDetection
   })
 }
 
@@ -707,12 +848,15 @@ export type SemanticStatus = 'confirmed' | 'uncertain'
 type Common = {
   id: string
   label: string
-  /** Distinct keyframes that saw it. Two or more is `confirmed`. */
+  /** Distinct keyframes that saw it. */
   viewCount: number
+  /** `confirmed` needs two sound views from different positions or headings; else `uncertain`. */
   status: SemanticStatus
-  /** Mean detection confidence, times 0.6 when only one view saw it. Not an accuracy in metres. */
+  /** Mean detection confidence, weighted by usable depth, times 0.6 unless confirmed. Not an accuracy in metres. */
   confidence: number
   evidenceFrameIds: string[]
+  /** Why it is less trustworthy, from every member. */
+  doubts: string[]
   /** Always `estimate`: a draft for a person to verify on site. */
   basis: 'estimate'
 }
@@ -728,12 +872,18 @@ export type SemanticOpening = Common & {
   sill: number
   centre: Vec3
   beyondWallEnds: boolean
+  /** Median offset of depth from the plan wall, metres. */
+  wallOffset: number
 }
 
 export type SemanticFurniture = Common & {
   kind: 'furniture'
   centre: Vec2
+  /** Lowest seen surface, level Y. */
   baseY: number
+  topY: number
+  /** True when the lowest seen surface is well above the floor. */
+  floatingBase: boolean
   yawDegrees: number
   size: { width: number; depth: number; height: number }
   yawSnappedToWall: string | null
@@ -752,64 +902,200 @@ export type SemanticsResult = {
   }>
 }
 
-const normalise = (label: string) => label.trim().toLowerCase().replace(/\s+/g, ' ')
+const SYNONYMS: Record<string, string> = {
+  couch: 'sofa',
+  settee: 'sofa',
+  television: 'tv',
+  'tv screen': 'tv',
+  armchair: 'armchair',
+  'arm chair': 'armchair',
+}
+const normalise = (label: string) => {
+  const clean = label.trim().toLowerCase().replace(/\s+/g, ' ')
+  return SYNONYMS[clean] ?? clean
+}
+/** A door and a leafless opening at the same spot are one thing. */
+const openingFamily = (kind: SemanticKind) =>
+  kind === 'door' || kind === 'opening' ? 'door' : kind
 
-type Cluster = {
-  members: LiftedDetection[]
+type Cluster = { members: Array<LiftedDetection & { ok: true }> }
+
+function corners(box: LiftedBox): Vec2[] {
+  const c = Math.cos(box.yaw)
+  const s = Math.sin(box.yaw)
+  const hw = box.width / 2
+  const hd = box.depth / 2
+  return (
+    [
+      [-hw, -hd],
+      [hw, -hd],
+      [hw, hd],
+      [-hw, hd],
+    ] as Vec2[]
+  ).map(([a, b]) => [box.centre[0] + a * c - b * s, box.centre[1] + a * s + b * c])
 }
 
-function matches(cluster: Cluster, candidate: LiftedDetection & { ok: true }): boolean {
-  const seed = cluster.members[0]!
-  if (!seed.ok || seed.detection.kind !== candidate.detection.kind) return false
-  if (seed.opening && candidate.opening) {
-    if (seed.opening.wallId !== candidate.opening.wallId) return false
-    const gap = Math.abs(seed.opening.positionAlongWall - candidate.opening.positionAlongWall)
-    return gap < Math.max(0.4, 0.5 * Math.min(seed.opening.width, candidate.opening.width))
+function polygonArea(points: readonly Vec2[]): number {
+  let sum = 0
+  for (let i = 0; i < points.length; i += 1) {
+    const [x1, z1] = points[i]!
+    const [x2, z2] = points[(i + 1) % points.length]!
+    sum += x1 * z2 - x2 * z1
   }
-  if (seed.box && candidate.box) {
-    if (normalise(seed.detection.label) !== normalise(candidate.detection.label)) return false
+  return Math.abs(sum) / 2
+}
+
+/** Convex polygon clip (Sutherland-Hodgman) for two counter-clockwise or clockwise rectangles. */
+function clip(subject: Vec2[], clipper: Vec2[]): Vec2[] {
+  const orient = (() => {
+    let sum = 0
+    for (let i = 0; i < clipper.length; i += 1) {
+      const [x1, z1] = clipper[i]!
+      const [x2, z2] = clipper[(i + 1) % clipper.length]!
+      sum += x1 * z2 - x2 * z1
+    }
+    return sum >= 0 ? 1 : -1
+  })()
+  let out = subject
+  for (let i = 0; i < clipper.length && out.length > 0; i += 1) {
+    const a = clipper[i]!
+    const b = clipper[(i + 1) % clipper.length]!
+    const inside = (p: Vec2) =>
+      orient * ((b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])) >= 0
+    const input = out
+    out = []
+    for (let j = 0; j < input.length; j += 1) {
+      const p = input[j]!
+      const q = input[(j + 1) % input.length]!
+      const pin = inside(p)
+      const qin = inside(q)
+      if (pin !== qin) {
+        const d1 = (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])
+        const d2 = (b[0] - a[0]) * (q[1] - a[1]) - (b[1] - a[1]) * (q[0] - a[0])
+        const t = d1 / (d1 - d2)
+        out.push([p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1])])
+      }
+      if (qin) out.push(q)
+    }
+  }
+  return out
+}
+
+/** Footprint overlap: intersection over union, and over the smaller box (containment). */
+function footprintOverlap(a: LiftedBox, b: LiftedBox): { iou: number; containment: number } {
+  const ca = corners(a)
+  const cb = corners(b)
+  const overlap = clip(ca, cb)
+  const inter = overlap.length >= 3 ? polygonArea(overlap) : 0
+  const areaA = polygonArea(ca)
+  const areaB = polygonArea(cb)
+  return {
+    iou: inter / (areaA + areaB - inter || 1),
+    containment: inter / (Math.min(areaA, areaB) || 1),
+  }
+}
+
+function memberMatches(
+  member: LiftedDetection & { ok: true },
+  candidate: LiftedDetection & { ok: true },
+): boolean {
+  if (member.opening && candidate.opening) {
+    if (openingFamily(member.detection.kind) !== openingFamily(candidate.detection.kind))
+      return false
+    if (member.opening.wallId !== candidate.opening.wallId) return false
+    const a = member.opening
+    const b = candidate.opening
+    const gap = Math.abs(a.positionAlongWall - b.positionAlongWall)
+    const ratio = a.width / (b.width || 1)
+    return gap < Math.max(0.3, 0.5 * Math.min(a.width, b.width)) && ratio > 0.6 && ratio < 1.67
+  }
+  if (member.box && candidate.box) {
+    if (normalise(member.detection.label) !== normalise(candidate.detection.label)) return false
     const gap = Math.hypot(
-      seed.box.centre[0] - candidate.box.centre[0],
-      seed.box.centre[1] - candidate.box.centre[1],
+      member.box.centre[0] - candidate.box.centre[0],
+      member.box.centre[1] - candidate.box.centre[1],
     )
-    const size = Math.min(
-      Math.max(seed.box.width, seed.box.depth),
+    const small = Math.min(
+      Math.max(member.box.width, member.box.depth),
       Math.max(candidate.box.width, candidate.box.depth),
     )
-    return gap < Math.max(0.5, 0.6 * size)
+    // One view sees a surface, not a volume, so footprints are padded before they are compared.
+    const pad = (box: LiftedBox): LiftedBox => ({
+      ...box,
+      width: box.width + MATCH_PAD,
+      depth: box.depth + MATCH_PAD,
+    })
+    const { iou, containment } = footprintOverlap(pad(member.box), pad(candidate.box))
+    return (iou >= 0.25 || containment >= 0.6) && gap < Math.max(0.35, 0.5 * small)
   }
   return false
 }
 
-function meanConfidence(members: readonly LiftedDetection[]): number {
-  return members.reduce((sum, member) => sum + member.detection.confidence, 0) / members.length
+/** A cluster takes a detection only from a frame it does not hold yet, and that matches a member. */
+function matches(cluster: Cluster, candidate: LiftedDetection & { ok: true }): boolean {
+  if (cluster.members.some((member) => member.detection.frameId === candidate.detection.frameId)) {
+    return false
+  }
+  return cluster.members.some((member) => memberMatches(member, candidate))
 }
 
-function commonOf(id: string, members: LiftedDetection[]): Common {
+const doubtsOf = (member: LiftedDetection & { ok: true }): string[] =>
+  member.opening?.doubts ?? member.box?.doubts ?? []
+const validOf = (member: LiftedDetection & { ok: true }): number =>
+  member.opening?.validFraction ?? member.box?.validFraction ?? 1
+
+function hasBaseline(a: LiftedDetection, b: LiftedDetection): boolean {
+  if (!a.view || !b.view) return false
+  const moved = Math.hypot(
+    a.view.position[0] - b.view.position[0],
+    a.view.position[1] - b.view.position[1],
+  )
+  let turn = Math.abs(a.view.heading - b.view.heading)
+  if (turn > Math.PI) turn = 2 * Math.PI - turn
+  return moved >= MIN_BASELINE || turn >= MIN_TURN
+}
+
+function commonOf(id: string, members: Array<LiftedDetection & { ok: true }>): Common {
   const frames = [...new Set(members.map((member) => member.detection.frameId))]
-  const viewCount = frames.length
   const labels = new Map<string, number>()
   for (const member of members) {
     const label = member.detection.label.trim()
     labels.set(label, (labels.get(label) ?? 0) + 1)
   }
   const label = [...labels.entries()].sort((l, r) => r[1] - l[1])[0]![0]
-  const confirmed = viewCount >= 2
+  const sound = members.filter((member) => doubtsOf(member).length === 0)
+  const confirmed = sound.some((a, i) =>
+    sound.some((b, j) => j > i && a.detection.frameId !== b.detection.frameId && hasBaseline(a, b)),
+  )
+  const doubts = [...new Set(members.flatMap(doubtsOf))]
+  if (!confirmed && frames.length >= 2 && sound.length < 2) {
+    doubts.push('fewer than two sound views from different positions')
+  } else if (!confirmed && frames.length >= 2) {
+    doubts.push('the views were taken from nearly the same position and heading')
+  }
+  const weighted =
+    members.reduce(
+      (sum, member) =>
+        sum + member.detection.confidence * (0.5 + 0.5 * Math.min(1, validOf(member) / 0.6)),
+      0,
+    ) / members.length
   return {
     id,
     label,
-    viewCount,
+    viewCount: frames.length,
     status: confirmed ? 'confirmed' : 'uncertain',
-    confidence: round(Math.min(1, Math.max(0, meanConfidence(members) * (confirmed ? 1 : 0.6))), 2),
+    confidence: round(Math.min(1, Math.max(0, weighted * (confirmed ? 1 : 0.6))), 2),
     evidenceFrameIds: frames,
+    doubts,
     basis: 'estimate',
   }
 }
 
 /**
  * Merges lifted detections of the same thing seen in several keyframes: openings on the same wall
- * at nearly the same position, furniture with the same label and a nearby centre. Two or more
- * distinct keyframes make a cluster `confirmed`; one leaves it `uncertain`.
+ * at nearly the same position and width, furniture with the same label and an overlapping
+ * footprint. A cluster never takes two detections from one frame, so two chairs in one photo stay
+ * two. Two sound views from different positions or headings make a cluster `confirmed`.
  */
 export function clusterDetections(
   lifted: readonly LiftedDetection[],
@@ -858,7 +1144,7 @@ export function clusterDetections(
   })
   for (const cluster of sorted) {
     const first = cluster.members[0]!
-    if (first.ok && first.opening) {
+    if (first.opening) {
       const kind = first.detection.kind as 'door' | 'window' | 'opening'
       counters[kind] += 1
       const parts = cluster.members.map((member) => member.opening!)
@@ -883,19 +1169,22 @@ export function clusterDetections(
           round(wall.a[1] + unit[1] * position),
         ],
         beyondWallEnds: parts.some((part) => part.beyondWallEnds),
+        wallOffset: round(median(parts.map((part) => part.wallOffset))),
       })
-    } else if (first.ok && first.box) {
+    } else if (first.box) {
       counters.furniture += 1
       const points = cluster.members.flatMap((member) => member.points ?? [])
       const merged =
         cluster.members.length > 1
-          ? (fitOrientedBox(thin(points, MAX_POINTS * 2), walls, floorY) ?? first.box)
+          ? (fitOrientedBox(points, walls, floorY) ?? first.box)
           : first.box
       furniture.push({
         ...commonOf(`furniture_${counters.furniture}`, cluster.members),
         kind: 'furniture',
         centre: merged.centre,
         baseY: merged.baseY,
+        topY: merged.topY,
+        floatingBase: merged.floating,
         yawDegrees: round((merged.yaw * 180) / Math.PI, 1),
         size: { width: merged.width, depth: merged.depth, height: merged.height },
         yawSnappedToWall: merged.yawSnappedToWall,

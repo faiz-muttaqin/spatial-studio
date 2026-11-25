@@ -69,20 +69,70 @@ function sceneWalls(
     }))
 }
 
+/**
+ * The box yaw is measured from +X toward +Z; a positive three.js rotation about Y turns +X toward
+ * -Z, so the item rotation is the negated yaw, kept in (-180, 180].
+ */
+export function placeRotation(yawDegrees: number): number {
+  let rotation = -yawDegrees
+  while (rotation > 180) rotation -= 360
+  while (rotation <= -180) rotation += 360
+  return Math.round(rotation * 10) / 10 || 0
+}
+
+const MEMO_MILLIS = 60_000
+const MEMO_ENTRIES = 8
+const memo = new Map<string, { at: number; value: Promise<unknown> }>()
+
+/** Repeated plan and lift calls on one scan reuse its bundle and room proposal for a minute. */
+function memoised<T>(key: string, make: () => Promise<T>): Promise<T> {
+  const now = Date.now()
+  for (const [k, entry] of memo) if (now - entry.at > MEMO_MILLIS) memo.delete(k)
+  const hit = memo.get(key)
+  if (hit) return hit.value as Promise<T>
+  const value = make()
+  value.catch(() => memo.delete(key))
+  memo.set(key, { at: now, value })
+  while (memo.size > MEMO_ENTRIES) memo.delete(memo.keys().next().value!)
+  return value
+}
+
+const scanKey = (node: ScanNode) =>
+  JSON.stringify([
+    node.id,
+    node.captureSession?.manifestUrl,
+    node.position,
+    node.rotation,
+    node.scale,
+  ])
+
+const SEMANTICS_WANT = { rgb: true, depth: true, planes: true, measurements: true, motion: true }
+
+function loadSemanticsBundle(host: CaptureArtifactHost, node: ScanNode): Promise<ScanBundle> {
+  return memoised(`bundle:${scanKey(node)}`, () => loadBundle(host, node, SEMANTICS_WANT))
+}
+
+function proposalFor(host: CaptureArtifactHost, bundle: ScanBundle, node: ScanNode) {
+  return memoised(`proposal:${scanKey(node)}`, async () =>
+    proposeRoom({
+      planes: bundle.planes,
+      measurements: bundle.measurements,
+      transform: bundle.transform,
+      depthFrames: await readDepthFrames(host, bundle, bundle.problems),
+      walkedPath: bundle.walked,
+    }),
+  )
+}
+
 /** The floor height in level metres: the plane set's floor, else the room proposal's from depth. */
 async function floorFor(
   host: CaptureArtifactHost,
   bundle: ScanBundle,
+  node: ScanNode,
 ): Promise<{ y: number; basis: string }> {
   const planeFloor = bundle.planes ? analysePlanes(bundle.planes, bundle.transform).floor : null
   if (planeFloor) return { y: planeFloor.y, basis: 'plane-set floor, in level coordinates' }
-  const proposal = proposeRoom({
-    planes: bundle.planes,
-    measurements: bundle.measurements,
-    transform: bundle.transform,
-    depthFrames: await readDepthFrames(host, bundle, bundle.problems),
-    walkedPath: bundle.walked,
-  })
+  const proposal = await proposalFor(host, bundle, node)
   return proposal.floorY !== null
     ? {
         y: proposal.floorY,
@@ -101,7 +151,7 @@ async function wallsFor(
   const planeFloor = bundle.planes ? analysePlanes(bundle.planes, bundle.transform).floor : null
   const scene = sceneWalls(operations, node.parentId)
   if (scene.length > 0) {
-    const floor = await floorFor(host, bundle)
+    const floor = await floorFor(host, bundle, node)
     return {
       walls: scene,
       source: 'scene-walls',
@@ -110,14 +160,7 @@ async function wallsFor(
       notes: [`Snapped to the ${scene.length} straight wall(s) on this scan's level.`],
     }
   }
-  const depthFrames = await readDepthFrames(host, bundle, bundle.problems)
-  const proposal = proposeRoom({
-    planes: bundle.planes,
-    measurements: bundle.measurements,
-    transform: bundle.transform,
-    depthFrames,
-    walkedPath: bundle.walked,
-  })
+  const proposal = await proposalFor(host, bundle, node)
   if (!proposal.polygon) {
     return {
       walls: [],
@@ -165,13 +208,7 @@ async function planScanSemantics(
   input: { scanId: string; perWall?: number },
 ) {
   const node = findScan(operations, input.scanId)
-  const bundle = await loadBundle(host, node, {
-    rgb: true,
-    depth: true,
-    planes: true,
-    measurements: true,
-    motion: true,
-  })
+  const bundle = await loadSemanticsBundle(host, node)
   const frames = bundle.rgb ?? []
   if (frames.length === 0) refuse('no_keyframes', `Scan ${node.id} has no photo keyframes.`)
   requireOpengl(bundle, node.id)
@@ -255,7 +292,7 @@ async function readLiftFrames(
       problems.push(`${id}: no photo keyframe with depth`)
       continue
     }
-    if (frame.trackingState !== 'tracking' || !frame.pose) {
+    if (frame.trackingState !== 'tracking' || !frame.pose || !frame.intrinsics) {
       problems.push(`${id}: the tracker had no usable pose for this keyframe`)
       continue
     }
@@ -283,6 +320,7 @@ async function readLiftFrames(
       id,
       imageWidth: frame.width,
       imageHeight: frame.height,
+      rgbIntrinsics: frame.intrinsics,
       depth: {
         id: entry.id,
         width: entry.width,
@@ -305,6 +343,7 @@ function suggestedCalls(
   const real = source.source === 'scene-walls'
   const openings = result.openings.map((opening) => ({
     id: opening.id,
+    status: opening.status,
     ...(real
       ? {
           call: {
@@ -328,6 +367,12 @@ function suggestedCalls(
   }))
   const furniture = result.furniture.map((item) => ({
     id: item.id,
+    status: item.status,
+    ...(item.floatingBase
+      ? {
+          floatingBase: `Its lowest seen surface is ${item.baseY} m (level Y); it may be wall-mounted or its legs were not seen. Place it at the floor only if it stands there.`,
+        }
+      : {}),
     steps: [
       {
         tool: 'search_assets',
@@ -342,12 +387,12 @@ function suggestedCalls(
               assetId: '<an id from search_assets>',
               x: item.centre[0],
               z: item.centre[1],
-              rotation: item.yawDegrees,
+              rotation: placeRotation(item.yawDegrees),
             },
           ],
           ...(levelId ? { levelId } : {}),
         },
-        note: 'rotation is the yaw of the box width axis, in degrees; check which way the item faces after placing it.',
+        note: 'rotation turns the item about Y the way the editor does (positive turns +X toward -Z), set so its width axis lies along the box; the box width axis has no front, so check which way the item faces after placing it.',
       },
     ],
   }))
@@ -367,29 +412,35 @@ async function liftScanSemantics(
     )
   }
   const node = findScan(operations, input.scanId)
-  const bundle = await loadBundle(host, node, {
-    rgb: true,
-    depth: true,
-    planes: true,
-    measurements: true,
-    motion: true,
-  })
+  const bundle = await loadSemanticsBundle(host, node)
   if (!bundle.rgb?.length) refuse('no_keyframes', `Scan ${node.id} has no photo keyframes.`)
   if (!bundle.depthIndex?.length) refuse('no_depth', `Scan ${node.id} has no depth keyframes.`)
   requireOpengl(bundle, node.id)
-  const needsWalls = input.detections.some((detection) => detection.kind !== 'furniture')
-  const source: WallSource = needsWalls
-    ? await wallsFor(operations, host, bundle, node)
-    : await (async (): Promise<WallSource> => {
-        const floor = await floorFor(host, bundle)
-        return {
-          walls: sceneWalls(operations, node.parentId),
-          source: 'scene-walls',
-          floorY: floor.y,
-          floorBasis: floor.basis,
+  // Frame ids are checked first, so a call naming no real keyframe does no wall or floor work.
+  const known = new Set(bundle.rgb.map((frame) => frame.id))
+  const real = input.detections.filter((detection) => known.has(detection.frameId))
+  const needsWalls = real.some((detection) => detection.kind !== 'furniture')
+  const source: WallSource =
+    real.length === 0
+      ? {
+          walls: [],
+          source: 'none',
+          floorY: 0,
+          floorBasis: 'not computed: none of the named keyframes exists in this scan',
           notes: [],
         }
-      })()
+      : needsWalls
+        ? await wallsFor(operations, host, bundle, node)
+        : await (async (): Promise<WallSource> => {
+            const floor = await floorFor(host, bundle, node)
+            return {
+              walls: sceneWalls(operations, node.parentId),
+              source: 'scene-walls',
+              floorY: floor.y,
+              floorBasis: floor.basis,
+              notes: [],
+            }
+          })()
   const problems = [...bundle.problems]
   const frames = await readLiftFrames(host, bundle, frameIds, problems)
   const options = { transform: bundle.transform, floorY: source.floorY }
@@ -420,7 +471,7 @@ async function liftScanSemantics(
     notes: [
       ...source.notes,
       'Every value is an estimate from 160x90 phone depth and your boxes, not a measurement. Furniture size covers only the surfaces the camera saw, so depth and width are often small.',
-      'Confidence is your mean detection confidence, scaled down when only one photo saw it; it is not an accuracy in metres.',
+      'Confirmed needs two sound views from different positions or headings. Anything with doubts (wall drift, little wall support, a box at the image edge, sparse depth) stays uncertain. Confidence is your detection confidence weighted by usable depth and scaled down unless confirmed; it is not an accuracy in metres.',
       ...(problems.length ? [`Frames not read: ${problems.join('; ')}`] : []),
     ],
     needsVerification: true,

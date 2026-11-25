@@ -44,7 +44,15 @@ export const liftScanSemanticsTool = {
           label: z.string().min(1).max(64).describe('What it is, e.g. "door", "sofa".'),
           kind: z.enum(['door', 'window', 'opening', 'furniture']),
           box2d: z
-            .tuple([z.number(), z.number(), z.number(), z.number()])
+            .tuple([
+              z.number().finite(),
+              z.number().finite(),
+              z.number().finite(),
+              z.number().finite(),
+            ])
+            .refine(([x0, y0, x1, y1]) => x0 < x1 && y0 < y1, {
+              message: 'box2d must be [x0, y0, x1, y1] with x0 < x1 and y0 < y1',
+            })
             .describe('[x0, y0, x1, y1] in pixels of the full-size keyframe, origin top left.'),
           confidence: z.number().min(0).max(1),
         }),

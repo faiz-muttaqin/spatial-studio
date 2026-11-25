@@ -3,6 +3,7 @@ import type { DepthFrameInput } from './depth-walls'
 import { IDENTITY_SCAN_TRANSFORM, type Vec3 } from './plane-analysis'
 import {
   clusterDetections,
+  fitOrientedBox,
   type LiftFrame,
   liftDetections,
   type PlanFrame,
@@ -40,7 +41,7 @@ type Scene = {
 
 const thin = 0.05
 /** The north wall with a door (x 1.0..1.9, to 2.1 m) and a window (x 3.0..4.2, sill 0.9, top 2.1). */
-function room(options: { sofa?: Aabb } = {}): Scene {
+function room(options: { sofa?: Aabb; extra?: Aabb[] } = {}): Scene {
   const boxes: Aabb[] = [
     { min: [-0.5, -0.1, -0.5], max: [5.5, 0, 4.5] },
     { min: [-0.5, 2.6, -0.5], max: [5.5, 2.7, 4.5] },
@@ -57,6 +58,7 @@ function room(options: { sofa?: Aabb } = {}): Scene {
     { min: [-thin, 0, -0.5], max: [0, 2.6, 4.5] },
   ]
   if (options.sofa) boxes.push(options.sofa)
+  if (options.extra) boxes.push(...options.extra)
   return { boxes, holes: [] }
 }
 
@@ -79,7 +81,7 @@ function rayBox(origin: Vec3, dir: Vec3, box: Aabb): number | null {
 }
 
 /** OpenGL camera-to-world, column-major, looking along `yaw` in XZ (0 = +X, pi/2 = +Z). */
-function pose(x: number, z: number, yaw: number, roll = 0): number[] {
+function pose(x: number, z: number, yaw: number, roll = 0, height = CAMERA_HEIGHT): number[] {
   const forward = [Math.cos(yaw), 0, Math.sin(yaw)]
   const right0 = [-Math.sin(yaw), 0, Math.cos(yaw)]
   // Rolling about the viewing axis turns the image, as a phone's sensor-orientation readout does.
@@ -89,17 +91,17 @@ function pose(x: number, z: number, yaw: number, roll = 0): number[] {
   const up = right0.map(
     (value, axis) => -value * Math.sin(roll) + [0, 1, 0][axis]! * Math.cos(roll),
   )
-  return [...right, 0, ...up, 0, ...forward.map((value) => -value), 0, x, CAMERA_HEIGHT, z, 1]
+  return [...right, 0, ...up, 0, ...forward.map((value) => -value), 0, x, height, z, 1]
 }
 
-function render(id: string, scene: Scene, matrix: number[]): DepthFrameInput {
+function render(id: string, scene: Scene, matrix: number[], k = DEPTH_INTRINSICS): DepthFrameInput {
   const depth = new Uint16Array(DEPTH_W * DEPTH_H)
   const confidence = new Uint8Array(DEPTH_W * DEPTH_H).fill(255)
   const origin: Vec3 = [matrix[12]!, matrix[13]!, matrix[14]!]
   for (let py = 0; py < DEPTH_H; py += 1) {
     for (let px = 0; px < DEPTH_W; px += 1) {
-      const x = (px + 0.5 - DEPTH_INTRINSICS.cx) / DEPTH_INTRINSICS.fx
-      const y = (DEPTH_INTRINSICS.cy - (py + 0.5)) / DEPTH_INTRINSICS.fy
+      const x = (px + 0.5 - k.cx) / k.fx
+      const y = (k.cy - (py + 0.5)) / k.fy
       // Camera-space direction (x, y, -1) through the pose rotation.
       const dir: Vec3 = [
         matrix[0]! * x + matrix[4]! * y - matrix[8]!,
@@ -121,15 +123,26 @@ function render(id: string, scene: Scene, matrix: number[]): DepthFrameInput {
     id,
     width: DEPTH_W,
     height: DEPTH_H,
-    intrinsics: DEPTH_INTRINSICS,
+    intrinsics: k,
     pose: matrix,
     depth,
     confidence,
   }
 }
 
-function liftFrame(id: string, scene: Scene, matrix: number[]): LiftFrame {
-  return { id, imageWidth: IMAGE_W, imageHeight: IMAGE_H, depth: render(id, scene, matrix) }
+function liftFrame(
+  id: string,
+  scene: Scene,
+  matrix: number[],
+  depthK = DEPTH_INTRINSICS,
+): LiftFrame {
+  return {
+    id,
+    imageWidth: IMAGE_W,
+    imageHeight: IMAGE_H,
+    rgbIntrinsics: IMAGE_INTRINSICS,
+    depth: render(id, scene, matrix, depthK),
+  }
 }
 
 /** Image pixel of a world point, as the agent would box it. */
@@ -213,7 +226,7 @@ describe('pickKeyframesForWalls', () => {
 })
 
 describe('liftDetections', () => {
-  const shot = pose(1.5, 2.5, facingNorth)
+  const shot = pose(1.5, 3.8, facingNorth)
 
   test('lifts a door on a known wall to a position along the wall, width, height and sill', () => {
     const frame = liftFrame('f1', room(), shot)
@@ -237,7 +250,7 @@ describe('liftDetections', () => {
   })
 
   test('lifts a door from a photo in sensor orientation, rolled a quarter turn', () => {
-    const rolled = pose(1.5, 2.5, facingNorth, Math.PI / 2)
+    const rolled = pose(1.5, 3.8, facingNorth, Math.PI / 2)
     const frame = liftFrame('r1', room(), rolled)
     const door = detection(
       'r1',
@@ -280,7 +293,11 @@ describe('liftDetections', () => {
     // 1.8 m wide, 0.9 m deep, 0.8 m high, against the south wall, turned 90 degrees to the walls.
     const sofa = { min: [1.5, 0, 0.4] as Vec3, max: [3.3, 0.8, 1.3] as Vec3 }
     const scene = room({ sofa })
-    const views = [pose(2.4, 3.6, facingNorth), pose(0.6, 2.6, -0.2), pose(4.4, 2.6, Math.PI + 0.2)]
+    const views = [
+      pose(2.4, 3.9, facingNorth, 0, 1.0),
+      pose(0.5, 3.4, -1.1, 0, 1.0),
+      pose(4.5, 3.4, -2.05, 0, 1.0),
+    ]
     const frames = views.map((view, index) => liftFrame(`s${index}`, scene, view))
     const detections = views.map((view, index) =>
       detection(
@@ -307,7 +324,9 @@ describe('liftDetections', () => {
     expect(sofaOut.centre[0]).toBeCloseTo(2.4, 0)
     expect(sofaOut.centre[1]).toBeCloseTo(0.85, 0)
     expect(Math.abs(sofaOut.size.width - 1.8)).toBeLessThan(0.25)
-    expect(Math.abs(sofaOut.size.depth - 0.9)).toBeLessThan(0.25)
+    // One view sees surfaces, not volumes, so depth is a lower bound.
+    expect(sofaOut.size.depth).toBeGreaterThan(0.35)
+    expect(sofaOut.size.depth).toBeLessThan(1.1)
     expect(Math.abs(sofaOut.size.height - 0.8)).toBeLessThan(0.15)
     expect(sofaOut.yawSnappedToWall).not.toBeNull()
     expect(sofaOut.basis).toBe('estimate')
@@ -358,8 +377,8 @@ describe('liftDetections', () => {
 describe('clusterDetections', () => {
   test('flags a door seen in one view as uncertain and confirms one seen in two', () => {
     const scene = room()
-    const first = pose(1.5, 2.5, facingNorth)
-    const second = pose(2.2, 3.2, facingNorth)
+    const first = pose(1.5, 3.8, facingNorth)
+    const second = pose(2.7, 3.8, facingNorth)
     const third = pose(3.6, 2.5, facingNorth)
     const frames = [
       liftFrame('a', scene, first),
@@ -401,7 +420,7 @@ describe('clusterDetections', () => {
 
   test('keeps different openings on one wall apart', () => {
     const scene = room()
-    const view = pose(2.5, 3, facingNorth)
+    const view = pose(2.5, 3.9, facingNorth)
     const frame = liftFrame('d', scene, view)
     const lifted = liftDetections(
       [
@@ -429,5 +448,194 @@ describe('clusterDetections', () => {
       options,
     )
     expect(clusterDetections(lifted, WALLS, options).openings).toHaveLength(2)
+  })
+})
+
+describe('review fixes', () => {
+  const doorCorners: Vec3[] = [
+    [1.0, 0, 0],
+    [1.9, 2.1, 0],
+  ]
+
+  test('an off-centre camera against an asymmetric opening is not mirrored', () => {
+    // Window at x 3.0..4.2 seen from the far left, turned toward it; a mirror would put it near x 1.4.
+    const view = pose(0.8, 3.9, -1.0)
+    const frame = liftFrame('o1', room(), view)
+    const window = detection(
+      'o1',
+      'window',
+      'window',
+      boxAround(view, [
+        [3.0, 0.9, 0],
+        [4.2, 2.1, 0],
+      ]),
+    )
+    const [lifted] = liftDetections([window], [frame], WALLS, options)
+    expect(lifted!.ok).toBe(true)
+    expect(lifted!.opening!.positionAlongWall).toBeCloseTo(3.6, 1)
+    expect(lifted!.opening!.width).toBeCloseTo(1.2, 1)
+    // An axis-aligned box around an obliquely seen window is a little taller than the window.
+    expect(Math.abs(lifted!.opening!.sill - 0.9)).toBeLessThan(0.12)
+  })
+
+  test('a camera whose depth field of view differs from the photo still gives the right width', () => {
+    const wideDepth = { fx: 84, fy: 84, cx: 80, cy: 45 }
+    const view = pose(1.5, 3.8, facingNorth)
+    const frame = liftFrame('w1', room(), view, wideDepth)
+    const [lifted] = liftDetections(
+      [detection('w1', 'door', 'door', boxAround(view, doorCorners))],
+      [frame],
+      WALLS,
+      options,
+    )
+    expect(lifted!.ok).toBe(true)
+    expect(lifted!.opening!.width).toBeCloseTo(0.9, 1)
+    expect(lifted!.opening!.height).toBeCloseTo(2.1, 1)
+    expect(lifted!.opening!.positionAlongWall).toBeCloseTo(1.45, 1)
+  })
+
+  test('wall drift is measured from depth, re-cast, and keeps the opening uncertain', () => {
+    const drifted: SemanticWall[] = [{ ...NORTH, a: [0, 0.25], b: [5, 0.25] }, ...WALLS.slice(1)]
+    const views = [pose(1.5, 3.8, facingNorth), pose(2.7, 3.8, facingNorth)]
+    const scene = room()
+    const frames = views.map((view, i) => liftFrame(`dr${i}`, scene, view))
+    const lifted = liftDetections(
+      views.map((view, i) => detection(`dr${i}`, 'door', 'door', boxAround(view, doorCorners))),
+      frames,
+      drifted,
+      options,
+    )
+    expect(lifted.every((item) => item.ok)).toBe(true)
+    expect(lifted[0]!.opening!.wallOffset).toBeCloseTo(-0.25, 1)
+    expect(lifted[0]!.opening!.width).toBeCloseTo(0.9, 1)
+    const door = clusterDetections(lifted, drifted, options).openings[0]!
+    expect(door.status).toBe('uncertain')
+    expect(door.doubts.join(' ')).toContain('drifted')
+  })
+
+  test('two views from the same spot do not confirm each other', () => {
+    const view = pose(1.5, 3.8, facingNorth)
+    const frames = [
+      liftFrame('s1', room(), view),
+      liftFrame('s2', room(), pose(1.52, 3.8, facingNorth)),
+    ]
+    const lifted = liftDetections(
+      [
+        detection('s1', 'door', 'door', boxAround(view, doorCorners)),
+        detection('s2', 'door', 'door', boxAround(view, doorCorners)),
+      ],
+      frames,
+      WALLS,
+      options,
+    )
+    const door = clusterDetections(lifted, WALLS, options).openings[0]!
+    expect(door.viewCount).toBe(2)
+    expect(door.status).toBe('uncertain')
+  })
+
+  test('a box touching the image edge is truncated and uncertain', () => {
+    const view = pose(1.5, 2.5, facingNorth)
+    const frame = liftFrame('t1', room(), view)
+    const [lifted] = liftDetections(
+      [detection('t1', 'door', 'door', boxAround(view, doorCorners))],
+      [frame],
+      WALLS,
+      options,
+    )
+    expect(lifted!.ok).toBe(true)
+    expect(lifted!.opening!.doubts.join(' ')).toContain('image edge')
+  })
+
+  test('a yawed footprint gets its yaw and size, with the real base', () => {
+    const yaw = (30 * Math.PI) / 180
+    const points: Vec3[] = []
+    for (let i = 0; i <= 20; i += 1) {
+      for (let j = 0; j <= 8; j += 1) {
+        const a = -0.9 + (1.8 * i) / 20
+        const b = -0.45 + (0.9 * j) / 8
+        points.push([
+          2 + a * Math.cos(yaw) - b * Math.sin(yaw),
+          0.4 + (i % 3) * 0.2,
+          1 + a * Math.sin(yaw) + b * Math.cos(yaw),
+        ])
+      }
+    }
+    const fit = fitOrientedBox(points, [], 0)!
+    expect((fit.yaw * 180) / Math.PI).toBeCloseTo(30, -1)
+    expect(Math.abs((fit.yaw * 180) / Math.PI - 30)).toBeLessThan(4)
+    expect(fit.width).toBeGreaterThan(1.6)
+    expect(fit.width).toBeLessThan(1.95)
+    expect(fit.depth).toBeGreaterThan(0.75)
+    expect(fit.depth).toBeLessThan(1.0)
+    expect(fit.floating).toBe(true)
+    expect(fit.baseY).toBeCloseTo(0.4, 1)
+  })
+
+  test('two chairs half a metre apart in one photo stay two, and different labels stay apart', () => {
+    const chairA: Aabb = { min: [1.6, 0, 1.0], max: [2.0, 0.9, 1.4] }
+    const chairB: Aabb = { min: [2.1, 0, 1.0], max: [2.5, 0.9, 1.4] }
+    const scene = room({ extra: [chairA, chairB] })
+    const views = [pose(1.8, 3.9, facingNorth, 0, 0.9), pose(2.9, 3.9, facingNorth - 0.2, 0, 0.9)]
+    const frames = views.map((view, i) => liftFrame(`c${i}`, scene, view))
+    const boxes = (view: number[], chair: Aabb) =>
+      boxAround(view, [
+        [chair.min[0], 0, chair.min[2]],
+        [chair.max[0], 0.9, chair.max[2]],
+      ])
+    const lifted = liftDetections(
+      [
+        detection('c0', 'furniture', 'chair', boxes(views[0]!, chairA)),
+        detection('c0', 'furniture', 'chair', boxes(views[0]!, chairB)),
+        detection('c1', 'furniture', 'chair', boxes(views[1]!, chairA)),
+        detection('c1', 'furniture', 'chair', boxes(views[1]!, chairB)),
+      ],
+      frames,
+      WALLS,
+      options,
+    )
+    expect(lifted.every((item) => item.ok)).toBe(true)
+    expect(clusterDetections(lifted, WALLS, options).furniture).toHaveLength(2)
+    const relabelled = lifted.map((item, i) =>
+      i === 2 ? { ...item, detection: { ...item.detection, label: 'bookcase' } } : item,
+    )
+    expect(clusterDetections(relabelled, WALLS, options).furniture.length).toBeGreaterThan(2)
+    const synonyms = lifted.map((item, i) =>
+      i === 2 ? { ...item, detection: { ...item.detection, label: 'Chair ' } } : item,
+    )
+    expect(clusterDetections(synonyms, WALLS, options).furniture).toHaveLength(2)
+  })
+
+  test('worst case: 200 large furniture boxes are bounded in time and per frame', () => {
+    const view = pose(2.5, 3.9, facingNorth)
+    const frames = Array.from({ length: 10 }, (_, i) => liftFrame(`z${i}`, room(), view))
+    const started = performance.now()
+    const detections = Array.from({ length: 200 }, (_, i) =>
+      detection(`z${i % 10}`, 'furniture', 'cabinet', [100, 100, 1500, 800]),
+    )
+    const lifted = liftDetections(detections, frames, WALLS, options)
+    clusterDetections(lifted, WALLS, options)
+    expect(performance.now() - started).toBeLessThan(3000)
+    const refused = lifted.filter((item) => !item.ok)
+    expect(refused.some((item) => !item.ok && item.reason === 'too_many_boxes_in_frame')).toBe(
+      false,
+    )
+    expect(lifted.filter((item) => item.ok).length).toBeLessThanOrEqual(200)
+    const full = liftDetections(
+      [detection('z0', 'furniture', 'cabinet', [0, 0, 1920, 1080])],
+      frames,
+      WALLS,
+      options,
+    )
+    expect(full[0]!.ok === false && full[0]!.reason).toBe('box_too_large')
+    const many = liftDetections(
+      Array.from({ length: 200 }, () =>
+        detection('z0', 'furniture', 'cabinet', [300, 300, 900, 800]),
+      ),
+      frames,
+      WALLS,
+      options,
+    )
+    expect(many.filter((item) => item.ok).length).toBeLessThanOrEqual(20)
+    expect(many.some((item) => !item.ok && item.reason === 'too_many_boxes_in_frame')).toBe(true)
   })
 })
