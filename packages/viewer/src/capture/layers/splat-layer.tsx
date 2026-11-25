@@ -106,7 +106,6 @@ function createSplatObjects(data: GaussianSplatData, textures: SplatTextures) {
   const opacityUniform = uniform(1)
   // The TSL typings do not model matrix columns or instanced scalar attributes; the shader
   // graph is checked by running it (see the capture viewer tests and the browser check).
-  // biome-ignore lint/suspicious/noExplicitAny: TSL node typings
   const index: any = instancedBufferAttribute(orderAttribute, 'float')
   const row = index.div(SPLAT_TEXTURE_WIDTH).floor()
   const coord = ivec2(index.sub(row.mul(SPLAT_TEXTURE_WIDTH)).toInt(), row.toInt())
@@ -121,9 +120,7 @@ function createSplatObjects(data: GaussianSplatData, textures: SplatTextures) {
 
   const viewPosition = modelViewMatrix.mul(vec4(centre.xyz, 1)).xyz
   const depth = viewPosition.z.negate()
-  // biome-ignore lint/suspicious/noExplicitAny: TSL node typings
   const mv: any = modelViewMatrix
-  // biome-ignore lint/suspicious/noExplicitAny: TSL node typings
   const projection: any = cameraProjectionMatrix
   const rotation0 = mv[0].xyz
   const rotation1 = mv[1].xyz
