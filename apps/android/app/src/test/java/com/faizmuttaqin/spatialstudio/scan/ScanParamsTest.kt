@@ -35,6 +35,15 @@ class ScanParamsTest {
     }
 
     @Test
+    fun torchIsOffByDefaultAndMustBeABoolean() {
+        assertFalse(ScanParams.start(params("{}")).options.torch)
+        assertTrue(ScanParams.start(params("""{"options":{"torch":true}}""")).options.torch)
+        org.junit.Assert.assertThrows(com.faizmuttaqin.spatialstudio.bridge.BridgeException::class.java) {
+            ScanParams.start(params("""{"options":{"torch":"yes"}}"""))
+        }
+    }
+
+    @Test
     fun locationIsOffByDefaultAndSensorsAreOn() {
         val options = ScanParams.start(params("{}")).options
         assertFalse(options.location)
@@ -89,5 +98,18 @@ class ScanParamsTest {
         assertTrue(ScanParams.start(params("""{"options":{"livePreview":true}}""")).options.livePreview)
         invalid { ScanParams.start(params("""{"options":{"livePreview":"yes"}}""")) }
         invalid { ScanParams.start(params("""{"options":{"livePreview":1}}""")) }
+    }
+
+    @Test
+    fun torchLivePreviewAndLocaleSitSideBySide() {
+        val o = ScanParams.start(params("""{"options":{"torch":true,"livePreview":true,"locale":"ja"}}""")).options
+        assertTrue(o.torch)
+        assertTrue(o.livePreview)
+        assertEquals("ja", o.locale)
+        val defaults = ScanParams.start(params("{}")).options
+        assertFalse(defaults.torch)
+        assertFalse(defaults.livePreview)
+        assertNull(defaults.locale)
+        invalid { ScanParams.start(params("""{"options":{"torch":"on","livePreview":true}}""")) }
     }
 }

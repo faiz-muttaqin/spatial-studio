@@ -69,7 +69,8 @@ class SensorRecorder(
     private val history = OrientationHistory()
     private val diagnostics = HeadingDiagnostics()
     @Volatile private var magnetometerAccuracy = 0
-    private val frameClock = ClockCalibrator()
+    // Rolling: a camera reconfigure can shift the frame clock's base mid-scan; headings pair only while it checks out.
+    private val frameClock = ClockCalibrator(rolling = true)
     private val sensorClock = ClockCalibrator()
 
     /** Most recent camera-direction reading for the HUD; null until the phone is held upright. */
@@ -152,25 +153,32 @@ class SensorRecorder(
         if (frameClock.state != ClockCalibrator.State.COMPARABLE || sensorClock.state != ClockCalibrator.State.COMPARABLE) return
         if (!heading.accepts(frameTimestampNs)) return
         // The reading nearest the frame's capture time, not the newest: the camera image is older than the latest sensor event.
-        val reading = history.nearest(frameTimestampNs)
+        // After an adopted clock shift the frame time is mapped back onto the clock the sensors share.
+        val pairingNs = frameTimestampNs + frameClock.offsetNs
+        val reading = history.nearest(pairingNs)
         diagnostics.count("frames")
         if (reading == null) {
             diagnostics.count("no-orientation")
             return
         }
         // Magnetic only: the declination comes from retained fixes at finalisation, so switching location off removes it.
-        val sample = HeadingMath.sample(
-            frameTimestampNs = frameTimestampNs,
+        val paired = HeadingMath.sample(
+            frameTimestampNs = pairingNs,
             pose = pose,
             orientation = reading,
             magnetometerAccuracy = magnetometerAccuracy,
             declinationDeg = null,
             maxAgeNs = MAX_PAIR_AGE_NS,
         )
-        if (sample == null) {
-            diagnostics.count(HeadingMath.diagnose(frameTimestampNs, pose, reading, MAX_PAIR_AGE_NS))
+        if (paired == null) {
+            diagnostics.count(HeadingMath.diagnose(pairingNs, pose, reading, MAX_PAIR_AGE_NS))
             return
         }
+        // The stored sample keeps the frame's own timestamp, the one keyframes and the trajectory use.
+        val sample = HeadingData(
+            frameTimestampNs, paired.azimuthMagneticDeg, paired.azimuthTrueDeg, paired.declinationDeg,
+            paired.magnetometerAccuracy, paired.headingAccuracyDeg, paired.worldBearingDeg,
+        )
         diagnostics.count("paired")
         live = sample
         heading.offerIf(frameTimestampNs, sample) { sensorsOn }
@@ -178,10 +186,11 @@ class SensorRecorder(
 
     /** Verified boot-time clocks for both sources, so sensor and camera timestamps can be compared. */
     val clocksVerified: Boolean
-        get() = frameClock.state == ClockCalibrator.State.COMPARABLE && sensorClock.state == ClockCalibrator.State.COMPARABLE
+        get() = frameClock.everComparable && sensorClock.everComparable
 
     private val clockMismatch: Boolean
-        get() = frameClock.state == ClockCalibrator.State.MISMATCH || sensorClock.state == ClockCalibrator.State.MISMATCH
+        get() = (!frameClock.everComparable && frameClock.state == ClockCalibrator.State.MISMATCH) ||
+            (!sensorClock.everComparable && sensorClock.state == ClockCalibrator.State.MISMATCH)
 
     fun captured(): SensorCapture {
         val warnings = ArrayList<String>()
@@ -190,6 +199,7 @@ class SensorRecorder(
         if (pressure.truncated) warnings += "barometer-truncated"
         if (fixes.truncated) warnings += "geolocation-truncated"
         if (sensorsOn && clockMismatch) warnings += "sensor-clock-not-comparable"
+        if (sensorsOn && frameClock.resets > 0) warnings += "frame-clock-reset"
         return SensorCapture(
             orientation = orientation.snapshot(),
             heading = heading.snapshot(),

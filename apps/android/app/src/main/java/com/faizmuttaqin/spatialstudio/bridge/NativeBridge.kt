@@ -204,6 +204,7 @@ class NativeBridge(
                     put("uploaded", record.uploaded)
                     put("uploading", record.sessionId == uploading)
                     put("attached", record.attachedAtMs != null)
+                    record.uploadedOrigin?.let { put("uploadedOrigin", it) }
                     put("projectId", record.projectId)
                     record.manifestSha256?.takeIf { record.uploaded }?.let { put("manifestUrl", "/api/artifacts/$it") }
                     record.error?.let { put("error", it) }

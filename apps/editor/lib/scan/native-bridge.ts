@@ -81,6 +81,8 @@ const ScanListResultSchema = z.array(
       uploaded: z.boolean(),
       /** The page confirmed the scan was attached to a project (`scan.markAttached`). */
       attached: z.boolean().optional(),
+      /** The site the manifest was uploaded to; absent on records from before it was kept. */
+      uploadedOrigin: z.string().optional(),
       /** The project id the scan was started for; the attach target after a reload. */
       projectId: z.string().nullable().optional(),
       /** Present once the scan is uploaded; the page can attach it without uploading again. */
@@ -120,6 +122,8 @@ export type ScanStartOptions = {
   livePreview?: boolean
   /** Page language (BCP 47) for the live preview panel, so it speaks the page's language. Not saved with the scan. */
   locale?: string
+  /** Contract v1.3: the ARCore torch for the whole scan, chosen before it starts. Off unless set. */
+  torch?: boolean
 }
 
 const ReplySchema = z.union([

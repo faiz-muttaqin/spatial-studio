@@ -190,6 +190,19 @@ describe('true north', () => {
     segmentsAgree: true,
   }
 
+  test('accepts a segment span and rejects a reversed one', () => {
+    const segment = { startTimestampNs: 1_000, endTimestampNs: 9_000 }
+    expect(TrueNorthSchema.safeParse({ ...trueNorth, segmentsAgree: false, segment }).success).toBe(
+      true,
+    )
+    expect(
+      TrueNorthSchema.safeParse({
+        ...trueNorth,
+        segment: { startTimestampNs: 9_000, endTimestampNs: 1_000 },
+      }).success,
+    ).toBe(false)
+  })
+
   test('accepts a true and a magnetic result', () => {
     expect(TrueNorthSchema.safeParse(trueNorth).success).toBe(true)
     expect(

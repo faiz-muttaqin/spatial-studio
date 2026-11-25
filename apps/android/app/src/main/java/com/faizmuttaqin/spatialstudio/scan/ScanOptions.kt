@@ -22,6 +22,8 @@ data class ScanOptions(
     val livePreview: Boolean = false,
     /** Page language (BCP 47) for the live preview panel; never saved with the scan. */
     val locale: String? = null,
+    /** Contract v1.3: ARCore torch for the whole scan, set when the session is configured. Off by default. */
+    val torch: Boolean = false,
 ) {
     companion object {
         const val DEFAULT_SPACING_M = 0.25
@@ -92,9 +94,11 @@ object ScanParams {
             if (v == null || v.length > 35 || !ScanOptions.LOCALE.matches(v)) invalid("options.locale must be a BCP 47 language tag")
             v
         }
+        val torch = o["torch"]?.let { (it as? JsonPrimitive)?.takeIf { p -> !p.isString }?.booleanOrNull ?: invalid("options.torch must be a boolean") }
         return ScanOptions(
             locale = locale,
             livePreview = livePreview ?: defaults.livePreview,
+            torch = torch ?: defaults.torch,
             sensors = sensors ?: defaults.sensors,
             location = location ?: defaults.location,
             depth = depth ?: defaults.depth,

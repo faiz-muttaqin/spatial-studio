@@ -1794,65 +1794,65 @@ msgstr "Error al subir. No se adjuntó nada; puede volver a intentarlo."
 msgid "app.scan.intro"
 msgstr "Tome fotos y medidas con este teléfono. Se guardan con el proyecto como capa de referencia para reconstruir la estancia."
 
+# English: "Floor covered {percent}%"
 # Source-Hash: 2d7d77c9c235dd59
 # Review: required
-# English: "Floor covered {percent}%"
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.coverage"
 msgstr "Suelo cubierto {percent} %"
 
+# English: "The preview could not connect"
 # Source-Hash: cb5e84c098e62d2c
 # Review: required
-# English: "The preview could not connect"
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.failed"
 msgstr "No se pudo conectar la vista previa"
 
+# English: "The live preview is shown inside the companion app while scanning."
 # Source-Hash: 66768389d06c4aab
 # Review: required
-# English: "The live preview is shown inside the companion app while scanning."
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.noApp"
 msgstr "La vista previa en vivo se muestra dentro de la aplicación complementaria durante el escaneo."
 
+# English: "Live preview"
 # Source-Hash: dd3cd056185905ac
 # Review: required
-# English: "Live preview"
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.open"
 msgstr "Vista previa en vivo"
 
+# English: "No room outline yet. Keep moving around the room."
 # Source-Hash: 0c36b1b7902a20a9
 # Review: required
-# English: "No room outline yet. Keep moving around the room."
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.outlineUnclear"
 msgstr "Aún no hay contorno de la sala. Sigue moviéndote por la sala."
 
+# English: "Paused"
 # Source-Hash: b0c0000eeb008e92
 # Review: required
-# English: "Paused"
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.paused"
 msgstr "En pausa"
 
+# English: "{frames} frames, {kb} KB"
 # Source-Hash: f9a1c6d607daa91d
 # Review: required
-# English: "{frames} frames, {kb} KB"
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.stats"
 msgstr "{frames} fotogramas, {kb} KB"
 
+# English: "Connecting to the scan"
 # Source-Hash: eaa1aac63a5ce4d0
 # Review: required
-# English: "Connecting to the scan"
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.waiting"
@@ -1986,6 +1986,30 @@ msgstr "Ventana {number}"
 msgid "app.scan.native.attach"
 msgstr "Adjuntar"
 
+# Source-Hash: 875e8b17daace2b3
+# Review: required
+# English: "Check again"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.checkAgain"
+msgstr "Comprobar de nuevo"
+
+# Source-Hash: fa798a178c7c3128
+# Review: required
+# English: "Checking…"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.checking"
+msgstr "Comprobando…"
+
+# Source-Hash: 1700facb2f015fed
+# Review: required
+# English: "Delete from phone"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.deleteFromPhone"
+msgstr "Eliminar del teléfono"
+
 # Source-Hash: f89744026cb4ffb5
 # Review: required
 # AI-Provider: claude-code
@@ -2005,6 +2029,14 @@ msgstr "Descartar escaneo"
 #, fuzzy
 msgid "app.scan.native.earlier"
 msgstr "Escaneos aún no subidos"
+
+# Source-Hash: 5d808f2f9d15a3d7
+# Review: required
+# English: "Uploaded to another server. It is not on this site."
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.elsewhere"
+msgstr "Subido a otro servidor. No está en este sitio."
 
 # Source-Hash: 81e1405f801de1e7
 # Review: required
@@ -2026,6 +2058,14 @@ msgstr "{keyframes, plural, one {# fotograma clave} many {# fotogramas clave} ot
 msgid "app.scan.native.failed"
 msgstr "La aplicación complementaria informó de un error: {code}"
 
+# Source-Hash: 591087ea83a48ead
+# Review: required
+# English: "Hide"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.hide"
+msgstr "Ocultar"
+
 # Source-Hash: 6270972be99e74e0
 # Review: required
 # AI-Provider: claude-code
@@ -2036,17 +2076,25 @@ msgstr "La aplicación complementaria informó de un error: {code}"
 msgid "app.scan.native.hint"
 msgstr "La aplicación complementaria registra la pose, los planos, la profundidad y los fotogramas clave con ARCore y después los sube a este sitio."
 
+# Source-Hash: 238406df01367d8d
+# Review: required
+# English: "Already in {project}"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.inProject"
+msgstr "Ya está en {project}"
+
+# English: "Show a live map while scanning"
 # Source-Hash: 4c03e9893226a97d
 # Review: required
-# English: "Show a live map while scanning"
 #: apps/editor/app/scan/native-scan.tsx
 #, fuzzy
 msgid "app.scan.native.livePreview"
 msgstr "Mostrar un mapa en vivo durante el escaneo"
 
+# English: "Off by default. A small preview of coverage and the room outline appears on the scan screen. It is only a preview; the saved scan is the same either way."
 # Source-Hash: 9afb1cceb0c6a8b8
 # Review: required
-# English: "Off by default. A small preview of coverage and the room outline appears on the scan screen. It is only a preview; the saved scan is the same either way."
 #: apps/editor/app/scan/native-scan.tsx
 #, fuzzy
 msgid "app.scan.native.livePreviewHint"
@@ -2072,6 +2120,30 @@ msgstr "Registrar la ubicación aproximada"
 msgid "app.scan.native.locationHint"
 msgstr "Desactivado por defecto. La ubicación se guarda con el escaneo y sirve para corregir la brújula al norte verdadero cuando se procesa el escaneo. El teléfono pide permiso primero."
 
+# Source-Hash: c36f40587389e367
+# Review: required
+# English: "Mark attached"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.markAttached"
+msgstr "Marcar como adjuntado"
+
+# Source-Hash: aba25fa394039e44
+# Review: required
+# English: "Project: {project}"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.projectLabel"
+msgstr "Proyecto: {project}"
+
+# Source-Hash: 1ca91cd28528f704
+# Review: required
+# English: "Delete this scan from the phone? It is not on this site, so this cannot be undone."
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.removeConfirm"
+msgstr "¿Eliminar este escaneo del teléfono? No está en este sitio y no se puede deshacer."
+
 # Source-Hash: e4e15da3db73b81d
 # Review: required
 # AI-Provider: claude-code
@@ -2092,6 +2164,30 @@ msgstr "Iniciar escaneo con la aplicación"
 msgid "app.scan.native.starting"
 msgstr "Abriendo el escáner…"
 
+# Source-Hash: fc1817e763d15c74
+# Review: required
+# English: "Use the torch (experiment)"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.torch"
+msgstr "Usar la linterna (experimento)"
+
+# Source-Hash: f21d72fefa946b08
+# Review: required
+# English: "Set before the scan and kept on throughout. Tracking may be less reliable with the torch on."
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.torchHint"
+msgstr "Se elige antes del escaneo y se mantiene encendida. El seguimiento puede ser menos fiable con la linterna encendida."
+
+# Source-Hash: 7b4c9586b0ee1fe3
+# Review: required
+# English: "Could not check this scan. Try again."
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.unknown"
+msgstr "No se pudo comprobar este escaneo. Inténtalo de nuevo."
+
 # Source-Hash: ceedca8a2b02b006
 # Review: required
 # AI-Provider: claude-code
@@ -2102,13 +2198,21 @@ msgstr "Abriendo el escáner…"
 msgid "app.scan.native.upload"
 msgstr "Subir este escaneo"
 
-# Source-Hash: 3eb37861f2f38005
+# Source-Hash: 2187770cce6dcd76
 # Review: required
-# English: "Uploaded, not attached yet"
+# English: "Scans uploaded from the phone"
 #: apps/editor/app/scan/native-scan.tsx
 #, fuzzy
-msgid "app.scan.native.uploadedList"
-msgstr "Subido, aún sin adjuntar"
+msgid "app.scan.native.uploadedHeading"
+msgstr "Escaneos subidos desde el teléfono"
+
+# Source-Hash: e3bf9221d58e34e5
+# Review: required
+# English: "{when} · {keyframes, plural, one {# photo} other {# photos}} · {size} MB"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.uploadedMeta"
+msgstr "{when} · {keyframes, plural, one {# foto} many {# fotos} other {# fotos}} · {size} MB"
 
 # Source-Hash: 756844bbc7a4b1cf
 # Review: required

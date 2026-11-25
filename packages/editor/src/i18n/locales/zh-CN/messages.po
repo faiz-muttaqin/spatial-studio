@@ -1794,65 +1794,65 @@ msgstr "上传失败。未添加任何内容，你可以重试。"
 msgid "app.scan.intro"
 msgstr "用这部手机拍摄照片并记录尺寸。它们会作为重建房间的参考图层与项目一起保存。"
 
+# English: "Floor covered {percent}%"
 # Source-Hash: 2d7d77c9c235dd59
 # Review: required
-# English: "Floor covered {percent}%"
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.coverage"
 msgstr "地面已覆盖 {percent}%"
 
+# English: "The preview could not connect"
 # Source-Hash: cb5e84c098e62d2c
 # Review: required
-# English: "The preview could not connect"
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.failed"
 msgstr "预览无法连接"
 
+# English: "The live preview is shown inside the companion app while scanning."
 # Source-Hash: 66768389d06c4aab
 # Review: required
-# English: "The live preview is shown inside the companion app while scanning."
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.noApp"
 msgstr "扫描时，实时预览会显示在配套应用内。"
 
+# English: "Live preview"
 # Source-Hash: dd3cd056185905ac
 # Review: required
-# English: "Live preview"
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.open"
 msgstr "实时预览"
 
+# English: "No room outline yet. Keep moving around the room."
 # Source-Hash: 0c36b1b7902a20a9
 # Review: required
-# English: "No room outline yet. Keep moving around the room."
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.outlineUnclear"
 msgstr "暂无房间轮廓。请继续在房间里移动。"
 
+# English: "Paused"
 # Source-Hash: b0c0000eeb008e92
 # Review: required
-# English: "Paused"
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.paused"
 msgstr "已暂停"
 
+# English: "{frames} frames, {kb} KB"
 # Source-Hash: f9a1c6d607daa91d
 # Review: required
-# English: "{frames} frames, {kb} KB"
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.stats"
 msgstr "{frames} 帧，{kb} KB"
 
+# English: "Connecting to the scan"
 # Source-Hash: eaa1aac63a5ce4d0
 # Review: required
-# English: "Connecting to the scan"
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.waiting"
@@ -1986,6 +1986,30 @@ msgstr "窗 {number}"
 msgid "app.scan.native.attach"
 msgstr "附加"
 
+# Source-Hash: 875e8b17daace2b3
+# Review: required
+# English: "Check again"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.checkAgain"
+msgstr "重新检查"
+
+# Source-Hash: fa798a178c7c3128
+# Review: required
+# English: "Checking…"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.checking"
+msgstr "正在检查…"
+
+# Source-Hash: 1700facb2f015fed
+# Review: required
+# English: "Delete from phone"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.deleteFromPhone"
+msgstr "从手机删除"
+
 # Source-Hash: f89744026cb4ffb5
 # Review: required
 # AI-Provider: claude-code
@@ -2005,6 +2029,14 @@ msgstr "丢弃扫描"
 #, fuzzy
 msgid "app.scan.native.earlier"
 msgstr "尚未上传的扫描"
+
+# Source-Hash: 5d808f2f9d15a3d7
+# Review: required
+# English: "Uploaded to another server. It is not on this site."
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.elsewhere"
+msgstr "已上传到其他服务器，不在此站点上。"
 
 # Source-Hash: 81e1405f801de1e7
 # Review: required
@@ -2026,6 +2058,14 @@ msgstr "{keyframes, plural, other {# 个关键帧}}，{state}"
 msgid "app.scan.native.failed"
 msgstr "配套应用报告了错误：{code}"
 
+# Source-Hash: 591087ea83a48ead
+# Review: required
+# English: "Hide"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.hide"
+msgstr "隐藏"
+
 # Source-Hash: 6270972be99e74e0
 # Review: required
 # AI-Provider: claude-code
@@ -2036,17 +2076,25 @@ msgstr "配套应用报告了错误：{code}"
 msgid "app.scan.native.hint"
 msgstr "配套应用使用 ARCore 记录位姿、平面、深度和关键帧，然后将其上传到本站。"
 
+# Source-Hash: 238406df01367d8d
+# Review: required
+# English: "Already in {project}"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.inProject"
+msgstr "已在 {project} 中"
+
+# English: "Show a live map while scanning"
 # Source-Hash: 4c03e9893226a97d
 # Review: required
-# English: "Show a live map while scanning"
 #: apps/editor/app/scan/native-scan.tsx
 #, fuzzy
 msgid "app.scan.native.livePreview"
 msgstr "扫描时显示实时地图"
 
+# English: "Off by default. A small preview of coverage and the room outline appears on the scan screen. It is only a preview; the saved scan is the same either way."
 # Source-Hash: 9afb1cceb0c6a8b8
 # Review: required
-# English: "Off by default. A small preview of coverage and the room outline appears on the scan screen. It is only a preview; the saved scan is the same either way."
 #: apps/editor/app/scan/native-scan.tsx
 #, fuzzy
 msgid "app.scan.native.livePreviewHint"
@@ -2072,6 +2120,30 @@ msgstr "记录大致位置"
 msgid "app.scan.native.locationHint"
 msgstr "默认关闭。位置信息会与扫描一起保存，并在处理扫描时用于将指南针校正为真北。手机会先请求权限。"
 
+# Source-Hash: c36f40587389e367
+# Review: required
+# English: "Mark attached"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.markAttached"
+msgstr "标记为已附加"
+
+# Source-Hash: aba25fa394039e44
+# Review: required
+# English: "Project: {project}"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.projectLabel"
+msgstr "项目：{project}"
+
+# Source-Hash: 1ca91cd28528f704
+# Review: required
+# English: "Delete this scan from the phone? It is not on this site, so this cannot be undone."
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.removeConfirm"
+msgstr "要从手机删除此扫描吗？它不在此站点上，删除后无法恢复。"
+
 # Source-Hash: e4e15da3db73b81d
 # Review: required
 # AI-Provider: claude-code
@@ -2092,6 +2164,30 @@ msgstr "开始配套应用扫描"
 msgid "app.scan.native.starting"
 msgstr "正在打开扫描器…"
 
+# Source-Hash: fc1817e763d15c74
+# Review: required
+# English: "Use the torch (experiment)"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.torch"
+msgstr "使用手电筒（实验）"
+
+# Source-Hash: f21d72fefa946b08
+# Review: required
+# English: "Set before the scan and kept on throughout. Tracking may be less reliable with the torch on."
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.torchHint"
+msgstr "在扫描前选择，并全程保持开启。开启手电筒时跟踪可能不够稳定。"
+
+# Source-Hash: 7b4c9586b0ee1fe3
+# Review: required
+# English: "Could not check this scan. Try again."
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.unknown"
+msgstr "无法检查此扫描，请重试。"
+
 # Source-Hash: ceedca8a2b02b006
 # Review: required
 # AI-Provider: claude-code
@@ -2102,13 +2198,21 @@ msgstr "正在打开扫描器…"
 msgid "app.scan.native.upload"
 msgstr "上传此扫描"
 
-# Source-Hash: 3eb37861f2f38005
+# Source-Hash: 2187770cce6dcd76
 # Review: required
-# English: "Uploaded, not attached yet"
+# English: "Scans uploaded from the phone"
 #: apps/editor/app/scan/native-scan.tsx
 #, fuzzy
-msgid "app.scan.native.uploadedList"
-msgstr "已上传，尚未附加"
+msgid "app.scan.native.uploadedHeading"
+msgstr "从手机上传的扫描"
+
+# Source-Hash: e3bf9221d58e34e5
+# Review: required
+# English: "{when} · {keyframes, plural, one {# photo} other {# photos}} · {size} MB"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.uploadedMeta"
+msgstr "{when} · {keyframes, plural, other {# 张照片}} · {size} MB"
 
 # Source-Hash: 756844bbc7a4b1cf
 # Review: required
