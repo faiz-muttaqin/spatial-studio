@@ -31,7 +31,7 @@ import {
   type ViewerImmersiveSession,
   ViewerPresentations,
 } from '@pascal-app/viewer'
-import { CaptureRuntime } from '@pascal-app/viewer/capture'
+import { CaptureRuntime, type CaptureRuntimeErrorContext } from '@pascal-app/viewer/capture'
 import { useViewerUiSounds } from '@pascal-app/viewer/sfx'
 import {
   type ActionMenuPlacement,
@@ -289,13 +289,13 @@ export interface EditorProps {
    */
   multiSelectionFooter?: ReactNode
 
-  /** Host-owned content mounted inside the editor's React Three Fiber scene. */
   /**
    * Resolves a scan's `captureSession` to a capture source (manifest and artifacts). The editor
    * mounts the viewer's capture layers and the scan evidence panel with it. Omit it and capture
    * scans stay reference entries that draw nothing.
    */
   captureSourceResolver?: CaptureSourceResolver
+  /** Host-owned content mounted inside the editor's React Three Fiber scene. */
   viewerSceneSlot?: ReactNode
   /** Host-owned SVG content mounted in the transformed floor-plan scene. */
   floorplanSceneSlot?: ReactNode
@@ -950,6 +950,10 @@ function SnapAwareGrid() {
   return <Grid cellColor="#aaa" cellSize={gridSnapStep} fadeDistance={500} sectionColor="#ccc" />
 }
 
+function logCaptureError(error: Error, context: CaptureRuntimeErrorContext) {
+  console.warn(`Capture ${context.phase} failed for ${context.scanId}:`, error.message)
+}
+
 // ── Viewer scene content: memoized so <Viewer> doesn't re-render on mode/viewMode changes ──
 
 const ViewerSceneContent = memo(function ViewerSceneContent({
@@ -1017,7 +1021,9 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!isXRMode && <VectorEdgeExtractor />}
       {!(isFirstPersonMode || isXRMode) && <SiteEdgeLabels />}
       {presentationsReady ? <ViewerPresentations /> : null}
-      {captureSourceResolver ? <CaptureRuntime resolveSource={captureSourceResolver} /> : null}
+      {captureSourceResolver ? (
+        <CaptureRuntime onError={logCaptureError} resolveSource={captureSourceResolver} />
+      ) : null}
       {!noEditing && viewerSceneSlot}
     </>
   )

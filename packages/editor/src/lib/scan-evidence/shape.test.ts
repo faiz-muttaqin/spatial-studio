@@ -195,10 +195,10 @@ describe('selectKeyframePage', () => {
 })
 
 describe('findEvidenceStreams', () => {
-  it('finds ready evidence streams by kind and ignores pending ones', () => {
+  it('finds evidence streams by kind and keeps their availability', () => {
     const found = findEvidenceStreams(descriptor(undefined))
-    expect(found.keyframes?.id).toBe('photos')
-    expect(found.planes?.id).toBe('planes')
-    expect(found.measurements).toBeNull()
+    expect(found.keyframes?.stream.id).toBe('photos')
+    expect(found.planes?.stream.id).toBe('planes')
+    expect(found.measurements?.availability).toBe('pending')
   })
 })

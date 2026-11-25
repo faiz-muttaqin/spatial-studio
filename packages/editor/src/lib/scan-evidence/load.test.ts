@@ -47,6 +47,31 @@ function source(): CaptureSource {
 }
 
 describe('loadScanEvidence', () => {
+  it('reports pending and failed evidence streams without fetching them', async () => {
+    const pending = CaptureSessionDescriptorSchema.parse({
+      ...descriptor,
+      state: 'finalizing',
+      streams: [
+        { id: 'p', kind: 'plane-set', availability: 'failed' },
+        { id: 'k', kind: 'rgb-keyframes', availability: 'pending' },
+      ],
+    })
+    let fetched = 0
+    const evidence = await loadScanEvidence(
+      { describe: async () => pending },
+      {
+        fetchJson: async () => {
+          fetched += 1
+          return {}
+        },
+      },
+    )
+    expect(fetched).toBe(0)
+    expect(evidence.notReady).toEqual({ keyframes: 'pending', planes: 'failed' })
+    expect(evidence.session.state).toBe('finalizing')
+    expect(evidence.problems).toEqual([])
+  })
+
   it('reads artifact and inline streams', async () => {
     const evidence = await loadScanEvidence(source(), {
       fetchJson: async (url) =>

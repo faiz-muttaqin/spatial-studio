@@ -89,6 +89,8 @@ export function PointDiscCloud({
   useLayoutEffect(() => {
     const blended = opacity < 1
     built.opacityUniform.value = Math.min(1, Math.max(0, opacity))
+    // Only crossing 1 changes how the material is drawn; a fade within 0 to 1 is just the uniform.
+    if (built.material.transparent === blended) return
     built.material.transparent = blended
     built.material.depthWrite = !blended
     // The disc's cut-away corners are 0, so a low threshold still clips them while the rest fades.

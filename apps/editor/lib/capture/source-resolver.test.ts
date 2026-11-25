@@ -89,6 +89,27 @@ describe('createCaptureSourceResolver', () => {
     )
   })
 
+  it('only reads the content-addressed artifact route', async () => {
+    const resolve = createCaptureSourceResolver({ fetch: fetchStub(manifest()), origin })
+    expect(() => resolve({ sessionId: 'session-1', manifestUrl: '/api/scenes/abc' })).toThrow(
+      'artifact store',
+    )
+    expect(() =>
+      resolve({ sessionId: 'session-1', manifestUrl: 'blob:https://studio.example.test/x' }),
+    ).toThrow()
+    const source = await resolve({ sessionId: 'session-1', manifestUrl: `/api/artifacts/${sha}` })
+    for (const uri of [
+      `/api/artifacts/${sha}?x=1`,
+      '/api/artifacts/short',
+      '/other/file.jpg',
+      'data:text/plain,hi',
+    ]) {
+      await expect(
+        source.resolveArtifact?.({ id: 'x', mediaType: 'image/jpeg', uri }),
+      ).rejects.toThrow()
+    }
+  })
+
   it('needs a manifest URL and does not cache a failed manifest', async () => {
     let attempts = 0
     const flaky = (async () => {

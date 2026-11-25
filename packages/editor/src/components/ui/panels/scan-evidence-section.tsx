@@ -8,7 +8,7 @@ import {
   captureStreamLabel,
 } from '@pascal-app/core/capture'
 import { X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useCaptureSourceResolver } from '../../../lib/capture-source-context'
 import { loadScanEvidence, type ScanEvidence } from '../../../lib/scan-evidence/load'
@@ -20,6 +20,7 @@ type CaptureScan = ScanNode & { captureSession: NonNullable<ScanNode['captureSes
 type EvidenceState =
   | { status: 'loading' }
   | { status: 'error' }
+  | { status: 'no-manifest' }
   | { status: 'ready'; evidence: ScanEvidence; source: CaptureSource }
 
 // Streams that carry evidence for review, not a drawable layer.
@@ -30,13 +31,6 @@ const EVIDENCE_KINDS = new Set([
   'manual-measurements',
   'device-capabilities',
 ])
-
-const LAYER_LABELS: Record<string, { id: string; message: string }> = {
-  deviceMotion: { id: 'editor.panels.scanEvidence.layer.deviceMotion', message: 'Camera path' },
-  model: { id: 'editor.panels.scanEvidence.layer.model', message: '3D model' },
-  pointCloud: { id: 'editor.panels.scanEvidence.layer.pointCloud', message: 'Point cloud' },
-  surfaceMesh: { id: 'editor.panels.scanEvidence.layer.surfaceMesh', message: 'Surface mesh' },
-}
 
 export function ScanEvidenceSection({ node }: { node: ScanNode }) {
   if (!node.captureSession) return null
@@ -62,7 +56,8 @@ function ScanEvidenceContent({ node }: { node: CaptureScan }) {
         const evidence = await loadScanEvidence(source, { signal: abort.signal })
         if (!abort.signal.aborted) setState({ evidence, source, status: 'ready' })
       } catch {
-        if (!abort.signal.aborted) setState({ status: 'error' })
+        if (abort.signal.aborted) return
+        setState({ status: session.manifestUrl ? 'error' : 'no-manifest' })
       }
     })()
     return () => abort.abort()
@@ -83,12 +78,18 @@ function ScanEvidenceContent({ node }: { node: CaptureScan }) {
     return (
       <PanelSection title={title}>
         <p className="text-muted-foreground text-xs" role="status">
-          {state.status === 'loading'
-            ? i18n._({ id: 'editor.panels.scanEvidence.loading', message: 'Loading capture data…' })
-            : i18n._({
-                id: 'editor.panels.scanEvidence.unavailable',
-                message: 'The capture data could not be loaded.',
-              })}
+          {state.status === 'loading' &&
+            i18n._({ id: 'editor.panels.scanEvidence.loading', message: 'Loading capture data…' })}
+          {state.status === 'error' &&
+            i18n._({
+              id: 'editor.panels.scanEvidence.unavailable',
+              message: 'The capture data could not be loaded.',
+            })}
+          {state.status === 'no-manifest' &&
+            i18n._({
+              id: 'editor.panels.scanEvidence.noManifest',
+              message: 'This scan has no capture manifest, so there is no evidence to show.',
+            })}
         </p>
       </PanelSection>
     )
@@ -103,6 +104,11 @@ function ScanEvidenceContent({ node }: { node: CaptureScan }) {
   return (
     <PanelSection title={title}>
       <SessionFacts evidence={evidence} i18n={i18n} locale={locale} />
+      {Object.entries(evidence.notReady).map(([part, availability]) => (
+        <p className="text-amber-600 text-xs" key={part} role="status">
+          {notReadyMessage(part, availability, i18n)}
+        </p>
+      ))}
       {evidence.problems.length > 0 && (
         <p className="text-amber-600 text-xs" role="alert">
           {i18n._({
@@ -114,8 +120,7 @@ function ScanEvidenceContent({ node }: { node: CaptureScan }) {
       {layers.length > 0 && (
         <Group label={i18n._({ id: 'editor.panels.scanEvidence.layers', message: 'Layers' })}>
           {layers.map(({ key, stream }) => {
-            const known = LAYER_LABELS[key]
-            const label = known ? i18n._(known) : captureStreamLabel(stream)
+            const label = layerLabel(key, i18n) ?? captureStreamLabel(stream)
             return (
               <label className="flex items-center gap-2 text-xs" key={key}>
                 <input
@@ -138,6 +143,72 @@ function ScanEvidenceContent({ node }: { node: CaptureScan }) {
       )}
     </PanelSection>
   )
+}
+
+function partLabel(part: string, i18n: PascalI18n): string {
+  if (part === 'planes') {
+    return i18n._({ id: 'editor.panels.scanEvidence.planes', message: 'Detected planes' })
+  }
+  if (part === 'measurements') {
+    return i18n._({ id: 'editor.panels.scanEvidence.measurements', message: 'Manual measurements' })
+  }
+  return i18n._({ id: 'editor.panels.scanEvidence.photosName', message: 'Photos' })
+}
+
+function layerLabel(key: string, i18n: PascalI18n): string | null {
+  switch (key) {
+    case 'deviceMotion':
+      return i18n._({ id: 'editor.panels.scanEvidence.layer.deviceMotion', message: 'Camera path' })
+    case 'model':
+      return i18n._({ id: 'editor.panels.scanEvidence.layer.model', message: '3D model' })
+    case 'pointCloud':
+      return i18n._({ id: 'editor.panels.scanEvidence.layer.pointCloud', message: 'Point cloud' })
+    case 'surfaceMesh':
+      return i18n._({ id: 'editor.panels.scanEvidence.layer.surfaceMesh', message: 'Surface mesh' })
+    default:
+      return null
+  }
+}
+
+function providerLabel(provider: string, i18n: PascalI18n): string {
+  switch (provider) {
+    case 'android-arcore':
+      return i18n._({ id: 'editor.panels.scanEvidence.provider.androidArcore', message: 'Android (ARCore)' })
+    case 'browser-photo':
+      return i18n._({ id: 'editor.panels.scanEvidence.provider.browserPhoto', message: 'Browser photos' })
+    case 'webxr':
+      return i18n._({ id: 'editor.panels.scanEvidence.provider.webxr', message: 'WebXR' })
+    default:
+      return provider
+  }
+}
+
+function stateLabel(state: string, i18n: PascalI18n): string | null {
+  switch (state) {
+    case 'failed':
+      return i18n._({ id: 'editor.panels.scanEvidence.state.failed', message: 'Failed' })
+    case 'finalizing':
+      return i18n._({ id: 'editor.panels.scanEvidence.state.finalizing', message: 'Finalising' })
+    case 'live':
+      return i18n._({ id: 'editor.panels.scanEvidence.state.live', message: 'Live' })
+    default:
+      return null
+  }
+}
+
+function notReadyMessage(part: string, availability: 'failed' | 'pending', i18n: PascalI18n): string {
+  const values = { part: partLabel(part, i18n) }
+  return availability === 'failed'
+    ? i18n._({
+        id: 'editor.panels.scanEvidence.partFailed',
+        message: '{part}: the capture could not produce this.',
+        values,
+      })
+    : i18n._({
+        id: 'editor.panels.scanEvidence.partPending',
+        message: '{part}: not ready yet.',
+        values,
+      })
 }
 
 function Group({ children, label }: { children: React.ReactNode; label: string }) {
@@ -186,8 +257,14 @@ function SessionFacts({
     <div className="flex flex-col gap-1">
       <Fact
         label={i18n._({ id: 'editor.panels.scanEvidence.provider', message: 'Provider' })}
-        value={session.provider ?? unknown}
+        value={session.provider ? providerLabel(session.provider, i18n) : unknown}
       />
+      {stateLabel(session.state, i18n) && (
+        <Fact
+          label={i18n._({ id: 'editor.panels.scanEvidence.status', message: 'Status' })}
+          value={stateLabel(session.state, i18n)}
+        />
+      )}
       <Fact
         label={i18n._({ id: 'editor.panels.scanEvidence.device', message: 'Device' })}
         value={session.device ?? unknown}
@@ -207,8 +284,9 @@ function SessionFacts({
       {session.warnings.length > 0 && (
         <Group label={i18n._({ id: 'editor.panels.scanEvidence.warnings', message: 'Warnings' })}>
           <ul className="list-disc pl-4 text-xs">
-            {session.warnings.map((warning) => (
-              <li key={warning}>{warning}</li>
+            {session.warnings.map((warning, index) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: warnings may repeat
+              <li key={`${index}:${warning}`}>{warning}</li>
             ))}
           </ul>
         </Group>
@@ -305,6 +383,7 @@ function KeyframeStrip({
 }) {
   const [page, setPage] = useState(0)
   const [open, setOpen] = useState<RgbKeyframe | null>(null)
+  const closeLightbox = useCallback(() => setOpen(null), [])
   const current = useMemo(() => selectKeyframePage(index, page), [index, page])
 
   return (
@@ -347,7 +426,7 @@ function KeyframeStrip({
           </button>
         </div>
       )}
-      {open && <Lightbox frame={open} i18n={i18n} onClose={() => setOpen(null)} source={source} />}
+      {open && <Lightbox frame={open} i18n={i18n} onClose={closeLightbox} source={source} />}
     </Group>
   )
 }
@@ -433,16 +512,27 @@ function Lightbox({
   source: CaptureSource
 }) {
   const url = useFrameImageUrl(source, frame)
+  const closeRef = useRef<HTMLButtonElement>(null)
   useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null
+    closeRef.current?.focus()
+    // Capture phase on window: Escape closes the photo and never reaches editor shortcuts.
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key !== 'Escape') return
+      event.stopPropagation()
+      event.preventDefault()
+      onClose()
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey, true)
+    return () => {
+      window.removeEventListener('keydown', onKey, true)
+      opener?.focus()
+    }
   }, [onClose])
   // The panel animates with transforms, which would pin a fixed overlay inside it.
   return createPortal(
     <div
+      aria-label={i18n._({ id: 'editor.panels.scanEvidence.photoDialog', message: 'Capture photo' })}
       aria-modal="true"
       className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 p-4"
       onClick={onClose}
@@ -453,6 +543,7 @@ function Lightbox({
         aria-label={i18n._({ id: 'editor.panels.scanEvidence.close', message: 'Close photo' })}
         className="absolute top-4 right-4 rounded-full bg-black/60 p-2 text-white"
         onClick={onClose}
+        ref={closeRef}
         type="button"
       >
         <X className="h-4 w-4" />

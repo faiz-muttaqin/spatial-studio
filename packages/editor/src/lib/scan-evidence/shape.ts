@@ -143,15 +143,25 @@ export function selectKeyframePage(
   }
 }
 
+export type EvidenceStream = {
+  stream: CaptureStreamDescriptor
+  /** `ready` streams are read; `pending` and `failed` ones are shown as such. */
+  availability: CaptureStreamDescriptor['availability']
+}
+
 export type EvidenceStreams = {
-  keyframes: CaptureStreamDescriptor | null
-  measurements: CaptureStreamDescriptor | null
-  planes: CaptureStreamDescriptor | null
+  keyframes: EvidenceStream | null
+  measurements: EvidenceStream | null
+  planes: EvidenceStream | null
 }
 
 export function findEvidenceStreams(descriptor: CaptureSessionDescriptor): EvidenceStreams {
-  const ready = descriptor.streams.filter((stream) => stream.availability === 'ready')
-  const byKind = (kind: string) => ready.find((stream) => stream.kind === kind) ?? null
+  const byKind = (kind: string): EvidenceStream | null => {
+    const matches = descriptor.streams.filter((stream) => stream.kind === kind)
+    // A usable stream wins over a failed or pending duplicate of the same kind.
+    const stream = matches.find((entry) => entry.availability === 'ready') ?? matches[0]
+    return stream ? { availability: stream.availability, stream } : null
+  }
   return {
     keyframes: byKind('rgb-keyframes'),
     measurements: byKind('manual-measurements'),

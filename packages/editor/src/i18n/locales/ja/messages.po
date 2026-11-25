@@ -15362,6 +15362,46 @@ msgstr "写真を拡大"
 msgid "editor.panels.scanEvidence.floorHeight"
 msgstr "床の高さ"
 
+# Source-Hash: fbd9f7555e970dfe
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Camera path"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.layer.deviceMotion"
+msgstr "カメラの軌跡"
+
+# Source-Hash: 5ad3f0662667e6ac
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "3D model"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.layer.model"
+msgstr "3Dモデル"
+
+# Source-Hash: 749ae67e5fd0b837
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Point cloud"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.layer.pointCloud"
+msgstr "点群"
+
+# Source-Hash: d162bd068d79cdf1
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Surface mesh"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.layer.surfaceMesh"
+msgstr "サーフェスメッシュ"
+
 # Source-Hash: 4ccd2fc1a471fca5
 # Review: required
 # AI-Provider: claude-code
@@ -15402,6 +15442,16 @@ msgstr "手動の寸法"
 msgid "editor.panels.scanEvidence.nextPage"
 msgstr "次へ"
 
+# Source-Hash: c116b51a1d87ff05
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "This scan has no capture manifest, so there is no evidence to show."
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.noManifest"
+msgstr "このスキャンにはキャプチャのマニフェストがないため、表示できる証拠がありません。"
+
 # Source-Hash: a86ca97fec1d4f51
 # Review: required
 # AI-Provider: claude-code
@@ -15422,6 +15472,16 @@ msgstr "ドア、窓"
 msgid "editor.panels.scanEvidence.pageOf"
 msgstr "{page} / {pages}"
 
+# Source-Hash: 8a107b6a22257c2b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "{part}: the capture could not produce this."
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.partFailed"
+msgstr "{part}：キャプチャで生成できませんでした。"
+
 # Source-Hash: 131af82ccbeed864
 # Review: required
 # AI-Provider: claude-code
@@ -15432,6 +15492,26 @@ msgstr "{page} / {pages}"
 msgid "editor.panels.scanEvidence.partial"
 msgstr "このキャプチャの一部の証拠を読み取れませんでした。"
 
+# Source-Hash: f574e114e135433f
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "{part}: not ready yet."
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.partPending"
+msgstr "{part}：まだ準備できていません。"
+
+# Source-Hash: 7b83f0e4a253f537
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Capture photo"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.photoDialog"
+msgstr "キャプチャの写真"
+
 # Source-Hash: e44ffe32c2b2e0f6
 # Review: required
 # AI-Provider: claude-code
@@ -15441,6 +15521,16 @@ msgstr "このキャプチャの一部の証拠を読み取れませんでした
 #, fuzzy
 msgid "editor.panels.scanEvidence.photos"
 msgstr "写真（{count}）"
+
+# Source-Hash: a9e5b4262fdbf3e9
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Photos"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.photosName"
+msgstr "写真"
 
 # Source-Hash: bd70e0434f0713f5
 # Review: required
@@ -15512,6 +15602,36 @@ msgstr "前へ"
 msgid "editor.panels.scanEvidence.provider"
 msgstr "プロバイダー"
 
+# Source-Hash: 825c7563be3c661d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Android (ARCore)"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.provider.androidArcore"
+msgstr "Android (ARCore)"
+
+# Source-Hash: b95e8f15d921d007
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Browser photos"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.provider.browserPhoto"
+msgstr "ブラウザーの写真"
+
+# Source-Hash: dc6a65eb99592943
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "WebXR"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.provider.webxr"
+msgstr "WebXR"
+
 # Source-Hash: 646ef0fbcbc58edf
 # Review: required
 # AI-Provider: claude-code
@@ -15541,6 +15661,46 @@ msgstr "長さ"
 #, fuzzy
 msgid "editor.panels.scanEvidence.roomWidth"
 msgstr "幅"
+
+# Source-Hash: a4364c1ff0695334
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Failed"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.state.failed"
+msgstr "失敗"
+
+# Source-Hash: 850576156d4bcae7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Finalising"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.state.finalizing"
+msgstr "最終処理中"
+
+# Source-Hash: 5871bc6d2f460a90
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Live"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.state.live"
+msgstr "ライブ"
+
+# Source-Hash: 7eeef5d986492416
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Status"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.status"
+msgstr "状態"
 
 # Source-Hash: 8f8699138b7446ad
 # Review: required

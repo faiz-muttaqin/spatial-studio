@@ -132,16 +132,20 @@ function CaptureLine({
     const material = new LineBasicMaterial({
       color,
       linewidth: lineWidth,
-      opacity,
       toneMapped: false,
-      transparent: opacity < 1,
     })
     const object = segments
       ? new LineSegments(geometry, material)
       : new ThreeLine(geometry, material)
     object.frustumCulled = false
     return object
-  }, [color, lineWidth, opacity, points, segments])
+  }, [color, lineWidth, points, segments])
+
+  useEffect(() => {
+    const material = line.material as LineBasicMaterial
+    material.opacity = opacity
+    material.transparent = opacity < 1
+  }, [line, opacity])
 
   useEffect(
     () => () => {

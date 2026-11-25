@@ -17,6 +17,7 @@ import {
 import { createPortal, useFrame } from '@react-three/fiber'
 import {
   type ComponentType,
+  memo,
   type ReactNode,
   Suspense,
   useCallback,
@@ -100,37 +101,59 @@ export function CaptureRuntime({
   resolveSource,
   retryKey = 0,
 }: CaptureRuntimeProps) {
-  const nodes = useScene((state) => state.nodes)
-  const showScans = useViewer((state) => state.showScans)
-  const scans = useMemo(
-    () =>
-      Object.values(nodes).filter(
-        (node): node is CaptureSessionScan =>
-          node.type === 'scan' &&
-          node.captureSession !== null &&
-          isCaptureSessionVisible(showScans, node.visible),
-      ),
-    [nodes, showScans],
+  // A string of ids is a primitive, so unrelated node edits do not re-render the runtime.
+  const scanIdKey = useScene((state) => {
+    let ids = ''
+    for (const node of Object.values(state.nodes)) {
+      if (node.type === 'scan' && node.captureSession !== null) ids += `${node.id},`
+    }
+    return ids
+  })
+  const scanIds = useMemo(
+    () => (scanIdKey ? (scanIdKey.slice(0, -1).split(',') as ScanNode['id'][]) : []),
+    [scanIdKey],
   )
 
   return (
     <>
-      {scans.map((scan) => (
+      {scanIds.map((scanId) => (
         <CaptureSessionPortal
           defaultLayerVisibility={defaultLayerVisibility}
-          key={`${scan.id}:${retryKey}`}
+          key={`${scanId}:${retryKey}`}
           maxPacketsPerStream={maxPacketsPerStream}
           onError={onError}
           renderers={renderers}
           resolveSource={resolveSource}
-          scan={scan}
+          scanId={scanId}
         />
       ))}
     </>
   )
 }
 
-function CaptureSessionPortal({
+const CaptureSessionPortal = memo(function CaptureSessionPortal({
+  scanId,
+  ...rest
+}: {
+  defaultLayerVisibility: Readonly<Record<string, boolean>>
+  maxPacketsPerStream: number
+  onError?: (error: Error, context: CaptureRuntimeErrorContext) => void
+  renderers: Readonly<Record<string, CaptureStreamRenderer>>
+  resolveSource: CaptureSourceResolver
+  scanId: ScanNode['id']
+}) {
+  const showScans = useViewer((state) => state.showScans)
+  const node = useScene((state) => state.nodes[scanId])
+  if (
+    !(node?.type === 'scan' && node.captureSession !== null) ||
+    !isCaptureSessionVisible(showScans, node.visible)
+  ) {
+    return null
+  }
+  return <VisibleCaptureSession {...rest} scan={node as CaptureSessionScan} />
+})
+
+function VisibleCaptureSession({
   defaultLayerVisibility,
   maxPacketsPerStream,
   onError,
@@ -155,7 +178,13 @@ function CaptureSessionPortal({
       isCaptureStreamRenderable(stream, customRendererKeys),
     [customRendererKeys, defaultLayerVisibility, scan.layers],
   )
-  const sourceState = useCaptureSource(scan.captureSession, resolveSource, {
+  const { manifestUrl, revisionId, schemaVersion, sessionId } = scan.captureSession
+  // Built from the locator's fields, so an edit elsewhere on the node never reloads the source.
+  const locator = useMemo(
+    () => ({ manifestUrl, revisionId, schemaVersion, sessionId }),
+    [manifestUrl, revisionId, schemaVersion, sessionId],
+  )
+  const sourceState = useCaptureSource(locator, resolveSource, {
     maxPacketsPerStream,
     streamFilter,
   })

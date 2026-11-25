@@ -6,7 +6,7 @@ import type {
   CaptureStreamDescriptor,
   CaptureStreamPacket,
 } from '@pascal-app/core/capture'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 export type CaptureSourceState = {
   descriptor: CaptureSessionDescriptor | null
@@ -37,6 +37,10 @@ export function useCaptureSource(
 ): CaptureSourceState {
   const { maxPacketsPerStream = 32, streamFilter, subscribe = true } = options
   const [retryVersion, setRetryVersion] = useState(0)
+  // The filter only picks which live streams to subscribe to when a source opens. Keeping it out
+  // of the effect's dependencies means toggling a layer never reloads the descriptor.
+  const streamFilterRef = useRef(streamFilter)
+  streamFilterRef.current = streamFilter
   const [state, setState] = useState<CaptureSourceSnapshot>({
     descriptor: null,
     descriptorVersion: 0,
@@ -77,12 +81,12 @@ export function useCaptureSource(
       abort.signal,
       retryVersion,
       maxPacketsPerStream,
-      streamFilter,
+      streamFilterRef.current,
       subscribe,
       setState,
     )
     return () => abort.abort()
-  }, [locator, maxPacketsPerStream, resolveSource, retryVersion, streamFilter, subscribe])
+  }, [locator, maxPacketsPerStream, resolveSource, retryVersion, subscribe])
 
   const retry = useCallback(() => setRetryVersion((current) => current + 1), [])
   return { ...state, retry }

@@ -2,12 +2,12 @@ import {
   CapturePlaneSetSchema,
   type CaptureSessionDescriptor,
   type CaptureSource,
-  type CaptureStreamDescriptor,
   ManualMeasurementsSchema,
   type RgbKeyframeIndex,
   RgbKeyframeIndexSchema,
 } from '@pascal-app/core/capture'
 import {
+  type EvidenceStream,
   findEvidenceStreams,
   type MeasurementSummary,
   type PlaneSummary,
@@ -21,6 +21,8 @@ export type EvidencePart = 'keyframes' | 'measurements' | 'planes'
 
 export type ScanEvidence = {
   descriptor: CaptureSessionDescriptor
+  /** Evidence streams the bundle declares but did not finish: still `pending` or `failed`. */
+  notReady: Partial<Record<EvidencePart, 'failed' | 'pending'>>
   keyframes: RgbKeyframeIndex | null
   measurements: MeasurementSummary | null
   /** Evidence streams the bundle has but that could not be read or failed their schema. */
@@ -49,9 +51,15 @@ export async function loadScanEvidence(
   const descriptor = await source.describe(signal)
   const streams = findEvidenceStreams(descriptor)
   const problems: EvidencePart[] = []
+  const notReady: ScanEvidence['notReady'] = {}
 
-  const read = async (part: EvidencePart, stream: CaptureStreamDescriptor | null) => {
-    if (!stream) return null
+  const read = async (part: EvidencePart, entry: EvidenceStream | null) => {
+    if (!entry) return null
+    const { stream } = entry
+    if (entry.availability === 'failed' || entry.availability === 'pending') {
+      notReady[part] = entry.availability
+      return null
+    }
     try {
       if (stream.inline != null) return stream.inline
       if (!(stream.artifact && source.resolveArtifact)) throw new Error('No artifact.')
@@ -95,6 +103,7 @@ export async function loadScanEvidence(
     keyframes,
     measurements: measurements ? summarizeMeasurements(measurements) : null,
     planes: planes ? summarizePlanes(planes) : null,
+    notReady,
     problems,
     session: summarizeSession(descriptor),
   }

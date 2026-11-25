@@ -15,7 +15,8 @@ type ResolverOptions = {
 /**
  * Same-origin capture sources for the editor. A scan's manifest and every artifact it names
  * (`/api/artifacts/<sha256>`) are fetched with the session cookie, so only this origin is ever
- * contacted: a manifest URL or artifact URI that points elsewhere is refused instead of leaking
+ * contacted, and only the content-addressed artifact route: a manifest URL or artifact URI that
+ * points elsewhere, to another path, or to a `blob:` or `data:` URL is refused instead of leaking
  * the cookie or loading foreign content into the scene. Sources are shared per session so the
  * 3D layers and the evidence panel read the manifest once.
  */
@@ -54,6 +55,8 @@ export function createCaptureSourceResolver(options: ResolverOptions = {}): Capt
   }
 }
 
+const ARTIFACT_PATH = /^\/api\/artifacts\/[0-9a-f]{64}$/
+
 function sameOriginUrl(value: string, base: string, origin: string): string {
   let url: URL
   try {
@@ -63,6 +66,9 @@ function sameOriginUrl(value: string, base: string, origin: string): string {
   }
   if (url.origin !== new URL(origin).origin) {
     throw new Error('Capture data must be served from this origin.')
+  }
+  if (!ARTIFACT_PATH.test(url.pathname) || url.search || url.hash) {
+    throw new Error('Capture data must come from the artifact store.')
   }
   return url.toString()
 }
