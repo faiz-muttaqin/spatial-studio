@@ -77,6 +77,8 @@ class BundleInput(
     val trackingLossCount: Int,
     val warnings: List<String>,
     val startTimestampNs: Long?,
+    /** `SENSOR_ORIENTATION` of the ARCore camera, recorded with the pose convention. */
+    val sensorOrientationDeg: Int?,
     /** Extra provider details kept under `metadata.arcore`. */
     val arcore: JsonObject,
 )
@@ -224,6 +226,7 @@ class ScanBundleWriter(private val dir: File) {
 
     fun finalize(input: BundleInput): FinalizedBundle {
         val artifacts = ArrayList<ArtifactFile>()
+        val warnings = LinkedHashSet(input.warnings)
 
         fun register(path: String, mediaType: String): ArtifactFile {
             val file = File(dir, path)
@@ -257,9 +260,18 @@ class ScanBundleWriter(private val dir: File) {
             }
         }
 
-        if (input.keyframes.isNotEmpty()) {
-            val images = input.keyframes.associate { it.id to register(it.imagePath, ScanBundle.MEDIA_JPEG) }
-            val index = writeJson("keyframes.json", ScanBundle.keyframeIndex(input.keyframes, images))
+        // A keyframe or depth frame whose file is gone is left out with a warning instead of failing the save.
+        val keyframes = input.keyframes.filter { File(dir, it.imagePath).isFile }
+        if (keyframes.size < input.keyframes.size) warnings += "keyframe-file-missing"
+        val keyframeIds = keyframes.mapTo(HashSet()) { it.id }
+        val depthFrames = input.depth.filter { d ->
+            d.rgbKeyframeId in keyframeIds && File(dir, d.depthPath).isFile && (d.confidencePath == null || File(dir, d.confidencePath).isFile)
+        }
+        if (depthFrames.size < input.depth.size) warnings += "depth-file-missing"
+
+        if (keyframes.isNotEmpty()) {
+            val images = keyframes.associate { it.id to register(it.imagePath, ScanBundle.MEDIA_JPEG) }
+            val index = writeJson("keyframes.json", ScanBundle.keyframeIndex(keyframes, images))
             streams += buildJsonObject {
                 put("id", "rgb-keyframes")
                 put("kind", "rgb-keyframes")
@@ -270,17 +282,17 @@ class ScanBundleWriter(private val dir: File) {
                 put("artifact", ScanBundle.artifactRef(sessionId, "rgb-keyframes", index))
                 putJsonObject("metadata") {
                     put("source", "arcore")
-                    put("count", input.keyframes.size)
+                    put("count", keyframes.size)
                 }
             }
         }
 
-        if (input.depth.isNotEmpty()) {
-            val depthFiles = input.depth.associate { it.id to register(it.depthPath, ScanBundle.MEDIA_BINARY) }
-            val confidenceFiles = input.depth.mapNotNull { d ->
+        if (depthFrames.isNotEmpty()) {
+            val depthFiles = depthFrames.associate { it.id to register(it.depthPath, ScanBundle.MEDIA_BINARY) }
+            val confidenceFiles = depthFrames.mapNotNull { d ->
                 d.confidencePath?.let { d.id to register(it, ScanBundle.MEDIA_BINARY) }
             }.toMap()
-            val index = writeJson("depth.json", ScanBundle.depthIndex(input.depth, depthFiles, confidenceFiles))
+            val index = writeJson("depth.json", ScanBundle.depthIndex(depthFrames, depthFiles, confidenceFiles))
             streams += buildJsonObject {
                 put("id", "depth-keyframes")
                 put("kind", "depth-keyframes")
@@ -291,7 +303,7 @@ class ScanBundleWriter(private val dir: File) {
                 put("artifact", ScanBundle.artifactRef(sessionId, "depth-keyframes", index))
                 putJsonObject("metadata") {
                     put("source", "arcore")
-                    put("count", input.depth.size)
+                    put("count", depthFrames.size)
                     put("encoding", "uint16-le-millimetres")
                     put("confidenceEncoding", "uint8")
                 }
@@ -379,8 +391,15 @@ class ScanBundleWriter(private val dir: File) {
                 }
                 put("createdAt", JsonUtil.isoUtc(input.createdAtMs))
                 put("trackingLossCount", input.trackingLossCount)
-                put("warnings", JsonArray(input.warnings.map(::JsonPrimitive)))
+                put("warnings", JsonArray(warnings.map(::JsonPrimitive)))
                 input.startTimestampNs?.let { put("startTimestampNs", it) }
+                // Keyframe poses are Camera.getPose(): OpenGL camera axes (+X right, +Y up, -Z forward)
+                // relative to the image readout, so they match the unrotated JPEG and its intrinsics.
+                putJsonObject("camera") {
+                    put("convention", "opengl")
+                    put("frame", "image-readout")
+                    put("sensorOrientationDeg", input.sensorOrientationDeg)
+                }
                 put("arcore", input.arcore)
             }
         }

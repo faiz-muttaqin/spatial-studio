@@ -59,6 +59,27 @@ class OriginAllowlistTest {
     }
 
     @Test
+    fun oddCharactersInTheRestOfATrustedUrlStayInTheApp() {
+        assertTrue(release.isAllowedNavigation("$studio/project/a|b{c}^d e?q=[1]#x y"))
+        assertTrue(release.isAllowedNavigation("$studio?x=1"))
+        assertTrue(release.isAllowedNavigation(studio))
+        val underscore = OriginAllowlist(listOf("https://my_host.example.com"))
+        assertTrue(underscore.isAllowedNavigation("https://my_host.example.com/path"))
+    }
+
+    @Test
+    fun anythingOddInTheAuthorityFailsClosed() {
+        assertFalse(release.isAllowedNavigation("https://evil.example\\@spatial-studio.faizmuttaqin.com/"))
+        assertFalse(release.isAllowedNavigation("https://evil.example\\spatial-studio.faizmuttaqin.com/"))
+        assertFalse(release.isAllowedNavigation("https://spatial%2Dstudio.faizmuttaqin.com/"))
+        assertFalse(release.isAllowedNavigation("https://spatial-studio.faizmuttaqin.com:abc/"))
+        assertFalse(release.isAllowedNavigation("https://spatial-studio.faizmuttaqin.com:99999/"))
+        assertFalse(release.isAllowedNavigation("https://[::1]/"))
+        assertFalse(release.isAllowedNavigation("https:///spatial-studio.faizmuttaqin.com/"))
+        assertFalse(release.isAllowedNavigation("https:spatial-studio.faizmuttaqin.com/"))
+    }
+
+    @Test
     fun matchReturnsTheConfiguredOrigin() {
         assertEquals(studio, release.match("$studio/")?.toString())
         assertNull(release.match("https://example.com"))

@@ -23,6 +23,7 @@ import com.faizmuttaqin.spatialstudio.scan.SessionRecord
 import com.faizmuttaqin.spatialstudio.security.OriginAllowlist
 import com.faizmuttaqin.spatialstudio.upload.ArtifactUploader
 import com.faizmuttaqin.spatialstudio.upload.UploadFailedException
+import com.faizmuttaqin.spatialstudio.upload.UploadLog
 import com.faizmuttaqin.spatialstudio.util.JsonUtil
 import com.google.ar.core.ArCoreApk
 import kotlinx.serialization.json.JsonArray
@@ -31,10 +32,10 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.io.File
 import java.util.UUID
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Bridge protocol v1 (CAPTURE_CONTRACT.md) over `WebViewCompat.addWebMessageListener`.
@@ -58,7 +59,6 @@ class NativeBridge(
     private val main = Handler(Looper.getMainLooper())
     private val worker: ExecutorService = Executors.newSingleThreadExecutor()
     private val uploads: ExecutorService = Executors.newSingleThreadExecutor()
-    private val uploadingSession = AtomicReference<String?>(null)
 
     /** Events go to the page that most recently sent a valid request. */
     @Volatile
@@ -68,6 +68,7 @@ class NativeBridge(
         if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
             WebViewCompat.addWebMessageListener(webView, AppConfig.BRIDGE_OBJECT_NAME, allowlist.webMessageRules, this)
             ScanCoordinator.addListener(this)
+            worker.execute { sweepStaleScans() }
             return true
         }
         Log.w(TAG, "WebView does not support WebMessageListener; bridge disabled")
@@ -165,12 +166,21 @@ class NativeBridge(
                 }
             }
         }
+        // A start can be dropped without an exception (for example from the background):
+        // release the scan if its screen has not opened in time, so later starts are not busy.
+        main.postDelayed({
+            if (ScanCoordinator.expireIfNotStarted(sessionId)) {
+                ScanCoordinator.state(sessionId, "failed") {
+                    put("error", errorJson(BridgeErrorCode.INTERNAL, "The scan screen did not open. Keep the app in front and try again."))
+                }
+            }
+        }, START_WATCHDOG_MS)
         return buildJsonObject { put("sessionId", sessionId) }
     }
 
     private fun listScans(): JsonElement {
         val active = ScanCoordinator.active?.sessionId
-        val uploading = uploadingSession.get()
+        val uploading = ScanCoordinator.uploading
         return JsonArray(
             store.list().map { record ->
                 buildJsonObject {
@@ -190,6 +200,7 @@ class NativeBridge(
                     put("uploading", record.sessionId == uploading)
                     put("projectId", record.projectId)
                     record.manifestSha256?.takeIf { record.uploaded }?.let { put("manifestUrl", "/api/artifacts/$it") }
+                    record.error?.let { put("error", it) }
                 }
             },
         )
@@ -199,7 +210,7 @@ class NativeBridge(
         if (ScanCoordinator.active?.sessionId == sessionId) {
             throw BridgeException(BridgeErrorCode.BUSY, "The scan is still running")
         }
-        if (uploadingSession.get() == sessionId) {
+        if (ScanCoordinator.uploading == sessionId) {
             throw BridgeException(BridgeErrorCode.BUSY, "The scan is uploading")
         }
         if (!store.discard(sessionId)) throw BridgeException(BridgeErrorCode.NOT_FOUND, "No such scan")
@@ -213,7 +224,7 @@ class NativeBridge(
             post(proxy, BridgeProtocol.errorReply(request.id, e.code, e.message.orEmpty()))
             return
         }
-        if (!uploadingSession.compareAndSet(null, sessionId)) {
+        if (!ScanCoordinator.beginUpload(sessionId)) {
             post(proxy, BridgeProtocol.errorReply(request.id, BridgeErrorCode.BUSY, "Another upload is running"))
             return
         }
@@ -228,7 +239,7 @@ class NativeBridge(
                 Log.e(TAG, "Upload failed", e)
                 BridgeProtocol.errorReply(request.id, BridgeErrorCode.INTERNAL, "Internal error during upload")
             } finally {
-                uploadingSession.set(null)
+                ScanCoordinator.endUpload(sessionId)
             }
             post(proxy, reply, request.id)
         }
@@ -237,11 +248,13 @@ class NativeBridge(
     private fun upload(sessionId: String, origin: OriginAllowlist.Origin): JsonElement {
         val record = store.read(sessionId) ?: throw BridgeException(BridgeErrorCode.NOT_FOUND, "No such scan")
         if (record.state != SessionRecord.READY) {
-            throw BridgeException(BridgeErrorCode.INVALID_REQUEST, "Scan is ${record.state}, not ready to upload")
+            val reason = record.error?.let { ": $it" }.orEmpty()
+            throw BridgeException(BridgeErrorCode.INVALID_REQUEST, "Scan is ${record.state}, not ready to upload$reason")
         }
         val plan = store.uploadPlan(sessionId)
+        val log = UploadLog(File(store.dir(sessionId), UploadLog.FILE))
         var lastEventAt = 0L
-        val result = uploader.upload(origin, store.dir(sessionId), plan) { progress ->
+        val result = uploader.upload(origin, store.dir(sessionId), plan, log) { progress ->
             val now = SystemClock.elapsedRealtime()
             if (progress.uploaded == progress.total || now - lastEventAt >= PROGRESS_INTERVAL_MS) {
                 lastEventAt = now
@@ -262,6 +275,15 @@ class NativeBridge(
             put("sessionId", sessionId)
             put("manifestUrl", result.manifestUrl)
             put("manifestSha256", result.manifestSha256)
+        }
+    }
+
+    private fun sweepStaleScans() {
+        try {
+            val removed = store.sweepStale(System.currentTimeMillis(), STALE_RECORDING_MS, ScanCoordinator.active?.sessionId)
+            if (removed > 0) Log.i(TAG, "Removed $removed abandoned scan(s)")
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not sweep abandoned scans", e)
         }
     }
 
@@ -286,6 +308,8 @@ class NativeBridge(
         private const val TAG = "SpatialStudioBridge"
         private const val MIN_FREE_BYTES = 300L * 1024 * 1024
         private const val PROGRESS_INTERVAL_MS = 250L
+        private const val START_WATCHDOG_MS = 10_000L
+        private const val STALE_RECORDING_MS = 24L * 60 * 60 * 1000
 
         fun errorJson(code: BridgeErrorCode, message: String) = buildJsonObject {
             put("code", code.wire)

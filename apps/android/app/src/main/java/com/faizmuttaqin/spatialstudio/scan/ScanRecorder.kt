@@ -136,38 +136,55 @@ class ScanRecorder(
         val width: Int
         val height: Int
         val nv21: ByteArray
-        image.use {
-            width = it.width
-            height = it.height
-            nv21 = ImageConversion.yuv420ToNv21(width, height, it.planes[0].data(), it.planes[1].data(), it.planes[2].data())
+        try {
+            image.use {
+                width = it.width
+                height = it.height
+                nv21 = ImageConversion.yuv420ToNv21(width, height, it.planes[0].data(), it.planes[1].data(), it.planes[2].data())
+            }
+        } catch (e: OutOfMemoryError) {
+            warnings.add(WARNING_OUT_OF_MEMORY)
+            return
         }
         val imageIntrinsics = intrinsicsFor(camera.imageIntrinsics, width, height)
         val depth = captureDepth(frame, camera)
 
         val keyframePose = pose.copyOf()
-        selector.accept(timestamp, keyframePose)
-        val id = "kf-%04d".format(Locale.ROOT, selector.count)
+        val id = "kf-%04d".format(Locale.ROOT, selector.reserve(timestamp, keyframePose))
         pending.incrementAndGet()
         encoder.execute {
+            var stored = false
             try {
-                val (stored, scaledIntrinsics) = writeJpeg(id, nv21, width, height, imageIntrinsics)
+                val (size, scaledIntrinsics) = writeJpeg(id, nv21, width, height, imageIntrinsics)
+                val depthRecord = depth?.let { writeDepth(id, it) }
                 keyframes.add(
                     KeyframeRecord(
                         id = id,
                         timestampNs = timestamp,
                         imagePath = "keyframes/$id.jpg",
-                        width = stored.first,
-                        height = stored.second,
+                        width = size.first,
+                        height = size.second,
                         intrinsics = scaledIntrinsics,
                         pose = keyframePose,
                         trackingState = "tracking",
                     ),
                 )
-                depth?.let { writeDepth(id, it) }
+                depthRecord?.let(depthFrames::add)
+                stored = true
+            } catch (e: OutOfMemoryError) {
+                // Skip this keyframe; the next one gets a fresh chance.
+                warnings.add(WARNING_OUT_OF_MEMORY)
             } catch (e: Exception) {
                 Log.w(TAG, "Keyframe $id could not be written", e)
                 warnings.add("keyframe-write-failed")
             } finally {
+                if (stored) {
+                    selector.commit()
+                } else {
+                    selector.release()
+                    val depthId = "depth-${id.removePrefix("kf-")}"
+                    listOf("keyframes/$id.jpg", "depth/$depthId.u16", "depth/$depthId.conf.u8").forEach { File(dir, it).delete() }
+                }
                 pending.decrementAndGet()
             }
         }
@@ -239,7 +256,12 @@ class ScanRecorder(
         }
         val full = ByteArrayOutputStream()
         yuv.compressToJpeg(Rect(0, 0, width, height), 95, full)
-        val bitmap = BitmapFactory.decodeByteArray(full.toByteArray(), 0, full.size())
+        // Decode at a power-of-two reduction that is still at least the target size, then scale exactly.
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = ImageConversion.sampleSizeFor(width, height, targetWidth, targetHeight)
+        }
+        val bitmap = BitmapFactory.decodeByteArray(full.toByteArray(), 0, full.size(), options)
+            ?: error("Could not decode keyframe $id")
         val scaled = Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true)
         file.outputStream().use { scaled.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, it) }
         if (scaled !== bitmap) scaled.recycle()
@@ -249,7 +271,7 @@ class ScanRecorder(
         return (targetWidth to targetHeight) to intrinsics?.scaled(sx, sy)
     }
 
-    private fun writeDepth(keyframeId: String, depth: CapturedDepth) {
+    private fun writeDepth(keyframeId: String, depth: CapturedDepth): DepthRecord {
         val id = "depth-${keyframeId.removePrefix("kf-")}"
         val depthDir = File(dir, "depth").also { it.mkdirs() }
         File(depthDir, "$id.u16").writeBytes(depth.depth)
@@ -257,18 +279,16 @@ class ScanRecorder(
             File(depthDir, "$id.conf.u8").writeBytes(it)
             "depth/$id.conf.u8"
         }
-        depthFrames.add(
-            DepthRecord(
-                id = id,
-                rgbKeyframeId = keyframeId,
-                timestampNs = depth.timestampNs,
-                width = depth.width,
-                height = depth.height,
-                depthPath = "depth/$id.u16",
-                confidencePath = confidencePath,
-                kind = depth.kind,
-                intrinsics = depth.intrinsics,
-            ),
+        return DepthRecord(
+            id = id,
+            rgbKeyframeId = keyframeId,
+            timestampNs = depth.timestampNs,
+            width = depth.width,
+            height = depth.height,
+            depthPath = "depth/$id.u16",
+            confidencePath = confidencePath,
+            kind = depth.kind,
+            intrinsics = depth.intrinsics,
         )
     }
 
@@ -305,6 +325,7 @@ class ScanRecorder(
 
     @Synchronized
     fun captured(): Captured {
+        if (trajectory.decimated) warnings.add("trajectory-decimated")
         val keyframes = keyframes.toList().sortedBy { it.timestampNs }
         val ids = keyframes.mapTo(HashSet()) { it.id }
         return Captured(
@@ -349,6 +370,7 @@ class ScanRecorder(
         const val DEPTH_RAW = "raw"
         const val DEPTH_SMOOTHED = "smoothed"
         const val WARNING_KEYFRAME_LIMIT = "keyframe-limit-reached"
+        const val WARNING_OUT_OF_MEMORY = "keyframe-out-of-memory"
         private const val MAX_LONG_EDGE = 1920
         private const val JPEG_QUALITY = 90
         private const val MAX_PENDING_ENCODES = 3

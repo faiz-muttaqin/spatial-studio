@@ -54,6 +54,16 @@ adb shell am start -n com.faizmuttaqin.spatialstudio.debug/com.faizmuttaqin.spat
 
 A launch URL is honoured only when it is on a trusted origin.
 
+## Upload time
+
+The studio allows 120 API requests a minute per client, and every artifact is one request. The app paces uploads at about 90 requests a minute to leave the page some headroom, waits for `Retry-After` on a 429, and records each stored artifact in the scan folder, so an interrupted upload resumes where it stopped instead of starting again.
+
+Estimate (not measured on a device yet): a 300-keyframe scan with raw depth is about 905 requests (300 JPEGs, 300 depth frames, 300 confidence frames, 4 JSON files, the manifest). Pacing alone makes that about 10 minutes. The JPEGs are roughly 50 to 200 MB depending on the camera image size, which takes 1 to 3 minutes at 10 Mbit/s and overlaps with the pacing; on a slower connection the transfer time dominates. Smaller scans scale down roughly in proportion.
+
+## Saving and failures
+
+If saving a finished scan fails (for example the disk is full), the scan is kept with state `failed` and the reason in `scan.list` (`error`), and the page can discard it. Scans left in `recording` because the app was killed are removed after 24 hours. A scan start that never reaches the scan screen (for example because the app was sent to the background) is released after 10 seconds with a `failed` event, so the next `scan.start` is not refused as busy.
+
 ## Security and privacy
 
 - One allowlist (`AppConfig.allowlist`) drives top-level navigation, the bridge's origin rules, camera grants and the upload target, so they cannot drift apart.

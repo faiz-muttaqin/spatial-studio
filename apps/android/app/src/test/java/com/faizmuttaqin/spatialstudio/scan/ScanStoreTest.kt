@@ -47,6 +47,34 @@ class ScanStoreTest {
     }
 
     @Test
+    fun keepsTheReasonAFailedScanWasNotSaved() {
+        val store = ScanStore(tmp.newFolder("scans"))
+        store.create(a, null, 1_000)
+        store.write(store.read(a)!!.copy(state = SessionRecord.FAILED, error = "Could not save the scan: ENOSPC"))
+        assertEquals("Could not save the scan: ENOSPC", store.read(a)?.error)
+        assertEquals(SessionRecord.FAILED, store.list().single().state)
+    }
+
+    @Test
+    fun sweepsOnlyAbandonedRecordings() {
+        val store = ScanStore(tmp.newFolder("scans"))
+        val hour = 60L * 60 * 1000
+        val now = 100 * hour
+        val c = "3b241101-e2bb-4255-8caf-4136c566a962"
+        val d = "9b2e3c4d-1a2b-4c3d-8e9f-0a1b2c3d4e5f"
+        store.create(a, null, now - 30 * hour) // recording, old: swept
+        store.create(b, null, now - 30 * hour)
+        store.write(store.read(b)!!.copy(state = SessionRecord.FAILED, error = "x")) // failed: kept
+        store.create(c, null, now - 1 * hour) // recording, recent: kept
+        store.create(d, null, now - 30 * hour) // the running scan: kept
+        val orphan = tmp.newFolder("scans", "6f1c2d3e-4b5a-4c6d-9e8f-7a6b5c4d3e2f").apply { setLastModified(now - 30 * hour) }
+        assertEquals(2, store.sweepStale(now, 24 * hour, activeSessionId = d))
+        assertFalse(store.dir(a).exists())
+        assertFalse(orphan.exists())
+        assertEquals(setOf(b, c, d), store.list().map { it.sessionId }.toSet())
+    }
+
+    @Test
     fun readsBackTheUploadPlan() {
         val store = ScanStore(tmp.newFolder("scans"))
         val dir = store.create(a, null, 1_000)

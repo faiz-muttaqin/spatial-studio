@@ -8,6 +8,7 @@
     <string name="scan_hint">Move slowly along the walls. Point at the floor and ceiling too.</string>
     <string name="scan_keyframe_limit">Keyframe limit reached. Finish and start a new scan for the rest of the room.</string>
     <string name="scan_camera_denied">Camera permission is needed to scan.</string>
+    <string name="scan_camera_busy">The camera is in use, for example by the web page or another app. Close it there, then start the scan again.</string>
     <string name="scan_arcore_unavailable">ARCore is not available on this device.</string>
     <string name="scan_arcore_not_installed">Google Play Services for AR is not installed and cannot be installed here.</string>
     <string name="scan_failed">Scan failed: %1$s</string>

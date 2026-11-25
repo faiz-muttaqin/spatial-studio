@@ -4,6 +4,8 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
 import android.os.Build
@@ -71,6 +73,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
     private var capabilities: JsonObject? = null
     private var capabilitiesProbedAtMs = 0L
     private var cameraConfigJson: JsonObject = JsonObject(emptyMap())
+    private var sensorOrientationDeg: Int? = null
     private var installRequested = false
     private var permissionRequested = false
     private var createdAtMs = 0L
@@ -95,8 +98,10 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         super.onCreate(savedInstanceState)
         val sessionId = intent.getStringExtra(EXTRA_SESSION_ID)
         val active = ScanCoordinator.active
-        if (sessionId == null || active == null || active.sessionId != sessionId) {
-            // Stale launch (for example after the process was restarted): nothing to scan for.
+        if (sessionId == null || active == null || active.sessionId != sessionId || !ScanCoordinator.markStarted(sessionId)) {
+            // Stale launch (process restarted, or the start watchdog already gave up): nothing to scan for.
+            // Releasing is a no-op unless this launch still holds the scan.
+            sessionId?.let(ScanCoordinator::end)
             finish()
             return
         }
@@ -146,7 +151,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         try {
             session?.resume()
         } catch (e: CameraNotAvailableException) {
-            fail(BridgeErrorCode.INTERNAL, "The camera is in use by another app")
+            fail(BridgeErrorCode.BUSY, getString(R.string.scan_camera_busy))
             return
         } catch (e: SecurityException) {
             fail(BridgeErrorCode.PERMISSION_DENIED, getString(R.string.scan_camera_denied))
@@ -262,6 +267,11 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         )
         if (choice >= 0) session.cameraConfig = configs[choice]
         val chosen = session.cameraConfig
+        sensorOrientationDeg = runCatching {
+            getSystemService(CameraManager::class.java)
+                ?.getCameraCharacteristics(chosen.cameraId)
+                ?.get(CameraCharacteristics.SENSOR_ORIENTATION)
+        }.getOrNull()
         cameraConfigJson = buildJsonObject {
             put("imageWidth", chosen.imageSize.width)
             put("imageHeight", chosen.imageSize.height)
@@ -431,6 +441,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                 trackingLossCount = captured.trackingLossCount,
                 warnings = recorder.warnings.toList(),
                 startTimestampNs = recorder.startTimestampNs,
+                sensorOrientationDeg = sensorOrientationDeg,
                 arcore = buildJsonObject {
                     put("cameraConfig", cameraConfigJson)
                     put("depthKind", recorder.depthKind)
@@ -461,7 +472,33 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Could not save the scan", e)
-            runOnUiThread { fail(BridgeErrorCode.INTERNAL, "Could not save the scan") }
+            keepFailed("Could not save the scan: ${e.message ?: e.javaClass.simpleName}")
+        } catch (e: OutOfMemoryError) {
+            keepFailed("Could not save the scan: out of memory")
+        }
+    }
+
+    /**
+     * Saving failed after capture (disk full, an artifact over 16 MB, ...). The files stay,
+     * marked `failed` with the reason, so the user can free space and discard or inspect them.
+     * Runs on the finalizer thread.
+     */
+    private fun keepFailed(message: String) {
+        val reason = message.take(300)
+        runCatching {
+            val record = store.read(scan.sessionId)
+                ?: SessionRecord(scan.sessionId, createdAtMs, scan.projectId, SessionRecord.RECORDING)
+            store.write(record.copy(state = SessionRecord.FAILED, error = reason))
+        }
+        runOnUiThread {
+            phase = Phase.DONE
+            Toast.makeText(this, getString(R.string.scan_failed, reason), Toast.LENGTH_LONG).show()
+            ScanCoordinator.state(scan.sessionId, "failed") {
+                put("error", NativeBridge.errorJson(BridgeErrorCode.INTERNAL, reason))
+                put("kept", true)
+            }
+            ScanCoordinator.end(scan.sessionId)
+            finish()
         }
     }
 

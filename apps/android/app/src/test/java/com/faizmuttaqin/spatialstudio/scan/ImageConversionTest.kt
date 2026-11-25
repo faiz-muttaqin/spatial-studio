@@ -17,6 +17,13 @@ class ImageConversionTest {
     }
 
     @Test
+    fun decodesAtTheLargestPowerOfTwoAboveTheTarget() {
+        assertEquals(1, ImageConversion.sampleSizeFor(2560, 1440, 1920, 1080))
+        assertEquals(2, ImageConversion.sampleSizeFor(4000, 3000, 1920, 1440))
+        assertEquals(4, ImageConversion.sampleSizeFor(8000, 6000, 1920, 1440))
+    }
+
+    @Test
     fun scalesIntrinsicsWithTheImage() {
         val k = Intrinsics(1000.0, 1000.0, 960.0, 540.0).scaled(0.5, 0.5)
         assertEquals(Intrinsics(500.0, 500.0, 480.0, 270.0), k)

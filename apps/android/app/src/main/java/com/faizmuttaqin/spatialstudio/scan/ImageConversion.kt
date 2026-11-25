@@ -23,6 +23,13 @@ object ImageConversion {
         return max(1, (width * scale).roundToInt()) to max(1, (height * scale).roundToInt())
     }
 
+    /** Largest power-of-two decode reduction that still yields at least the target size. */
+    fun sampleSizeFor(width: Int, height: Int, targetWidth: Int, targetHeight: Int): Int {
+        var sample = 1
+        while (width / (sample * 2) >= targetWidth && height / (sample * 2) >= targetHeight) sample *= 2
+        return sample
+    }
+
     /** Converts YUV_420_888 planes to NV21 (Y plane, then interleaved V/U) for `YuvImage`. */
     fun yuv420ToNv21(width: Int, height: Int, y: PlaneData, u: PlaneData, v: PlaneData): ByteArray {
         val out = ByteArray(width * height + 2 * ((width + 1) / 2) * ((height + 1) / 2))

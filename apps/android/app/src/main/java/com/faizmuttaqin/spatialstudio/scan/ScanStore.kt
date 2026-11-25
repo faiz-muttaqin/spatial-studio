@@ -19,6 +19,8 @@ data class SessionRecord(
     val bytes: Long = 0,
     val manifestSha256: String? = null,
     val uploadedAtMs: Long? = null,
+    /** Why a `failed` scan could not be saved; the files stay until discarded. */
+    val error: String? = null,
 ) {
     val uploaded: Boolean get() = uploadedAtMs != null
 
@@ -65,6 +67,7 @@ class ScanStore(val root: File) {
             put("bytes", record.bytes)
             put("manifestSha256", record.manifestSha256)
             put("uploadedAtMs", record.uploadedAtMs)
+            put("error", record.error)
         }
         JsonUtil.writeAtomically(File(dir(record.sessionId), RECORD_FILE), JsonUtil.encode(json).toByteArray(Charsets.UTF_8))
     }
@@ -79,6 +82,27 @@ class ScanStore(val root: File) {
         val dir = dir(sessionId)
         if (!dir.exists()) return false
         return dir.deleteRecursively()
+    }
+
+    /**
+     * Deletes scans abandoned mid-recording (the process died) and directories
+     * without a record, once they are older than [maxAgeMs]. Ready and failed
+     * scans stay until the user uploads or discards them.
+     */
+    fun sweepStale(nowMs: Long, maxAgeMs: Long, activeSessionId: String?): Int {
+        val dirs = root.listFiles { f -> f.isDirectory && ScanParams.isSessionId(f.name) } ?: return 0
+        var removed = 0
+        for (dir in dirs) {
+            if (dir.name == activeSessionId) continue
+            val record = read(dir.name)
+            val stale = when {
+                record == null -> nowMs - dir.lastModified() > maxAgeMs
+                record.state == SessionRecord.RECORDING -> nowMs - record.createdAtMs > maxAgeMs
+                else -> false
+            }
+            if (stale && dir.deleteRecursively()) removed++
+        }
+        return removed
     }
 
     fun uploadPlan(sessionId: String): FinalizedBundle = UploadPlanFile.read(File(dir(sessionId), ScanBundle.UPLOAD_PLAN_FILE))
@@ -100,6 +124,7 @@ class ScanStore(val root: File) {
             bytes = long("bytes") ?: 0,
             manifestSha256 = str("manifestSha256"),
             uploadedAtMs = long("uploadedAtMs"),
+            error = str("error"),
         )
     }
 

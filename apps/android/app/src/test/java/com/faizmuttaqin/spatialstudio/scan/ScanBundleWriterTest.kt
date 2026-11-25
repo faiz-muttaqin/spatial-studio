@@ -184,6 +184,27 @@ class ScanBundleWriterTest {
         assertEquals("2025-11-25T08:00:00.000Z", metadata.str("createdAt"))
         assertEquals(1, metadata.getValue("trackingLossCount").jsonPrimitive.int)
         assertEquals(1, metadata.getValue("warnings").jsonArray.size)
+        val camera = metadata.getValue("camera").jsonObject
+        assertEquals("opengl", camera.str("convention"))
+        assertEquals("image-readout", camera.str("frame"))
+        assertEquals(90, camera.getValue("sensorOrientationDeg").jsonPrimitive.int)
+    }
+
+    @Test
+    fun leavesOutKeyframesWhoseFilesAreMissing() {
+        val dir = tmp.newFolder("missing")
+        val input = TestBundles.write(dir)
+        File(dir, "keyframes/kf-0001.jpg").delete()
+        val bundle = ScanBundleWriter(dir).finalize(input)
+        val frames = read(File(dir, "keyframes.json")).getValue("frames").jsonArray.map { it.jsonObject.str("id") }
+        assertEquals(listOf("kf-0002"), frames)
+        // Its depth frame goes with it.
+        assertFalse(File(dir, "depth.json").exists())
+        assertFalse(bundle.artifacts.any { it.path.startsWith("depth/") })
+        val warnings = read(File(dir, "manifest.json")).getValue("metadata").jsonObject.getValue("warnings").jsonArray
+            .map { it.jsonPrimitive.content }
+        assertTrue("keyframe-file-missing" in warnings)
+        assertTrue("depth-file-missing" in warnings)
     }
 
     @Test
@@ -213,7 +234,8 @@ class ScanBundleWriterTest {
             full.sessionId, null, full.createdAtMs, full.appVersion, full.device, full.nativeCapabilities,
             full.capabilitiesProbedAtMs, trajectory = full.trajectory.take(1), keyframes = emptyList(), depth = emptyList(),
             planes = emptyList(), points = FloatArray(0), voxelSizeM = 0.02, minConfidence = 0.3f,
-            trackingLossCount = 0, warnings = emptyList(), startTimestampNs = null, arcore = JsonObject(emptyMap()),
+            trackingLossCount = 0, warnings = emptyList(), startTimestampNs = null, sensorOrientationDeg = null,
+            arcore = JsonObject(emptyMap()),
         )
         val bundle = ScanBundleWriter(dir).finalize(empty)
         val manifest = read(File(dir, "manifest.json"))

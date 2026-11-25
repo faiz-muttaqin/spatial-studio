@@ -64,6 +64,7 @@ object TestBundles {
             trackingLossCount = 1,
             warnings = listOf("no-planes-detected-test"),
             startTimestampNs = 1_000_000_000L,
+            sensorOrientationDeg = 90,
             arcore = buildJsonObject { put("depthKind", "raw") },
         )
     }
