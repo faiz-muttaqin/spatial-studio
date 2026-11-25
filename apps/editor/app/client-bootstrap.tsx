@@ -1,15 +1,9 @@
 'use client'
 
-// Loads `@pascal-app/nodes`' built-in plugin into the node registry on the
-// client. Mounted from `layout.tsx` so every page in the standalone
-// editor gets the registry populated before its first `<Viewer>` /
-// `<Editor>` mounts — without this the registry is empty on the client
-// (the server registers in its own module instance, which is unreachable
-// from hydrated pages) and every `NodeRenderer` resolves to `null`. The
-// `loaded` guard inside `../lib/bootstrap` keeps the side effect
-// idempotent under HMR.
-import '../lib/bootstrap'
-import { createI18n, defaultI18n, PascalI18nProvider } from '@pascal-app/core'
+// Locale scope shared by every page. The node registry and editor plugins
+// load from `(studio)/registry-bootstrap.tsx`, only for pages that mount a
+// viewer or editor.
+import { createI18n, defaultI18n, PascalI18nProvider } from '@pascal-app/core/i18n'
 import { registerBundledLocales } from '@pascal-app/editor/locales'
 import { type ReactNode, useEffect, useMemo } from 'react'
 import { registerDevLocales } from '@/lib/dev-locales'
