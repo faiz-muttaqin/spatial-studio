@@ -1,4 +1,13 @@
 export {
+  type BoundaryKind,
+  BoundaryKindSchema,
+  type BoundaryMark,
+  BoundaryMarkSchema,
+  type BoundaryMarksPayload,
+  BoundaryMarksPayloadSchema,
+  CAPTURE_MAX_BOUNDARY_MARKS,
+} from './boundary-marks'
+export {
   type CloudSummary,
   type PathSummary,
   pathPositions,

@@ -1,6 +1,6 @@
 # Capture contract: providers, scan bundle and Android bridge
 
-Status: contract v1 proposed 2026-11-25; v1.1 (sensor streams) proposed 2026-11-25. Shared by the web `/scan` route (`apps/editor`) and the Android companion (`apps/android`). Change it in its own commit before changing either side. Nothing here is implemented until STATUS.md records evidence.
+Status: contract v1 proposed 2026-11-25; v1.1 (sensor streams) proposed 2026-11-25; v1.2 (boundary marks) proposed 2026-11-25. Shared by the web `/scan` route (`apps/editor`) and the Android companion (`apps/android`). Change it in its own commit before changing either side. Nothing here is implemented until STATUS.md records evidence.
 
 ## Providers
 
@@ -8,7 +8,7 @@ Status: contract v1 proposed 2026-11-25; v1.1 (sensor streams) proposed 2026-11-
 |---|---|---|
 | `browser-photo` | Any secure-context browser | Photos plus manually entered dimensions. No measured depth or pose. |
 | `webxr` | Chrome Android with `immersive-ar` | Pose, hit-test, optional depth-sensing and camera-access, each negotiated individually. |
-| `android-arcore` | Android companion app, native scan screen | ARCore pose, planes, point cloud, optional depth16 and RGB keyframes with intrinsics, plus device sensors (v1.1: orientation, compass heading, opt-in location, light estimate, barometer). |
+| `android-arcore` | Android companion app, native scan screen | ARCore pose, planes, point cloud, optional depth16 and RGB keyframes with intrinsics, plus device sensors (v1.1: orientation, compass heading, opt-in location, light estimate, barometer) and assisted boundary marks (v1.2). |
 
 Every provider writes the same bundle. A provider never labels estimated values as measured: each measurement carries `source` (`manual`, `arcore`, `webxr`, `derived`) and, where known, a confidence.
 
@@ -47,6 +47,7 @@ A bundle is one `CaptureSessionManifest` schema version 2 (`packages/core/src/ca
 | `geolocation` | `geolocation` | artifact `application/json` `{ fixes: [{ timestamp, latitude, longitude, altitudeM, accuracyM, provider }] }` | v1.1, opt-in, off by default. Wall clock. |
 | `light-estimate` | `lightEstimate` | artifact `application/json` `{ estimates: [{ keyframeId, timestamp, mode, state, pixelIntensity, colorCorrection, mainLightDirection, mainLightIntensity }] }` | v1.1. One entry per keyframe at most. |
 | `barometer` | `barometer` | artifact `application/json` `{ samples: [{ timestamp, hPa }] }` | v1.1. |
+| `boundary-marks` | `boundaryMarks` | artifact `application/json` `{ marks: [mark, ...] }` | v1.2. User-marked wall, glass, mirror, opening and door bases. See "Boundary marks (v1.2)". |
 
 `metadata` on the manifest: `{ provider, appVersion, bridgeVersion?, device: { manufacturer, model, os } (each nullable), createdAt (ISO 8601), trackingLossCount, warnings: string[], trueNorth? }` (`trueNorth` is v1.1, see below). Browser providers record only the OS family (`os`) and leave `manufacturer` and `model` null; shared scenes can expose their artifacts.
 
@@ -90,6 +91,43 @@ Derivation: for each `heading` sample the north estimate is `worldBearingDeg - a
 - Location is off by default, requested per capture, and only the approximate location permission is asked for: the sun position and declination need kilometres, not metres. When a page asks for location the companion shows its own confirmation once per scan, before the system permission prompt, and the scan screen can switch it off again: off discards the fixes and the declination derived from them.
 - A bundle with `geolocation` identifies a place. Treat it as personal data: no public artifacts, coarsen (about 1 km) before a scene is shared or the data goes to an external service, and do not send it to an external AI without explicit consent. The wall clock timestamps tie it to a moment.
 - The other four streams contain no identifiers. `heading.declinationDeg` reveals the region only coarsely and is null when location is off.
+
+### Boundary marks (v1.2)
+
+Optional and additive: a v1 or v1.1 reader ignores the stream, and a bundle without it stays valid. It exists because ARCore finds floor and ceiling planes reliably but often finds no vertical plane on plain walls, and the camera sees through glass (see [GLASS_AND_MIRRORS.md](GLASS_AND_MIRRORS.md)). The user taps the floor at both ends of a boundary's base, where floor hit-tests are reliable. The stream carries only what the user marked; it never claims a fitted or measured surface.
+
+The artifact is `application/json`, `{ marks: [mark, ...] }`, frame `world`, with at most 200 marks and unique ids. A stream descriptor carries `metadata: { source: "manual-ar-marking", count }`.
+
+```ts
+type BoundaryMark = {
+  id: string // unique in the stream, 1 to 64 characters
+  kind: 'wall' | 'glass' | 'mirror' | 'opening' | 'door'
+  base: [BasePoint, BasePoint] // start, end; in the order tapped
+  height: {
+    metres: number | null // 0.1 to 10; null only when source is "unknown"
+    source: 'ceiling-plane' | 'typed' | 'unknown'
+    ceilingPlaneId: string | null // set only for "ceiling-plane": the plane-set id the height came from
+  }
+  source: 'manual-ar-marking'
+  createdAt: number // unix ms (clock "wall"), when the second point was accepted
+  notes: string | null // at most 500 characters
+}
+type BasePoint = {
+  point: [x, y, z] // ARCore world metres; equals the translation of pose within 1 mm
+  pose: number[16] // column-major hit pose; its Y axis is the plane normal at the hit
+  planeId: string | null // the horizontal plane that was hit; may be absent from the plane-set stream
+  timestamp: number // device clock, nanoseconds: the ARCore frame the tap was resolved against
+}
+```
+
+Rules:
+
+- Both base points come from ARCore hit-tests against a tracked, upward-facing horizontal plane, inside that plane's polygon, at the floor level (no higher than 0.25 m above the lowest tracked upward plane). Hits on feature points, depth points, instant placement or vertical planes are refused, because on clear glass those land on whatever lies behind it.
+- The two points are at least 0.05 m and at most 50 m apart horizontally, and differ in height by at most 0.5 m. A base is a floor line, not a slanted one.
+- `ceiling-plane`: the height is the tracked downward-facing plane's height above the mean base height, accepted from 1.8 m to 6 m. The companion offers it for `wall`, `glass` and `mirror` only. A door or opening is not ceiling height, so those take a typed height or stay `unknown`.
+- `typed`: the user entered the height in metres. `unknown`: neither was available; a consumer chooses its own default and labels it an assumption.
+- Marks are the user's statement of where a boundary stands. They do not say the surface was seen, and a `glass` or `mirror` mark is the only evidence of such a surface in the bundle. Consumers must not treat a mark as a measurement of thickness, material or reflectivity.
+- Coordinates are in the scan's world frame, so true north and any scan node transform apply exactly as for the other streams. Marks carry no personal data.
 
 ## Android bridge, protocol v1
 
@@ -135,4 +173,4 @@ Error codes: `forbidden`, `invalid_request`, `unknown_method`, `unsupported`, `p
 
 ## Next stage (not part of v1)
 
-Scan-to-scene (ROADMAP P3b) reads `plane-set`, `point-cloud` and `manual-measurements` to propose wall, slab and ceiling nodes for human review. Agent read tools for scan bundles (P4a) expose manifest summaries, measurements and bounded keyframe images to MCP clients.
+Scan-to-scene (ROADMAP P3b) reads `plane-set`, `point-cloud`, `manual-measurements` and `boundary-marks` to propose wall, slab and ceiling nodes for human review. Agent read tools for scan bundles (P4a) expose manifest summaries, measurements and bounded keyframe images to MCP clients.
