@@ -9,6 +9,7 @@ type LooseNode = {
   thickness?: number
   polygon?: Array<[number, number]>
   name?: string
+  visible?: boolean
 }
 
 export type OverlayWall = {
@@ -36,7 +37,7 @@ export function sceneOverlays(
   if (!levelId) return { walls, zones }
   for (const value of Object.values(nodes)) {
     const node = value as LooseNode
-    if (node.parentId !== levelId) continue
+    if (node.parentId !== levelId || node.visible === false) continue
     if (node.type === 'wall' && node.start && node.end) {
       walls.push({
         id: node.id,
@@ -49,6 +50,18 @@ export function sceneOverlays(
     }
   }
   return { walls, zones }
+}
+
+/** The building turn, in radians about y, of the level's parent; 0 when it has none. */
+export function buildingRotationOf(
+  nodes: Readonly<Record<string, unknown>>,
+  levelId: string | null,
+): number {
+  const level = levelId ? (nodes[levelId] as LooseNode | undefined) : undefined
+  const building = level?.parentId
+    ? (nodes[level.parentId] as { type?: string; rotation?: number[] } | undefined)
+    : undefined
+  return building?.type === 'building' ? (building.rotation?.[1] ?? 0) : 0
 }
 
 export type CaptureScan = {
@@ -69,6 +82,7 @@ export function captureScans(nodes: Readonly<Record<string, unknown>>): CaptureS
   for (const value of Object.values(nodes)) {
     const node = value as Partial<ScanNode> & { name?: string }
     if (node.type !== 'scan' || !node.id || !node.captureSession?.manifestUrl) continue
+    if ((node as { visible?: boolean }).visible === false) continue
     scans.push({
       id: node.id,
       name: node.name ?? node.id,

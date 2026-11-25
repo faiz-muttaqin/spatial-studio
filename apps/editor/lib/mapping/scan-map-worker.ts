@@ -5,6 +5,8 @@ import {
   loadScanMap,
   MapCancelled,
   type MapProgress,
+  MapRefusal,
+  type MapRefusalCode,
   type PhotoDecoder,
   type ScanMapRequest,
   type ScanMapResult,
@@ -14,46 +16,58 @@ export type WorkerIn = { type: 'build'; origin: string; request: ScanMapRequest 
 export type WorkerOut =
   | { type: 'progress'; progress: MapProgress }
   | { type: 'done'; result: ScanMapResult }
-  | { type: 'error'; message: string; cancelled?: boolean }
+  | { type: 'error'; code: MapRefusalCode | 'failed'; cancelled?: boolean }
 
 const scope = self as unknown as DedicatedWorkerGlobalScope
 
-/** Reads a response body in chunks and gives up as soon as it would pass `max`. */
+/**
+ * Reads a response body in chunks and gives up as soon as it would pass the cap or the timeout.
+ * Redirects are refused: an artifact URL that redirects would leave the checked origin and path.
+ */
 function boundedFetch(): BoundedFetch {
   return async (url, limit) => {
-    const response = await fetch(url, { credentials: 'same-origin' })
-    if (!response.ok) return null
-    const ok = (size: number) =>
-      (limit.exact === undefined || size === limit.exact) &&
-      (limit.max === undefined || size <= limit.max)
-    const declared = Number(response.headers.get('content-length'))
-    if (Number.isFinite(declared) && declared > 0 && !ok(declared)) {
-      await response.body?.cancel()
-      return null
-    }
-    const cap = limit.exact ?? limit.max ?? Number.POSITIVE_INFINITY
-    const reader = response.body?.getReader()
-    if (!reader) return null
-    const chunks: Uint8Array[] = []
-    let total = 0
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      total += value.byteLength
-      if (total > cap) {
-        await reader.cancel()
+    try {
+      const response = await fetch(url, {
+        credentials: 'same-origin',
+        redirect: 'error',
+        signal: AbortSignal.timeout(limit.timeoutMs),
+      })
+      if (!response.ok) return null
+      const ok = (size: number) =>
+        (limit.exact === undefined || size === limit.exact) &&
+        (limit.max === undefined || size <= limit.max)
+      const declared = Number(response.headers.get('content-length'))
+      if (Number.isFinite(declared) && declared > 0 && !ok(declared)) {
+        await response.body?.cancel()
         return null
       }
-      chunks.push(value)
+      const cap = limit.exact ?? limit.max ?? Number.POSITIVE_INFINITY
+      const reader = response.body?.getReader()
+      if (!reader) return null
+      const chunks: Uint8Array[] = []
+      let total = 0
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        total += value.byteLength
+        if (total > cap) {
+          await reader.cancel()
+          return null
+        }
+        chunks.push(value)
+      }
+      if (!ok(total)) return null
+      const bytes = new Uint8Array(total)
+      let offset = 0
+      for (const chunk of chunks) {
+        bytes.set(chunk, offset)
+        offset += chunk.byteLength
+      }
+      return bytes
+    } catch {
+      // A timeout, a refused redirect or a network error: the artifact counts as unreadable.
+      return null
     }
-    if (!ok(total)) return null
-    const bytes = new Uint8Array(total)
-    let offset = 0
-    for (const chunk of chunks) {
-      bytes.set(chunk, offset)
-      offset += chunk.byteLength
-    }
-    return bytes
   }
 }
 
@@ -98,7 +112,7 @@ scope.onmessage = async (event: MessageEvent<WorkerIn>) => {
   } catch (error) {
     post({
       type: 'error',
-      message: error instanceof Error ? error.message : 'The map could not be built.',
+      code: error instanceof MapRefusal ? error.code : 'failed',
       cancelled: error instanceof MapCancelled,
     })
   }

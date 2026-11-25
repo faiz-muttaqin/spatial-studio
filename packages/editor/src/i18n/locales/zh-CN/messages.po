@@ -1144,6 +1144,16 @@ msgstr "单坡"
 msgid "app.lib.buildTabState.wall"
 msgstr "墙体"
 
+# Source-Hash: 0657f670dfde573a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Technical details"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.details"
+msgstr "技术详情"
+
 # Source-Hash: 0fac904d1e7dde70
 # Review: required
 # AI-Provider: claude-code
@@ -1224,6 +1234,36 @@ msgstr "顶部表面"
 msgid "app.mapping.north"
 msgstr "北"
 
+# Source-Hash: 4e32cd20ba726f2c
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "This is magnetic north, not true north."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.north.magnetic"
+msgstr "这是磁北，不是真北。"
+
+# Source-Hash: 6eae717510c65c96
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Compass north from the scan."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.north.scan"
+msgstr "来自扫描指南针的北向。"
+
+# Source-Hash: 8e0de9b578d10f80
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The site north rotation is {degrees} degrees and is not shown here."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.north.site"
+msgstr "场地的北向旋转为 {degrees} 度，此处未显示。"
+
 # Source-Hash: f9dfd61493ca94a4
 # Review: required
 # AI-Provider: claude-code
@@ -1233,6 +1273,86 @@ msgstr "北"
 #, fuzzy
 msgid "app.mapping.northLetter"
 msgstr "北"
+
+# Source-Hash: 33d9f6f2450148bb
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "{kind}: its coordinate frame is not usable, so it is read as the capture world."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.note.frameCoordinates"
+msgstr "{kind}：其坐标系不可用，已按捕获世界读取。"
+
+# Source-Hash: ba1fdf07762f2dc7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Fusing stopped at the time budget after {frames} frames."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.note.fuseTimeBudget"
+msgstr "在 {frames} 帧之后，融合因时间预算而停止。"
+
+# Source-Hash: adcd19fe34135732
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Reading stopped at the memory limit after {frames} frames; later keyframes were left out."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.note.memoryBudget"
+msgstr "在 {frames} 帧之后，读取因内存上限而停止；之后的关键帧已被跳过。"
+
+# Source-Hash: f1a5338e17fbe921
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The room outline could not be computed, so none is available."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.note.outlineFailed"
+msgstr "无法计算房间轮廓，因此没有轮廓。"
+
+# Source-Hash: 2c7830ed41ea9784
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The room outline was skipped at the time budget."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.note.outlineSkipped"
+msgstr "由于时间预算，已跳过房间轮廓。"
+
+# Source-Hash: 543e31d939e360e1
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Photos that could not be used: {count}. Their frames add shape but no colour."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.note.photosUnused"
+msgstr "无法使用的照片：{count}。这些帧只提供形状，没有颜色。"
+
+# Source-Hash: fc0f225a29051119
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Some scan streams could not be read; the technical details say which."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.note.streamsUnreadable"
+msgstr "部分扫描数据流无法读取；技术详情中会说明是哪些。"
+
+# Source-Hash: 1039107e04b5d061
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Reading stopped at the time budget; later keyframes were left out."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.note.timeBudgetReading"
+msgstr "读取因时间预算而停止；之后的关键帧已被跳过。"
 
 # Source-Hash: 28a939dccbff00d7
 # Review: required
@@ -1264,6 +1384,86 @@ msgstr "地图不透明度"
 msgid "app.mapping.rebuild"
 msgstr "重新生成"
 
+# Source-Hash: 34d880acd9e42b93
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Something went wrong while building it."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.refusal.failed"
+msgstr "构建时出了问题。"
+
+# Source-Hash: 496fd9fa4af29403
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The scan manifest does not match the capture contract."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.refusal.manifestInvalid"
+msgstr "扫描清单不符合捕获契约。"
+
+# Source-Hash: 2c142cc146346474
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The scan manifest could not be read."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.refusal.manifestUnreadable"
+msgstr "无法读取扫描清单。"
+
+# Source-Hash: e28de3c689602fd7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "This scan has no depth keyframes with photo keyframes."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.refusal.noDepth"
+msgstr "此扫描没有与照片关键帧对应的深度关键帧。"
+
+# Source-Hash: 084dcdcffe0b664c
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "No depth frame could be read with a tracked pose."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.refusal.noFrames"
+msgstr "无法读取任何带有已跟踪位姿的深度帧。"
+
+# Source-Hash: 8bddd6448bbd1068
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "No points lie between the floor and the ceiling."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.refusal.noMap"
+msgstr "地面与天花板之间没有任何点。"
+
+# Source-Hash: ffdb7bce5f55650a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "No surface was seen in two or more depth frames."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.refusal.noSurface"
+msgstr "没有在两个或更多深度帧中看到任何表面。"
+
+# Source-Hash: 25f597a5d485eac0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Reading the scan took too long."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.refusal.timeout"
+msgstr "读取扫描耗时过长。"
+
 # Source-Hash: 61ecb75a10705708
 # Review: required
 # AI-Provider: claude-code
@@ -1273,6 +1473,16 @@ msgstr "重新生成"
 #, fuzzy
 msgid "app.mapping.restart"
 msgstr "重新开始"
+
+# Source-Hash: 7e42201ee9800142
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Turned with the building, like the 2D plan. A turn set by hand in the 2D plan is not followed."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.rotationHint"
+msgstr "与 2D 平面图一样随建筑旋转。在 2D 平面图中手动设置的旋转不会被跟随。"
 
 # Source-Hash: 053d7b00b76fe936
 # Review: required
@@ -1343,6 +1553,16 @@ msgstr "房间"
 #, fuzzy
 msgid "app.mapping.toggle.walls"
 msgstr "墙"
+
+# Source-Hash: 6312020ceef0ea49
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Mapping"
+#: apps/editor/lib/bootstrap.ts
+#, fuzzy
+msgid "app.mapping.view"
+msgstr "映射"
 
 # Source-Hash: 51d4b567c394bc97
 # Review: required

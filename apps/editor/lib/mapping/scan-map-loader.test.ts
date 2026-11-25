@@ -2,8 +2,10 @@ import { describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { sameOriginUrl } from '../capture/source-resolver'
 import {
+  jpegSize,
   type LoaderDeps,
   loadScanMap,
+  MAP_LIMITS,
   MapCancelled,
   MapRefusal,
   northInLevel,
@@ -44,9 +46,45 @@ function poseAt(position: number[], yaw: number, pitch: number): number[] {
 
 const DEPTH = { width: 160, height: 90, fx: 120, fy: 120, cx: 80, cy: 45 }
 const PHOTO = { width: 640, height: 360 }
+/** A JPEG head with a start-of-frame of the given size; enough for the size checks. */
+const jpegWith = (width: number, height: number) =>
+  Uint8Array.from([
+    0xff,
+    0xd8,
+    0xff,
+    0xe0,
+    0,
+    4,
+    0,
+    0,
+    0xff,
+    0xc0,
+    0,
+    17,
+    8,
+    height >> 8,
+    height & 255,
+    width >> 8,
+    width & 255,
+    3,
+    1,
+    0x11,
+    0,
+    2,
+    0x11,
+    0,
+    3,
+    0x11,
+    0,
+    0xff,
+    0xd9,
+  ])
+
 const MANIFEST_SHA = 'f'.repeat(64)
 
-function buildStore(options: { trueNorth?: unknown; depthIndexMissing?: boolean } = {}) {
+function buildStore(
+  options: { trueNorth?: unknown; depthIndexMissing?: boolean; jpeg?: Uint8Array } = {},
+) {
   const files = new Map<string, Uint8Array>()
   const put = (value: unknown | Uint8Array): string => {
     const bytes =
@@ -59,7 +97,7 @@ function buildStore(options: { trueNorth?: unknown; depthIndexMissing?: boolean 
   const rgbFrames: unknown[] = []
   const depthFrames: unknown[] = []
   let n = 0
-  const jpeg = put(Uint8Array.from([0xff, 0xd8, 0xff, 0xd9]))
+  const jpeg = put(options.jpeg ?? jpegWith(PHOTO.width, PHOTO.height))
   for (const [x, z] of [
     [-1, -0.6],
     [1, 0.5],
@@ -236,7 +274,7 @@ describe('loadScanMap', () => {
     })
     const result = await loadScanMap(request, { ...deps(buildStore()), decodePhoto: wrongSize })
     expect(result.photosDecoded).toBe(0)
-    expect(result.notes.join(' ')).toContain('could not be used')
+    expect(result.notes.some((note) => note.code === 'photos-unused')).toBe(true)
     const shapeOnly = Array.from({ length: result.map.width * result.map.height }).some(
       (_, at) => result.map.rgba[at * 4 + 3] === 128,
     )
@@ -300,6 +338,71 @@ describe('loadScanMap', () => {
   })
 })
 
+describe('jpegSize and the pre-decode checks', () => {
+  test('reads the size from the first frame header, skipping other segments', () => {
+    expect(jpegSize(jpegWith(640, 360))).toEqual({ width: 640, height: 360 })
+    expect(jpegSize(Uint8Array.from([1, 2, 3, 4]))).toBeNull()
+    expect(jpegSize(Uint8Array.from([0xff, 0xd8, 0xff, 0xd9]))).toBeNull()
+  })
+  test('a photo that claims another size, or a huge one, is never handed to the decoder', async () => {
+    for (const claimed of [jpegWith(800, 450), jpegWith(65535, 65535)]) {
+      const files = buildStore({ jpeg: claimed })
+      let decoded = 0
+      const result = await loadScanMap(request, {
+        ...deps(files),
+        decodePhoto: async () => {
+          decoded += 1
+          return null
+        },
+      })
+      expect(decoded).toBe(0)
+      expect(result.photosDecoded).toBe(0)
+      expect(result.notes.some((note) => note.code === 'photos-unused')).toBe(true)
+    }
+  })
+  test('the decoder sees a photo whose header matches the keyframe', async () => {
+    let decoded = 0
+    await loadScanMap(request, {
+      ...deps(buildStore({ jpeg: jpegWith(PHOTO.width, PHOTO.height) })),
+      decodePhoto: async () => {
+        decoded += 1
+        return null
+      },
+    })
+    expect(decoded).toBeGreaterThan(0)
+  })
+})
+
+describe('budgets', () => {
+  test('every fetch carries a timeout no longer than the fetch limit or the time left', async () => {
+    const timeouts: number[] = []
+    const base = deps(buildStore())
+    await loadScanMap(request, {
+      ...base,
+      fetchBytes: async (url, limit) => {
+        timeouts.push(limit.timeoutMs)
+        return base.fetchBytes(url, limit)
+      },
+    })
+    expect(timeouts.length).toBeGreaterThan(10)
+    for (const value of timeouts) {
+      expect(value).toBeGreaterThan(0)
+      expect(value).toBeLessThanOrEqual(MAP_LIMITS.fetchTimeoutMillis)
+    }
+  })
+  test('a clock past the budget refuses with a timeout before fetching more', async () => {
+    let tick = 0
+    await expect(
+      loadScanMap(request, { ...deps(buildStore()), now: () => (tick += 20_000) }),
+    ).rejects.toMatchObject({ code: 'timeout' })
+  })
+  test('a failed or stalled manifest read is a refusal, not a hang', async () => {
+    await expect(
+      loadScanMap(request, { ...deps(buildStore()), fetchBytes: async () => null }),
+    ).rejects.toMatchObject({ code: 'manifest-unreadable' })
+  })
+})
+
 describe('northInLevel', () => {
   const identity = {
     position: [0, 0, 0] as [number, number, number],
@@ -311,8 +414,9 @@ describe('northInLevel', () => {
     expect(northInLevel(90, identity)[0]).toBeCloseTo(1, 5)
     expect(northInLevel(180, identity)[1]).toBeCloseTo(1, 5)
   })
-  test('follows the scan rotation about y', () => {
+  test('follows the scan rotation about y: +90 degrees turns north (0, 0, -1) to level -x', () => {
     const turned = northInLevel(0, { ...identity, rotation: [0, Math.PI / 2, 0] })
-    expect(Math.abs(turned[0])).toBeCloseTo(1, 5)
+    expect(turned[0]).toBeCloseTo(-1, 5)
+    expect(turned[1]).toBeCloseTo(0, 5)
   })
 })

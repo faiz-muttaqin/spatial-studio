@@ -147,6 +147,7 @@ registerEditorHostPanel(webXRHostPanel)
 registerEditorHostView({
   id: 'spatial-studio:mapping',
   label: 'Mapping',
+  labelMessage: /* i18n */ { id: 'app.mapping.view', message: 'Mapping' },
   icon: { kind: 'url', src: '/icons/topview.webp' },
   component: () => import('../components/mapping-view'),
   defaultPinned: true,

@@ -1,5 +1,5 @@
 import type { ScanTransform } from '@pascal-app/core/capture'
-import type { MapProgress, ScanMapRequest, ScanMapResult } from './scan-map-loader'
+import type { MapProgress, MapRefusalCode, ScanMapRequest, ScanMapResult } from './scan-map-loader'
 import type { WorkerIn, WorkerOut } from './scan-map-worker'
 
 const MANIFEST_SHA = /([0-9a-f]{64})(?:[?#].*)?$/
@@ -44,12 +44,20 @@ export type ScanMapJob = {
 
 export class ScanMapCancelled extends Error {}
 
+export class ScanMapFailure extends Error {
+  constructor(readonly code: MapRefusalCode | 'failed') {
+    super(code)
+  }
+}
+
 /** Builds a map in a dedicated worker, or returns the cached one. */
 export function startScanMap(
   request: ScanMapRequest,
   onProgress: (progress: MapProgress) => void,
+  options: { force?: boolean } = {},
 ): ScanMapJob {
   const key = scanMapKey(request)
+  if (options.force && key) cache.delete(key)
   const cached = key ? cache.get(key) : undefined
   if (cached) return { promise: Promise.resolve(cached), cancel: () => {} }
   const worker = new Worker(new URL('./scan-map-worker.ts', import.meta.url), { type: 'module' })
@@ -70,11 +78,11 @@ export function startScanMap(
           while (cache.size > CACHE_ENTRIES) cache.delete(cache.keys().next().value as string)
         }
         resolve(message.result)
-      } else reject(new Error(message.message))
+      } else reject(new ScanMapFailure(message.code))
     }
     worker.onerror = (event) => {
       worker.terminate()
-      reject(new Error(event.message || 'The map worker failed.'))
+      reject(new ScanMapFailure('failed'))
     }
     worker.postMessage({
       type: 'build',

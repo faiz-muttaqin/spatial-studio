@@ -36,6 +36,12 @@ export const MAP_LIMITS = {
   maxDepthPixels: 1_000_000,
   /** Longest side of the photo decoded for colour; depth is 160x90, so more is wasted. */
   photoLongEdge: 320,
+  /** A photo larger than this many pixels is refused before it is decoded. */
+  maxPhotoPixels: 1920 * 1440,
+  /** Longest wait for one artifact, clamped to what is left of the total budget. */
+  fetchTimeoutMillis: 12_000,
+  /** Bytes the frames may hold at once (depth, confidence and decoded photos). */
+  memoryBudgetBytes: 192 * 1024 * 1024,
   maxPixels: 2048,
   /** The map shown is shrunk to this longest side. */
   displaySide: 2048,
@@ -52,6 +58,26 @@ export type ScanMapRequest = {
   minConfidence?: number
 }
 
+/** A user-visible remark about a build; the component turns the code into translated text. */
+export type MapNote =
+  | { code: 'frame-coordinates'; kind: string }
+  | { code: 'time-budget-reading' }
+  | { code: 'memory-budget'; frames: number }
+  | { code: 'photos-unused'; count: number }
+  | { code: 'fuse-time-budget'; frames: number }
+  | { code: 'outline-skipped' }
+  | { code: 'outline-failed' }
+  | { code: 'streams-unreadable' }
+
+export type MapRefusalCode =
+  | 'manifest-unreadable'
+  | 'manifest-invalid'
+  | 'no-depth'
+  | 'no-frames'
+  | 'no-surface'
+  | 'no-map'
+  | 'timeout'
+
 export type ScanMapResult = {
   map: Orthomap
   /** The walked path in level x, z. */
@@ -61,7 +87,9 @@ export type ScanMapResult = {
   /** Direction of north in level x, z as a unit vector, or null when the scan has no trueNorth. */
   north: [number, number] | null
   northReference: 'true' | 'magnetic' | null
-  notes: string[]
+  notes: MapNote[]
+  /** Untranslated technical remarks from the builders and the stream readers. */
+  diagnostics: string[]
   framesFused: number
   photosDecoded: number
 }
@@ -69,7 +97,7 @@ export type ScanMapResult = {
 /** Fetches a checked artifact URL, refusing before reading when the size is wrong. */
 export type BoundedFetch = (
   url: string,
-  limit: { max?: number; exact?: number },
+  limit: { max?: number; exact?: number; timeoutMs: number },
 ) => Promise<Uint8Array | null>
 
 /** Decodes JPEG bytes to RGB at about `longEdge` pixels, or null. Never rotates by EXIF. */
@@ -118,7 +146,45 @@ export class MapCancelled extends Error {
   }
 }
 
-export class MapRefusal extends Error {}
+export class MapRefusal extends Error {
+  constructor(readonly code: MapRefusalCode) {
+    super(code)
+  }
+}
+
+/**
+ * Width and height from a JPEG's first start-of-frame header, read from the bytes alone so a
+ * forged size is seen before any decoder allocates for it. Null when there is no usable header.
+ */
+export function jpegSize(bytes: Uint8Array): { width: number; height: number } | null {
+  if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return null
+  let at = 2
+  while (at + 4 <= bytes.length) {
+    if (bytes[at] !== 0xff) return null
+    const marker = bytes[at + 1]!
+    if (marker === 0xff) {
+      at += 1
+      continue
+    }
+    if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      at += 2
+      continue
+    }
+    if (marker === 0xd9 || marker === 0xda) return null
+    const length = (bytes[at + 2]! << 8) | bytes[at + 3]!
+    const isFrame =
+      marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc
+    if (isFrame) {
+      if (at + 9 > bytes.length) return null
+      const height = (bytes[at + 5]! << 8) | bytes[at + 6]!
+      const width = (bytes[at + 7]! << 8) | bytes[at + 8]!
+      return width > 0 && height > 0 ? { width, height } : null
+    }
+    if (length < 2) return null
+    at += 2 + length
+  }
+  return null
+}
 
 /**
  * Unit vector of north in level x, z for a `trueNorth` bearing: clockwise from the capture
@@ -144,20 +210,28 @@ export async function loadScanMap(
   }
   const progress = (phase: MapPhase, done: number, total: number) =>
     deps.onProgress?.({ phase, done, total })
-  const notes: string[] = []
+  const notes: MapNote[] = []
+  const diagnostics: string[] = []
   const problems: string[] = []
+  // Each artifact may take up to the fetch timeout, but never more than the total budget has left.
+  const timeoutMs = () => {
+    const left = MAP_LIMITS.totalMillis - (now() - started)
+    if (left < 1_000) throw new MapRefusal('timeout')
+    return Math.min(MAP_LIMITS.fetchTimeoutMillis, left)
+  }
   const artifact = (sha: string) => deps.artifactUrl(`/api/artifacts/${sha}`)
 
   progress('manifest', 0, 1)
   const manifestBytes = await deps.fetchBytes(deps.artifactUrl(request.manifestUrl), {
     max: CAPTURE_MAX_ARTIFACT_BYTES,
+    timeoutMs: timeoutMs(),
   })
-  if (!manifestBytes) throw new MapRefusal('The scan manifest could not be read.')
+  if (!manifestBytes) throw new MapRefusal('manifest-unreadable')
   let manifest: CaptureSessionDescriptor
   try {
     manifest = normalizeCaptureSessionManifest(JSON.parse(new TextDecoder().decode(manifestBytes)))
   } catch {
-    throw new MapRefusal('The scan manifest does not match the capture contract.')
+    throw new MapRefusal('manifest-invalid')
   }
   check()
 
@@ -172,7 +246,10 @@ export async function loadScanMap(
       if (value === undefined && stream.artifact) {
         const sha = shaFromReference(stream.artifact)
         const bytes = sha
-          ? await deps.fetchBytes(artifact(sha), { max: CAPTURE_MAX_ARTIFACT_BYTES })
+          ? await deps.fetchBytes(artifact(sha), {
+              max: CAPTURE_MAX_ARTIFACT_BYTES,
+              timeoutMs: timeoutMs(),
+            })
           : null
         if (!bytes) {
           problems.push(`${kind}: artifact not available`)
@@ -186,7 +263,8 @@ export async function loadScanMap(
         return null
       }
       return parsed.data
-    } catch {
+    } catch (error) {
+      if (error instanceof MapRefusal) throw error
       problems.push(`${kind}: unreadable`)
       return null
     }
@@ -194,8 +272,7 @@ export async function loadScanMap(
   const frameOf = (kind: string) => {
     const frameId = manifest.streams.find((stream) => stream.kind === kind)?.frameId
     const { matrix, unresolved } = resolveFrameTransform(manifest.coordinateFrames, frameId)
-    if (unresolved)
-      notes.push(`${kind}: its coordinate frame is not usable, read as capture world.`)
+    if (unresolved) notes.push({ code: 'frame-coordinates', kind })
     return matrix
   }
 
@@ -209,7 +286,7 @@ export async function loadScanMap(
   ])
   check()
   if (!depthIndex?.frames.length || !rgbIndex?.frames.length) {
-    throw new MapRefusal('This scan has no depth keyframes with photo keyframes, so no map.')
+    throw new MapRefusal('no-depth')
   }
 
   const rgbFrame = frameOf('rgb-keyframes')
@@ -226,13 +303,14 @@ export async function loadScanMap(
   let photosDecoded = 0
   let photosFailed = 0
   let unreadable = 0
+  let retained = 0
   const entries = evenSample(depthIndex.frames, MAP_LIMITS.cloudFrames)
   for (let at = 0; at < entries.length; at += 1) {
     const entry = entries[at]!
     check()
     progress('frames', at, entries.length)
     if (now() - started > MAP_LIMITS.totalMillis / 2) {
-      notes.push('Reading stopped at the time budget; later keyframes were left out.')
+      notes.push({ code: 'time-budget-reading' })
       break
     }
     const keyframe = keyframes.get(entry.rgbKeyframeId)
@@ -242,8 +320,17 @@ export async function loadScanMap(
       unreadable += 1
       continue
     }
+    // Depth, its confidence and the decoded photo stay in memory until fusing is done.
+    const photoBytes = Math.ceil(MAP_LIMITS.photoLongEdge * MAP_LIMITS.photoLongEdge * 0.5625) * 4
+    if (retained + expected * 3 + photoBytes > MAP_LIMITS.memoryBudgetBytes) {
+      notes.push({ code: 'memory-budget', frames: frames.length })
+      break
+    }
     await yieldToLoop()
-    const bytes = await deps.fetchBytes(artifact(depthSha), { exact: expected * 2 })
+    const bytes = await deps.fetchBytes(artifact(depthSha), {
+      exact: expected * 2,
+      timeoutMs: timeoutMs(),
+    })
     if (!bytes) {
       unreadable += 1
       continue
@@ -254,15 +341,28 @@ export async function loadScanMap(
     let confidence: Uint8Array | null = null
     const confidenceSha = entry.confidence ? shaFromReference(entry.confidence) : null
     if (confidenceSha) {
-      const raw = await deps.fetchBytes(artifact(confidenceSha), { exact: expected })
+      const raw = await deps.fetchBytes(artifact(confidenceSha), {
+        exact: expected,
+        timeoutMs: timeoutMs(),
+      })
       if (raw) confidence = Uint8Array.from(raw)
     }
     let image: DenseCloudFrame['image'] = null
     const imageSha = shaFromReference(keyframe.image)
     const jpeg = imageSha
-      ? await deps.fetchBytes(artifact(imageSha), { max: MAP_LIMITS.maxJpegBytes })
+      ? await deps.fetchBytes(artifact(imageSha), {
+          max: MAP_LIMITS.maxJpegBytes,
+          timeoutMs: timeoutMs(),
+        })
       : null
-    const decoded = jpeg ? await deps.decodePhoto(jpeg, MAP_LIMITS.photoLongEdge) : null
+    // The header is read first: a file that claims another size, or a huge one, is never decoded.
+    const header = jpeg ? jpegSize(jpeg) : null
+    const headerOk =
+      header !== null &&
+      header.width === keyframe.width &&
+      header.height === keyframe.height &&
+      header.width * header.height <= MAP_LIMITS.maxPhotoPixels
+    const decoded = headerOk ? await deps.decodePhoto(jpeg!, MAP_LIMITS.photoLongEdge) : null
     // The file's own size must match the keyframe's declared size, or its colours are not used.
     if (
       decoded &&
@@ -286,9 +386,11 @@ export async function loadScanMap(
           : null,
       }
       photosDecoded += 1
+      retained += decoded.data.byteLength
     } else {
       photosFailed += 1
     }
+    retained += expected * 2 + (confidence ? expected : 0)
     frames.push({
       id: entry.id,
       width: entry.width,
@@ -305,11 +407,9 @@ export async function loadScanMap(
       `depth-keyframes: ${unreadable} frame(s) unreadable, not tracked, or without a pose`,
     )
   }
-  if (frames.length === 0) throw new MapRefusal('No depth frame could be read with a tracked pose.')
+  if (frames.length === 0) throw new MapRefusal('no-frames')
   if (photosFailed > 0) {
-    notes.push(
-      `${photosFailed} photo(s) could not be used (missing, over the size cap, a different size from the keyframe, or undecodable); those frames add shape but no colour.`,
-    )
+    notes.push({ code: 'photos-unused', count: photosFailed })
   }
 
   progress('fuse', 0, 1)
@@ -322,10 +422,10 @@ export async function loadScanMap(
     maxMillis: Math.min(MAP_LIMITS.fuseMillis, remaining),
   })
   if (cloud.count === 0) {
-    throw new MapRefusal('No surface was seen in two or more depth frames, so no map.')
+    throw new MapRefusal('no-surface')
   }
   if (cloud.stats.timedOut) {
-    notes.push(`Fusing stopped at the time budget after ${cloud.stats.framesUsed} frame(s).`)
+    notes.push({ code: 'fuse-time-budget', frames: cloud.stats.framesUsed })
   }
   check()
 
@@ -335,7 +435,7 @@ export async function loadScanMap(
   let ceilingY: number | null = null
   const walked = motion ? pathPositions(motion.samples, frameOf('device-motion')) : null
   if (now() - started > MAP_LIMITS.totalMillis * 0.6) {
-    notes.push('The room outline was skipped at the time budget.')
+    notes.push({ code: 'outline-skipped' })
   } else {
     try {
       const planeFrame = planeSet ? frameOf('plane-set') : null
@@ -360,7 +460,7 @@ export async function loadScanMap(
         ? (proposal.polygon as Array<readonly [number, number]>).map(([x, z]) => [x, z])
         : null
     } catch {
-      notes.push('The room outline could not be computed, so none is available.')
+      notes.push({ code: 'outline-failed' })
     }
   }
   check()
@@ -374,7 +474,7 @@ export async function loadScanMap(
     layer: request.layer,
     maxPixels: MAP_LIMITS.maxPixels,
   })
-  if (full.width === 0) throw new MapRefusal(full.notes.join(' '))
+  if (full.width === 0) throw new MapRefusal('no-map')
   const map = downscaleOrthomap(full, MAP_LIMITS.displaySide)
 
   const path: Array<[number, number]> = walked
@@ -393,11 +493,8 @@ export async function loadScanMap(
     proposal: proposalPolygon,
     north: trueNorth.success ? northInLevel(trueNorth.data.worldYawDeg, request.transform) : null,
     northReference: trueNorth.success ? trueNorth.data.reference : null,
-    notes: [
-      ...map.notes,
-      ...notes,
-      ...(problems.length ? [`Unreadable: ${problems.join('; ')}`] : []),
-    ],
+    notes: problems.length ? [...notes, { code: 'streams-unreadable' }] : notes,
+    diagnostics: [...map.notes, ...diagnostics, ...problems],
     framesFused: cloud.stats.framesUsed,
     photosDecoded,
   }
