@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { SCAN_SEMANTICS_TOOL_CONTRACTS } from './scan-semantics'
 
 const read = {
   readOnlyHint: true,
@@ -97,5 +98,6 @@ export const SCAN_TOOL_CONTRACTS = [
   viewScanPhotosTool,
   proposeRoomFromScanTool,
   viewScanMapTool,
+  ...SCAN_SEMANTICS_TOOL_CONTRACTS,
 ] as const
 export type ScanToolName = (typeof SCAN_TOOL_CONTRACTS)[number]['name']
