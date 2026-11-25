@@ -539,3 +539,180 @@ describe('robustness against real-world and hostile captures', () => {
     expect(reads).toEqual([])
   })
 })
+
+// Synthetic depth: a 5 x 4 m room rendered by ray casting, walked in a loop. No real data.
+describe('propose_room_from_scan with raw depth and no planes', () => {
+  const W = 160
+  const H = 90
+  const K = { fx: 105, fy: 105, cx: 80, cy: 45 }
+  const ROOM = 2.6
+  const EYE = 1.4
+
+  function render(x: number, z: number, yaw: number, pitch: number) {
+    const cp = Math.cos(pitch)
+    const sp = Math.sin(pitch)
+    const cy = Math.cos(yaw)
+    const sy = Math.sin(yaw)
+    const forward = [cp * cy, sp, cp * sy]
+    const right = [-sy, 0, cy]
+    const up = [-sp * cy, cp, -sp * sy]
+    const poseMatrix = [...right, 0, ...up, 0, ...forward.map((v) => -v), 0, x, EYE, z, 1]
+    const depth = new Uint16Array(W * H)
+    for (let v = 0; v < H; v += 1) {
+      for (let u = 0; u < W; u += 1) {
+        const a = (u + 0.5 - K.cx) / K.fx
+        const b = -(v + 0.5 - K.cy) / K.fy
+        const d = [0, 1, 2].map((i) => right[i]! * a + up[i]! * b + forward[i]!)
+        let t = Number.POSITIVE_INFINITY
+        for (const [axis, at] of [
+          [0, 0],
+          [0, 5],
+          [2, 0],
+          [2, 4],
+        ] as const) {
+          const origin = axis === 0 ? x : z
+          const hit = (at - origin) / d[axis]!
+          if (hit <= 0) continue
+          const other = axis === 0 ? z + d[2]! * hit : x + d[0]! * hit
+          const height = EYE + d[1]! * hit
+          if (other >= 0 && other <= (axis === 0 ? 4 : 5) && height >= 0 && height <= ROOM) {
+            t = Math.min(t, hit)
+          }
+        }
+        if (d[1]! < 0) t = Math.min(t, -EYE / d[1]!)
+        if (d[1]! > 0) t = Math.min(t, (ROOM - EYE) / d[1]!)
+        depth[v * W + u] = Math.round(t * 1000)
+      }
+    }
+    return { depth, poseMatrix }
+  }
+
+  async function depthBundle(withConfidence: boolean) {
+    const rgb: unknown[] = []
+    const depthEntries: unknown[] = []
+    const samples: unknown[] = []
+    const stops: Array<[number, number]> = []
+    for (let x = 0.8; x < 4.2; x += 0.8) stops.push([x, 0.8])
+    for (let z = 0.8; z < 3.2; z += 0.8) stops.push([4.2, z])
+    for (let x = 4.2; x > 0.8; x -= 0.8) stops.push([x, 3.2])
+    for (let z = 3.2; z > 0.8; z -= 0.8) stops.push([0.8, z])
+    let index = 0
+    for (const [x, z] of stops) {
+      samples.push({
+        segment: 0,
+        timestamp: index,
+        transform: pose([1, 0, 0], [0, 1, 0], [0, 0, 1], [x, EYE, z]),
+      })
+      for (let turn = 0; turn < 10; turn += 1) {
+        const { depth, poseMatrix } = render(
+          x,
+          z,
+          (Math.PI * 2 * turn) / 10,
+          [-0.35, 0, 0.35][turn % 3]!,
+        )
+        const image = await put(jpeg(2000, index % 250))
+        rgb.push({
+          id: `kf${index}`,
+          timestamp: index,
+          image: { uri: `/api/artifacts/${image}`, sha256: image },
+          width: 640,
+          height: 480,
+          intrinsics: null,
+          pose: poseMatrix,
+          trackingState: 'tracking',
+        })
+        const bytes = new Uint8Array(depth.buffer.slice(0))
+        const depthSha = await put(bytes)
+        const confidenceSha = withConfidence ? await put(new Uint8Array(W * H).fill(255)) : null
+        depthEntries.push({
+          id: `dk${index}`,
+          rgbKeyframeId: `kf${index}`,
+          timestamp: index,
+          width: W,
+          height: H,
+          intrinsics: K,
+          depth: { uri: `/api/artifacts/${depthSha}`, sha256: depthSha },
+          confidence: confidenceSha
+            ? { uri: `/api/artifacts/${confidenceSha}`, sha256: confidenceSha }
+            : null,
+        })
+        index += 1
+      }
+    }
+    return put({
+      schemaVersion: 2,
+      sessionId: 'depth-room',
+      state: 'ready',
+      coordinateFrames: [],
+      streams: [
+        {
+          id: 'photos',
+          kind: 'rgb-keyframes',
+          role: 'photos',
+          artifact: reference(await put({ frames: rgb }), 'application/json'),
+        },
+        {
+          id: 'depth',
+          kind: 'depth-keyframes',
+          role: 'depth',
+          artifact: reference(await put({ frames: depthEntries }), 'application/json'),
+        },
+        {
+          id: 'motion',
+          kind: 'device-motion',
+          role: 'deviceMotion',
+          inline: { coordinateSystem: 'arcore-world', samples },
+        },
+      ],
+      metadata: {
+        provider: 'android-arcore',
+        appVersion: '0.0.0-test',
+        device: { manufacturer: 'Test', model: 'Synthetic', os: 'Android' },
+        createdAt: '2026-11-25T10:00:00+00:00',
+        trackingLossCount: 0,
+        warnings: ['no-planes-detected'],
+        camera: { convention: 'opengl', frame: 'image-readout', sensorOrientationDeg: 90 },
+      },
+    })
+  }
+
+  test('proposes a depth-fit room, places it through the node transform, and writes nothing', async () => {
+    const manifest = await depthBundle(true)
+    const { client, levelId } = await connect([{ id: 'scan_dddddddd', manifest }])
+    const before = json((await call(client, 'read_scan', { scanId: 'scan_dddddddd' })).content[0])
+    expect(before.planes).toBeNull()
+    expect(before.depth).toMatchObject({ present: true, frameCount: 170 })
+
+    const result = await call(client, 'propose_room_from_scan', { scanId: 'scan_dddddddd' })
+    expect(result.isError).toBeFalsy()
+    const proposal = json(result.content[0])
+    expect(proposal).toMatchObject({ method: 'depth', levelId, needsVerification: true })
+    expect(proposal.polygon).toHaveLength(4)
+    // The node sits at [10, 0, 20], so the 5 x 4 m room lands at x 10 to 15, z 20 to 24.
+    const xs = proposal.polygon.map((point: number[]) => point[0])
+    const zs = proposal.polygon.map((point: number[]) => point[1])
+    expect(Math.min(...xs)).toBeCloseTo(10, 0)
+    expect(Math.max(...xs)).toBeCloseTo(15, 0)
+    expect(Math.min(...zs)).toBeCloseTo(20, 0)
+    expect(Math.max(...zs)).toBeCloseTo(24, 0)
+    expect(proposal.height).toMatchObject({ basis: 'depth-estimate' })
+    for (const edge of proposal.edges) {
+      expect(edge.basis).toBe('depth-fit')
+      expect(edge.confidence).not.toBe('high')
+      expect(edge.evidenceIds.length).toBeGreaterThan(0)
+    }
+    expect(proposal.depth.candidates.length).toBeGreaterThan(3)
+    expect(proposal.unknowns.join(' ')).toContain('not measured walls')
+    expect(proposal.next).toContain('Nothing was written')
+  })
+
+  test('a depth artifact of the wrong size is skipped and reported, not trusted', async () => {
+    const manifest = await depthBundle(false)
+    const { client } = await connect([{ id: 'scan_eeeeeeee', manifest }])
+    const proposal = json(
+      (await call(client, 'propose_room_from_scan', { scanId: 'scan_eeeeeeee' })).content[0],
+    )
+    // No confidence image is fine: the proposal notes it.
+    expect(proposal.unknowns.join(' ')).toContain('no confidence image')
+  })
+})

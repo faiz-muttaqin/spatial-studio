@@ -19,6 +19,8 @@ import {
   type CloudSummary,
   captureDirectionToLevel,
   captureToLevel,
+  type DepthFrameInput,
+  type DepthKeyframe,
   DepthKeyframeIndexSchema,
   DeviceMotionTrajectorySchema,
   IDENTITY_SCAN_TRANSFORM,
@@ -66,6 +68,9 @@ type ScanBundle = {
   problems: string[]
   rgb: RgbKeyframe[] | null
   depthFrames: number | null
+  depthIndex: DepthKeyframe[] | null
+  /** Walked path in the capture world, `[x, y, z]` per sample. */
+  walked: Array<readonly [number, number, number]> | null
   planes: CapturePlane[] | null
   pointCloud: CloudSummary | null
   path: PathSummary | null
@@ -274,6 +279,8 @@ async function loadBundle(
         rgbFrame && frame.pose ? { ...frame, pose: multiplyMatrix4(rgbFrame, frame.pose) } : frame,
       ) ?? null,
     depthFrames: depth?.frames.length ?? null,
+    depthIndex: depth?.frames ?? null,
+    walked: walked as Array<readonly [number, number, number]> | null,
     planes:
       planes?.planes.map((plane) =>
         planeFrame
@@ -620,17 +627,86 @@ async function viewScanPhotos(
   return { content }
 }
 
+/** Most depth frames one proposal reads; the rest are skipped evenly so the work stays bounded. */
+const MAX_DEPTH_FRAMES = 120
+
+/**
+ * Raw depth for the proposal: each frame's uint16 millimetres and uint8 confidence from the store,
+ * paired with the pose of its rgb keyframe. A frame with a missing or wrongly sized artifact, or no
+ * pose to place it, is left out and counted in `problems`.
+ */
+async function readDepthFrames(
+  host: CaptureArtifactHost,
+  bundle: ScanBundle,
+  problems: string[],
+): Promise<DepthFrameInput[]> {
+  const index = bundle.depthIndex
+  if (!index?.length) return []
+  const poses = new Map((bundle.rgb ?? []).map((frame) => [frame.id, frame.pose]))
+  const chosen = evenSample(index, MAX_DEPTH_FRAMES)
+  const frames: DepthFrameInput[] = []
+  let skipped = 0
+  for (const entry of chosen) {
+    const pose = poses.get(entry.rgbKeyframeId)
+    const sha256 = shaFromReference(entry.depth)
+    const expected = entry.width * entry.height
+    if (!pose || !sha256 || expected > 1_000_000) {
+      skipped += 1
+      continue
+    }
+    const size = await host.size?.(sha256)
+    if (size !== undefined && size !== null && size !== expected * 2) {
+      skipped += 1
+      continue
+    }
+    const bytes = await host.read(sha256)
+    if (!bytes || bytes.byteLength !== expected * 2) {
+      skipped += 1
+      continue
+    }
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+    const depth = new Uint16Array(expected)
+    for (let pixel = 0; pixel < expected; pixel += 1) depth[pixel] = view.getUint16(pixel * 2, true)
+    let confidence: Uint8Array | null = null
+    const confidenceSha = entry.confidence ? shaFromReference(entry.confidence) : null
+    if (confidenceSha) {
+      const raw = await host.read(confidenceSha)
+      if (raw && raw.byteLength === expected) confidence = Uint8Array.from(raw)
+    }
+    frames.push({
+      id: entry.id,
+      width: entry.width,
+      height: entry.height,
+      intrinsics: entry.intrinsics,
+      pose,
+      depth,
+      confidence,
+    })
+  }
+  if (skipped) problems.push(`depth-keyframes: ${skipped} frame(s) unreadable or without a pose`)
+  return frames
+}
+
 async function proposeRoomFromScan(
   operations: SceneOperations,
   host: CaptureArtifactHost,
   scanId: string,
 ) {
   const node = findScan(operations, scanId)
-  const bundle = await loadBundle(host, node, { planes: true, measurements: true })
+  const bundle = await loadBundle(host, node, {
+    rgb: true,
+    depth: true,
+    planes: true,
+    measurements: true,
+    cloud: true,
+  })
+  const depthFrames = await readDepthFrames(host, bundle, bundle.problems)
   const proposal = proposeRoom({
     planes: bundle.planes,
     measurements: bundle.measurements,
     transform: bundle.transform,
+    depthFrames,
+    walkedPath: bundle.walked,
   })
   return {
     scanId: node.id,
