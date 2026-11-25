@@ -840,6 +840,7 @@ msgid "app.scan.submit.create"
 msgstr "Upload and create project"
 
 #: apps/editor/app/scan/scan-app.tsx
+#: apps/editor/components/scan-room-link.tsx
 msgid "app.scan.title"
 msgstr "Scan a room"
 

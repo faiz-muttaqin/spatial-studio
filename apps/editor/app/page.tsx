@@ -2,6 +2,7 @@ import { Settings } from 'lucide-react'
 import Link from 'next/link'
 import { AppHeader, AppShell, ICON_BUTTON, PascalMark } from '@/components/app-shell'
 import { CreateProjectButton } from '@/components/create-project-button'
+import { ScanRoomLink } from '@/components/scan-room-link'
 import { SceneCard, type SceneCardData } from '@/components/scene-card'
 import { getSceneOperations } from '@/lib/scene-store-server'
 import { sceneThumbnailUrl } from '@/lib/scene-thumbnails'
@@ -46,6 +47,7 @@ export default async function HomePage() {
   return (
     <AppShell>
       <AppHeader>
+        <ScanRoomLink />
         <CreateProjectButton nextNumber={nextNumber} />
         <Link aria-label="Settings" className={ICON_BUTTON} href="/settings" title="Settings">
           <Settings className="h-4 w-4" />

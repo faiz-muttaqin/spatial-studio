@@ -2100,6 +2100,7 @@ msgstr "アップロードしてプロジェクトを作成"
 # AI-Model: claude-opus-5-5
 # English: "Scan a room"
 #: apps/editor/app/scan/scan-app.tsx
+#: apps/editor/components/scan-room-link.tsx
 #, fuzzy
 msgid "app.scan.title"
 msgstr "部屋をスキャン"

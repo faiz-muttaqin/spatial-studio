@@ -58,9 +58,34 @@ Location and radio identifiers are personal data. They are off by default, opted
 - Whether ARCore light estimation helps place lamps and windows.
 - Sun check: render the sun for the capture's date, time, location and north, and compare with a real shadow photographed at that moment.
 
+## Depth sources without LiDAR
+
+Measured on the owner's test phone (Samsung SM-S937B): ARCore depth and raw depth are supported, no Camera2 camera reports `DEPTH_OUTPUT` (no time-of-flight sensor), and the back camera is a logical multi-camera (wide and ultrawide). Depth therefore comes from ARCore depth-from-motion, which needs the phone to move sideways, not only rotate.
+
+| Source | Status | Notes |
+|---|---|---|
+| ARCore raw depth with confidence | Recorded (P2N v1) | 160 x 90 per keyframe on the test phone; primary geometry source with poses |
+| ARCore planes | Recorded (fixed in #5) | Floors and ceilings found on the test phone; no vertical planes on plain or glass walls |
+| ARCore feature points | Recorded | Filtered at acquisition by distance and confidence |
+| Camera2 `DEPTH16` / ToF | Probed only | Absent on the test phone; use when a device reports it |
+| Learned monocular depth (for example Depth Anything V2) | P5 candidate | For phones without the Depth API; check code and weight licences per model size before use |
+
+Walls without texture or made of glass give no vertical planes, so P3b needs wall fitting from raw depth, floor-plane boundaries and the walked path, plus assisted marking ([GLASS_AND_MIRRORS.md](GLASS_AND_MIRRORS.md)).
+
+## Acoustic ranging (spike, opt-in)
+
+The phone's speaker emits a short near-ultrasonic chirp and the microphone times its echo (distance = speed of sound x delay / 2, about 5.8 ms per metre of round trip). It is the bat-like option that works on a standard phone, and it is complementary to the camera: clear glass reflects sound strongly, so echoes can locate glass the camera sees through. Published work on smartphone acoustic floor plans and echo-based SLAM (for example BatMapper, MobiSys 2017) supports the idea; their accuracy figures do not transfer without our own measurements.
+
+Constraints: request unprocessed microphone input (vendor echo cancellation and noise suppression can remove the echo), calibrate speaker-to-microphone latency per device, combine echoes with ARCore poses from several positions (one echo is ambiguous), keep volume low and chirps short (near-ultrasound can still be audible to some people and animals). Privacy: microphone use needs explicit per-scan opt-in, raw audio is never stored or uploaded, and only echo profiles (delays, strengths, confidence, pose reference) enter the bundle through a new contract stream.
+
+First experiment: distances of 0.5 to 4 m to concrete, wood, glass, a mirror and a curtain, at several angles, compared with a tape measure.
+
+Wi-Fi and Bluetooth on a standard phone measure distance to other devices (Wi-Fi RTT, Bluetooth channel sounding, UWB), not to walls; reflection analysis (Wi-Fi CSI) needs extra hardware. They stay optional research for positioning, not geometry.
+
 ## Roadmap placement
 
 - P2N.2: Android capture of orientation, heading, geolocation (opt-in), light estimate and barometer into the bundle. It can be built alongside the first real-device test of P2N v1; its accuracy figures come only from that device.
 - P2N.3: live telemetry transport spike (options 1 and 2 above).
+- P2N.4 (spike): acoustic ranging, opt-in, echo profiles only, measured against a tape on several materials before any adoption.
 - P3b: set site latitude, longitude and `northRotation` from a capture, with user confirmation; sun direction then follows from the existing daylight code.
 - P5 (optional): radio-signal observations for multi-room registration and re-localisation.

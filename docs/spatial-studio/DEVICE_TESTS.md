@@ -20,3 +20,15 @@ Findings:
 - Upload time for a full scan with depth is about 10 to 11 minutes at the current pacing.
 
 Not yet tested on a device: the deployed site, a sign-in through the app, planes, P2N.2 sensors, and drawing the capture in the editor.
+
+## 2026-11-25: second scan (local server) and live-site scan (P2N.2 fix build)
+
+- Build: `apps/android` debug APK from the P2N.2 branch, first at `a9baf89` (second scan) and then at `39c81e4` with the plane and heading fixes (live scan). Same phone.
+- Second scan, uploaded to the local server: 101 s, 17.6 m, 107 keyframes, one tracking loss; point cloud 11,204 points within y -2.4 to 4.7 m (acquisition filtering works). Still no planes and no true north, which led to the fixes below. Location was recorded; the code only starts it when `scan.start` asks for it or the scan-screen toggle is ticked, and this `/scan` page never asks.
+- Root causes found: the once-a-second plane snapshot never ran (timestamp overflow against a `Long.MIN_VALUE` sentinel, which also froze the HUD on "Starting camera…"), and heading samples were paired with the newest compass reading instead of the one nearest the frame time, so all were rejected.
+- Live-site scan with `39c81e4`, signed in inside the app on https://spatial-studio.faizmuttaqin.com, uploaded and attached to a new project there:
+  - 56.3 s, 17.7 m path, 87 keyframes, no tracking loss, no warnings.
+  - Planes: 28 in total, 20 active (15 upward, 5 downward, 0 vertical). Largest floor plane 24.6 m², largest ceiling plane 19.1 m², about 4.2 m apart.
+  - True north: confidence 0.93 from 277 samples, spread 1.2 degrees, segments agree, declination applied from opt-in location.
+  - Point cloud: 17,907 points, 2nd to 98th percentile height span 4.6 m.
+- Open: no vertical planes on plain or glass walls; the live MCP scan tools were not yet deployed at the time of the scan.
