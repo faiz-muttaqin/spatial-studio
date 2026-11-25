@@ -42,7 +42,12 @@ export class BridgeError extends Error {
   }
 }
 
-export const BRIDGE_EVENTS = ['scan.state', 'scan.progress', 'upload.progress'] as const
+export const BRIDGE_EVENTS = [
+  'scan.state',
+  'scan.progress',
+  'upload.progress',
+  'upload.done',
+] as const
 export type BridgeEventName = (typeof BRIDGE_EVENTS)[number]
 export type BridgeEvent = { v: 1; event: BridgeEventName; data: unknown }
 
@@ -74,6 +79,11 @@ const ScanListResultSchema = z.array(
       keyframes: z.number().int().nonnegative(),
       bytes: z.number().int().nonnegative(),
       uploaded: z.boolean(),
+      /** Present once the scan is uploaded; the page can attach it without uploading again. */
+      manifestUrl: z
+        .string()
+        .regex(/^\/api\/artifacts\/[0-9a-f]{64}$/)
+        .optional(),
     })
     .loose(),
 )

@@ -279,6 +279,32 @@ describe('native bridge client', () => {
   })
 })
 
+describe('uploaded scans in scan.list', () => {
+  test('carries the manifest url of an uploaded scan and the upload.done event is accepted', async () => {
+    const bridge = new FakeBridge()
+    const client = createNativeBridgeClient(bridge, { newId: sequentialIds() })
+    const done: unknown[] = []
+    client.subscribe('upload.done', (event) => done.push(event.data))
+    bridge.onRequest = (request) => {
+      bridge.reply(request.id, [
+        {
+          sessionId: 's1',
+          createdAt: '2026-11-25T00:00:00Z',
+          state: 'ready',
+          keyframes: 84,
+          bytes: 1,
+          uploaded: true,
+          manifestUrl: `/api/artifacts/${manifestSha}`,
+        },
+      ])
+      bridge.emit({ v: 1, event: 'upload.done', data: { sessionId: 's1' } })
+    }
+    const [entry] = await client.listScans()
+    expect(entry?.manifestUrl).toBe(`/api/artifacts/${manifestSha}`)
+    expect(done).toEqual([{ sessionId: 's1' }])
+  })
+})
+
 describe('findNativeBridge', () => {
   test('finds only an object with postMessage', () => {
     expect(findNativeBridge({})).toBeNull()

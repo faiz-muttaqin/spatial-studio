@@ -23,6 +23,9 @@ function describeEventData(data: unknown): string {
     .join(' · ')
 }
 
+/** The list shows only the latest few; the companion does not say which were attached. */
+const MAX_UPLOADED_SHOWN = 3
+
 function eventSession(event: BridgeEvent): string | null {
   const sessionId = (event.data as { sessionId?: unknown } | null)?.sessionId
   return typeof sessionId === 'string' ? sessionId : null
@@ -58,6 +61,8 @@ export function NativeScan({
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [events, setEvents] = useState<Partial<Record<BridgeEvent['event'], string>>>({})
   const [earlier, setEarlier] = useState<ScanListEntry[]>([])
+  /** Uploaded on the phone but possibly never attached (for example the page reloaded mid-upload). */
+  const [uploaded, setUploaded] = useState<ScanListEntry[]>([])
   const [busy, setBusy] = useState<'start' | 'upload' | 'discard' | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
   const [location, setLocation] = useState(false)
@@ -73,16 +78,32 @@ export function NativeScan({
     [client, sessionId],
   )
 
+  const [listVersion, setListVersion] = useState(0)
+
+  // A finished upload whose reply this page never got: list again so it can be attached.
+  useEffect(
+    () => client.subscribe('upload.done', () => setListVersion((version) => version + 1)),
+    [client],
+  )
+
   useEffect(() => {
     let active = true
     client.listScans().then(
-      (entries) => active && setEarlier(entries.filter((entry) => !entry.uploaded)),
+      (entries) => {
+        if (!active) return
+        setEarlier(entries.filter((entry) => !entry.uploaded))
+        setUploaded(
+          entries
+            .filter((entry) => entry.uploaded && entry.manifestUrl)
+            .slice(0, MAX_UPLOADED_SHOWN),
+        )
+      },
       () => {},
     )
     return () => {
       active = false
     }
-  }, [client])
+  }, [client, listVersion])
 
   const run = async (kind: 'start' | 'upload' | 'discard', action: () => Promise<void>) => {
     setBusy(kind)
@@ -124,6 +145,21 @@ export function NativeScan({
       setEarlier((entries) => entries.filter((entry) => entry.sessionId !== id))
       if (id === sessionId) setSessionId(null)
       await onUploaded(result)
+    })
+
+  /** The scan is already stored on the site: attach it from the list, with no second upload. */
+  const attachUploaded = (entry: ScanListEntry) =>
+    run('upload', async () => {
+      const manifestUrl = entry.manifestUrl
+      if (!manifestUrl) return
+      onBeforeUpload(entry.sessionId)
+      setUploaded((entries) => entries.filter((item) => item.sessionId !== entry.sessionId))
+      if (entry.sessionId === sessionId) setSessionId(null)
+      await onUploaded({
+        sessionId: entry.sessionId,
+        manifestUrl,
+        manifestSha256: manifestUrl.slice(-64),
+      })
     })
 
   const discard = (id: string) =>
@@ -238,6 +274,38 @@ export function NativeScan({
                   type="button"
                 >
                   {i18n._({ id: 'app.scan.native.uploadShort', message: 'Upload' })}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {uploaded.length > 0 ? (
+        <div className="space-y-2">
+          <p className="font-medium text-sm">
+            {i18n._({ id: 'app.scan.native.uploadedList', message: 'Uploaded, not attached yet' })}
+          </p>
+          <ul className="space-y-2">
+            {uploaded.map((entry) => (
+              <li
+                className="flex items-center justify-between gap-2 rounded-lg border border-border/60 p-2 text-sm"
+                key={entry.sessionId}
+              >
+                <span className="text-muted-foreground">
+                  {i18n._({
+                    id: 'app.scan.native.entry',
+                    message: '{keyframes, plural, one {# keyframe} other {# keyframes}}, {state}',
+                    values: { keyframes: entry.keyframes, state: entry.state },
+                  })}
+                </span>
+                <button
+                  className={SECONDARY_PILL}
+                  disabled={disabled || busy !== null}
+                  onClick={() => attachUploaded(entry)}
+                  type="button"
+                >
+                  {i18n._({ id: 'app.scan.native.attach', message: 'Attach' })}
                 </button>
               </li>
             ))}
