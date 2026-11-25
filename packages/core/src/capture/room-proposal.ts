@@ -3,7 +3,9 @@ import {
   type DepthFrameInput,
   type DepthWallEvidence,
   deriveDepthWalls,
+  distanceFromPath,
   floorPolygonsFromPlanes,
+  floorSeenAlongEdge,
   measureBeyondEdge,
   pathOutside,
   pointInPolygon,
@@ -81,6 +83,9 @@ export type RoomProposal = {
     position: [number, number, number]
     rotation: [number, number, number]
     scale: number
+    /** Low when the floor level is estimated from depth heights or depth disagrees with the plane. */
+    confidence: 'low' | 'medium'
+    floorBasis: 'plane' | 'depth-histogram'
     note: string
   } | null
   /** Always true: every value is an estimate or a guess until a person confirms it on site. */
@@ -130,6 +135,9 @@ const GOOD_GAP = 0.3
 /** Depth structure past an edge that marks clear glass or an open side. */
 const BEYOND_MIN_CELLS = 15
 const BEYOND_GLASS_SHARE = 0.12
+/** A depth-fit edge this far from the walked path, or without floor seen up to it, is rated low. */
+const FAR_FROM_PATH = 4
+const FLOOR_SEEN_SHARE = 0.5
 
 type Line = {
   /** A point on the line and its unit direction. */
@@ -142,7 +150,12 @@ type Line = {
   planeIds: string[]
   /** The strongest basis among them: planes over depth fits over floor boundaries. */
   basis: LineBasis
+  /** The members that are real plane ids; the others are depth or floor-boundary candidates. */
+  realPlaneIds: string[]
 }
+
+/** Planes must cover this much of a merged line before it counts as plane-based. */
+const PLANE_SHARE = 0.6
 
 type LineBasis = 'plane-estimate' | 'depth-fit' | 'floor-boundary'
 const BASIS_RANK: Record<LineBasis, number> = {
@@ -236,8 +249,18 @@ export function proposeRoom(input: RoomProposalInput): RoomProposal {
 
   if (analysis) unknowns.push(...analysis.notes)
   if (evidence) unknowns.push(...evidence.notes)
+  if (evidence && !analysis?.floor) {
+    unknowns.push(
+      'No floor plane was detected, so clear glass cannot be ruled out: depth-fit edges may include space seen through glass.',
+    )
+  }
+  for (const item of evidence?.ambiguous ?? []) {
+    unknowns.push(
+      `Ambiguous boundary: a wall was measured about ${item.wallDistance} m from the walked path (${item.wallId}), but the floor plane ends at about ${item.floorDistance} m (${item.floorBoundaryId}) with floor seen in between. The measured wall is used; if there is glass at the floor edge, the room is smaller. Check on site.`,
+    )
+  }
   if (evidence && proposal.polygon && proposal.method !== 'manual-measurements') {
-    proposal = annotateEdges(proposal, evidence, unknowns)
+    proposal = annotateEdges(proposal, evidence, unknowns, path)
   }
   if (path.length > 0 && proposal.polygon && proposal.method !== 'manual-measurements') {
     const { outside, total } = pathOutside(path, proposal.polygon)
@@ -272,7 +295,10 @@ export function proposeRoom(input: RoomProposalInput): RoomProposal {
   return {
     ...proposal,
     floorY,
-    suggestedScanTransform: suggestTransform(floorY, transform),
+    suggestedScanTransform: suggestTransform(floorY, transform, {
+      planeFloor: Boolean(analysis?.floor),
+      mismatch: evidence?.vertical.floorMismatch ?? null,
+    }),
     unknowns: [...proposal.unknowns, ...unknowns],
   }
 }
@@ -280,13 +306,24 @@ export function proposeRoom(input: RoomProposalInput): RoomProposal {
 function suggestTransform(
   floorY: number | null,
   transform: ScanTransform,
+  floor: { planeFloor: boolean; mismatch: number | null },
 ): RoomProposal['suggestedScanTransform'] {
   if (floorY === null || Math.abs(floorY) < 0.02) return null
+  // A floor from a plane that depth agrees with is a medium-confidence suggestion; one estimated
+  // from depth heights, or one depth disagrees with, is low and says so.
+  const confidence = floor.planeFloor && floor.mismatch === null ? 'medium' : 'low'
+  const why = !floor.planeFloor
+    ? 'The floor level is estimated from depth heights, not a detected plane.'
+    : floor.mismatch !== null
+      ? `Depth heights disagree with the floor plane by ${floor.mismatch} m, so the floor level is uncertain.`
+      : 'The floor is the largest detected upward plane.'
   return {
     position: [transform.position[0], round(transform.position[1] - floorY), transform.position[2]],
     rotation: [transform.rotation[0], transform.rotation[1], transform.rotation[2]],
     scale: transform.scale,
-    note: `The detected floor is at level y ${round(floorY)} m. Moving the scan node's y by ${round(-floorY)} m puts it on the level floor; the polygon's x and z do not change. Apply only after the person confirms.`,
+    confidence,
+    floorBasis: floor.planeFloor ? 'plane' : 'depth-histogram',
+    note: `Estimated floor at level y ${round(floorY)} m. Moving the scan node's y by ${round(-floorY)} m would put it on the level floor; the polygon's x and z do not change. ${why} Apply only after the person confirms.`,
   }
 }
 
@@ -676,9 +713,18 @@ function mergeWalls(walls: readonly WallSegment[], sources: SegmentSources): Lin
     const ts = group.flatMap((wall) => [dot(sub(wall.a, q), d), dot(sub(wall.b, q), d)])
     const tMin = Math.min(...ts)
     const tMax = Math.max(...ts)
-    const basis = group
-      .map((wall) => basisOfId(sources, wall.planeId))
-      .sort((left, right) => BASIS_RANK[right] - BASIS_RANK[left])[0]!
+    const isPlane = (wall: WallSegment) => basisOfId(sources, wall.planeId) === 'plane-estimate'
+    const planeLength = group.filter(isPlane).reduce((sum, wall) => sum + wall.length, 0)
+    const others = group.filter((wall) => !isPlane(wall))
+    // Planes keep the line only when they cover most of it; otherwise its strongest other basis stands.
+    const basis: LineBasis =
+      planeLength > 0 && (others.length === 0 || planeLength >= PLANE_SHARE * (tMax - tMin))
+        ? 'plane-estimate'
+        : others.some((wall) => basisOfId(sources, wall.planeId) === 'depth-fit')
+          ? 'depth-fit'
+          : others.length > 0
+            ? 'floor-boundary'
+            : 'plane-estimate'
     return {
       q,
       d,
@@ -687,6 +733,7 @@ function mergeWalls(walls: readonly WallSegment[], sources: SegmentSources): Lin
       length: tMax - tMin,
       planeIds: group.map((wall) => wall.planeId),
       basis,
+      realPlaneIds: group.filter(isPlane).map((wall) => wall.planeId),
     }
   })
 }
@@ -745,7 +792,7 @@ function buildPairOutline(
       length,
       basis: line ? line.basis : 'assumed',
       confidence: 'low',
-      evidencePlaneIds: line && line.basis === 'plane-estimate' ? line.planeIds : [],
+      evidencePlaneIds: line ? line.realPlaneIds : [],
       evidenceIds: line ? line.planeIds : [],
       reason: line
         ? 'One of two parallel walls seen; its ends are where it was last seen, not corners.'
@@ -995,7 +1042,7 @@ function buildOutline(
       length,
       basis: line.basis,
       confidence,
-      evidencePlaneIds: line.basis === 'plane-estimate' ? line.planeIds : [],
+      evidencePlaneIds: line.realPlaneIds,
       evidenceIds: line.planeIds,
       reason,
       likelyGlass: false,
@@ -1065,6 +1112,7 @@ function annotateEdges(
   proposal: RoomProposal,
   evidence: DepthWallEvidence,
   unknowns: string[],
+  path: Float32Array,
 ): RoomProposal {
   const polygon = proposal.polygon!
   const edges = proposal.edges.map((edge): RoomProposalEdge => {
@@ -1085,17 +1133,30 @@ function annotateEdges(
     const noDepthWall = edge.basis === 'floor-boundary' || edge.basis === 'assumed'
     const strongBeyond = beyond.cells >= BEYOND_MIN_CELLS && beyond.share >= BEYOND_GLASS_SHARE
     const likelyGlass = hidden || (noDepthWall && strongBeyond)
+    let confidence = edge.confidence
+    let capped: string | null = null
+    if (edge.basis === 'depth-fit') {
+      const far = path.length > 0 ? distanceFromPath(path, edge.from, edge.to) : 0
+      const floorSeen = floorSeenAlongEdge(evidence, edge.from, edge.to, [-outward[0], -outward[1]])
+      if (far > FAR_FROM_PATH) {
+        capped = `This edge is ${round(far, 1)} m from anywhere the phone walked, far beyond the walked area.`
+      } else if (floorSeen < FLOOR_SEEN_SHARE) {
+        capped = `The floor was not seen up to this edge (${Math.round(floorSeen * 100)}% of it), so glass or space beyond the room cannot be ruled out.`
+      }
+      if (capped) confidence = 'low'
+    }
     let note: string | undefined
     if (likelyGlass) {
-      note = `Depth reaches ${beyond.maxDistance} m past this edge, where no solid wall was measured: likely clear glass or an open side. The room boundary here is a guess from the ${edge.basis === 'assumed' ? 'closing edge' : 'floor plane edge'}, and what lies beyond is not part of the room.`
+      note = `Depth reaches ${beyond.maxDistance} m past this edge, where no solid wall was measured: likely clear glass or an open side. The room boundary here is a guess from the ${edge.basis === 'assumed' ? 'closing edge' : 'floor plane edge'}, and what lies beyond may not be part of the room.`
     } else if (edge.basis === 'depth-fit' && strongBeyond) {
       note = `Depth also runs ${beyond.maxDistance} m past this wall: a window, a glass section or a mirror may be in it.`
     }
     return {
       ...edge,
       likelyGlass,
+      confidence,
       seenBeyond: { ...beyond, ...(note ? { note } : {}) },
-      reason: likelyGlass ? `${edge.reason} ${note}` : edge.reason,
+      reason: [edge.reason, capped, likelyGlass ? note : null].filter(Boolean).join(' '),
     }
   })
   edges.forEach((edge) => {

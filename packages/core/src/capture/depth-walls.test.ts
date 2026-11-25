@@ -18,6 +18,8 @@ type World = {
   /** Clear glass: rays pass through it. */
   glass?: Segment[]
   height: number
+  /** Floor and ceiling return depth only up to this x, like ground and sky outside a glass wall. */
+  indoorUntilX?: number
 }
 type Camera = { x: number; z: number; yaw: number; pitch: number }
 
@@ -89,8 +91,13 @@ function renderFrame(
         const y = CAMERA_HEIGHT + dir[1]! * t
         if (y >= 0 && y <= world.height) best = Math.min(best, t)
       }
-      if (dir[1]! < 0) best = Math.min(best, -CAMERA_HEIGHT / dir[1]!)
-      if (dir[1]! > 0) best = Math.min(best, (world.height - CAMERA_HEIGHT) / dir[1]!)
+      const flat = dir[1]! < 0 ? -CAMERA_HEIGHT / dir[1]! : (world.height - CAMERA_HEIGHT) / dir[1]!
+      if (
+        dir[1] !== 0 &&
+        (world.indoorUntilX === undefined || camera.x + dir[0]! * flat <= world.indoorUntilX)
+      ) {
+        best = Math.min(best, flat)
+      }
       if (!Number.isFinite(best)) continue
       depth[v * WIDTH + u] = Math.round((best + (random() - 0.5) * 0.02) * 1000)
     }
@@ -174,8 +181,9 @@ describe('depth wall candidates', () => {
     ] as const) {
       expect(evidence.candidates.some((candidate) => onWall(candidate, pick, target))).toBe(true)
     }
-    expect(evidence.candidates.every((candidate) => candidate.basis === 'depth-fit')).toBe(true)
-    expect(evidence.candidates.every((candidate) => candidate.rmse < 0.06)).toBe(true)
+    const fitted = evidence.candidates.filter((candidate) => candidate.basis === 'depth-fit')
+    expect(fitted.length).toBeGreaterThanOrEqual(4)
+    expect(fitted.every((candidate) => candidate.rmse < 0.06)).toBe(true)
   })
 
   test('is bounded: frames are subsampled and the work stays typed', () => {
@@ -187,21 +195,20 @@ describe('depth wall candidates', () => {
     expect(evidence.cells).toBeInstanceOf(Float32Array)
   })
 
-  test('a candidate the walked path crosses is rejected', () => {
+  test('a candidate the walked path steps through is split there, not kept whole', () => {
     const world: World = { walls: polygonWalls(rectangle), height: 2.6 }
     const { frames, path } = walk(world, loop(0.8, 0.8, 4.2, 3.2))
-    // A path that runs through the east wall cannot have that wall in it.
-    const through = [...path.map(([x, , z]): Vec2 => [x, z])]
-    for (let x = 3; x < 7; x += 0.2) through.push([x, 2])
+    const through = path.map(([x, , z]): Vec2 => [x, z])
+    through.push([4, 2], [4.5, 2], [5.5, 2], [6.5, 2])
     const evidence = deriveDepthWalls(frames, { path: new Float32Array(through.flat()) })
-    expect(evidence.rejected.some((entry) => entry.reason.includes('cuts the walked path'))).toBe(
-      true,
+    expect(evidence.notes.join(' ')).toContain('walked path crosses it')
+    const east = evidence.candidates.filter(
+      (candidate) => Math.abs(candidate.a[0] - 5) < 0.2 && Math.abs(candidate.b[0] - 5) < 0.2,
     )
-    expect(
-      evidence.candidates.some(
-        (candidate) => Math.abs(candidate.a[0] - 5) < 0.2 && Math.abs(candidate.b[0] - 5) < 0.2,
-      ),
-    ).toBe(false)
+    for (const piece of east) {
+      const zs = [piece.a[1], piece.b[1]].sort((l, r) => l - r)
+      expect(zs[0]! < 1.6 ? zs[1]! <= 1.7 : zs[0]! >= 2.3).toBe(true)
+    }
   })
 })
 
@@ -224,7 +231,8 @@ describe('room proposal from depth', () => {
     for (const edge of proposal.edges) {
       expect(edge.basis).toBe('depth-fit')
       expect(edge.confidence).not.toBe('high')
-      expect(edge.evidenceIds.every((id) => id.startsWith('depth-fit:'))).toBe(true)
+      expect(edge.evidenceIds.some((id) => id.startsWith('depth-fit:'))).toBe(true)
+      expect(edge.evidenceIds.every((id) => /^(depth-fit|floor-boundary):/.test(id))).toBe(true)
       expect(edge.evidencePlaneIds).toEqual([])
       expect(edge.likelyGlass).toBe(false)
     }
@@ -293,6 +301,7 @@ describe('room proposal from depth', () => {
       ],
       glass: [{ a: [5, 0], b: [5, 4] }],
       height: 2.6,
+      indoorUntilX: 5,
     }
     const { frames, path } = walk(world, loop(0.8, 0.8, 4.2, 3.2))
     // ARCore saw floor and ceiling up to the glass only.
@@ -359,6 +368,177 @@ describe('room proposal from depth', () => {
     expect(proposal.polygon).not.toBeNull()
     expect(proposal.unknowns.join(' ')).toContain('No walked path was given')
     expect(proposal.depth?.pathChecked).toBe(false)
+  })
+})
+
+describe('honesty cases', () => {
+  const glassWorld = (indoorUntilX?: number): World => ({
+    walls: [
+      { a: [0, 0], b: [9, 0] },
+      { a: [9, 0], b: [9, 4] },
+      { a: [9, 4], b: [0, 4] },
+      { a: [0, 4], b: [0, 0] },
+    ],
+    glass: [{ a: [5, 0], b: [5, 4] }],
+    height: 2.6,
+    indoorUntilX,
+  })
+
+  test('no floor plane, glass with no floor beyond it: the boundary is the floor extent and is flagged', () => {
+    const { frames, path } = walk(glassWorld(5), loop(0.8, 0.8, 4.2, 3.2))
+    const proposal = proposeRoom({
+      planes: null,
+      measurements: null,
+      depthFrames: frames,
+      walkedPath: path,
+    })
+    expect(proposal.polygon).not.toBeNull()
+    expect(Math.max(...proposal.polygon!.map((point) => point[0]))).toBeLessThan(6.5)
+    expect(proposal.edges.some((edge) => edge.likelyGlass)).toBe(true)
+    expect(proposal.unknowns.join(' ')).toContain('glass cannot be ruled out')
+  })
+
+  test('no floor plane, floor seen all the way to a far wall: no glass claim, but nothing far is rated above low', () => {
+    const { frames, path } = walk(glassWorld(), loop(0.8, 0.8, 4.2, 3.2))
+    const proposal = proposeRoom({
+      planes: null,
+      measurements: null,
+      depthFrames: frames,
+      walkedPath: path,
+    })
+    expect(proposal.unknowns.join(' ')).toContain('glass cannot be ruled out')
+    const far = proposal.edges.filter((edge) => edge.from[0] > 7 && edge.to[0] > 7)
+    expect(far.length).toBeGreaterThan(0)
+    expect(far.every((edge) => edge.confidence === 'low')).toBe(true)
+  })
+
+  test('a floor plane that stops short of a measured wall is ambiguous, not glass', () => {
+    const long: Vec2[] = [
+      [0, 0],
+      [7, 0],
+      [7, 4],
+      [0, 4],
+    ]
+    const world: World = { walls: polygonWalls(long), height: 2.6 }
+    const { frames, path } = walk(world, loop(0.8, 0.8, 4.6, 3.2))
+    const planes: CapturePlane[] = [
+      flatPlane('floor', 'horizontal-up', 0, [0, 5.4], [0, 4]),
+      flatPlane('ceiling', 'horizontal-down', 2.6, [0, 7], [0, 4]),
+    ]
+    const proposal = proposeRoom({
+      planes,
+      measurements: null,
+      depthFrames: frames,
+      walkedPath: path,
+    })
+    expect(proposal.polygon).not.toBeNull()
+    expect(Math.max(...proposal.polygon!.map((point) => point[0]))).toBeGreaterThan(6.6)
+    expect(proposal.edges.some((edge) => edge.likelyGlass)).toBe(false)
+    expect(proposal.unknowns.join(' ')).toContain('Ambiguous boundary')
+  })
+
+  test('a short wall plane merged with depth does not turn depth ids into plane ids or a high edge', () => {
+    const world: World = { walls: polygonWalls(rectangle), height: 2.6 }
+    const { frames, path } = walk(world, loop(0.8, 0.8, 4.2, 3.2))
+    const planes: CapturePlane[] = [
+      {
+        id: 'short',
+        orientation: 'vertical',
+        // A 1.2 m wall piece on z = 0, normal along +Z.
+        centerPose: [1, 0, 0, 0, 0, 0, 1, 0, 0, -1, 0, 0, 1.1, 1.3, 0, 1],
+        extent: [1.2, 2.6],
+        polygon: [
+          [-0.6, -1.3],
+          [0.6, -1.3],
+          [0.6, 1.3],
+          [-0.6, 1.3],
+        ],
+        subsumedBy: null,
+      },
+      flatPlane('floor', 'horizontal-up', 0, [0, 5], [0, 4]),
+      flatPlane('ceiling', 'horizontal-down', 2.6, [0, 5], [0, 4]),
+    ]
+    const proposal = proposeRoom({
+      planes,
+      measurements: null,
+      depthFrames: frames,
+      walkedPath: path,
+    })
+    for (const edge of proposal.edges) {
+      expect(edge.evidencePlaneIds.every((id) => id === 'short')).toBe(true)
+      if (edge.evidenceIds.includes('short')) expect(edge.basis).not.toBe('plane-estimate')
+      expect(edge.confidence === 'high' && edge.basis !== 'plane-estimate').toBe(false)
+    }
+  })
+
+  test('the suggested scan transform is low confidence when the floor is estimated or contested', () => {
+    const world: World = { walls: polygonWalls(rectangle), height: 2.6 }
+    const { frames, path } = walk(world, loop(0.8, 0.8, 4.2, 3.2))
+    const estimated = proposeRoom({
+      planes: null,
+      measurements: null,
+      depthFrames: frames,
+      walkedPath: path,
+    })
+    // The camera sits at y 1.4 in a floor-at-0 world, so the floor is 0 and no move is needed.
+    expect(estimated.suggestedScanTransform).toBeNull()
+    const shifted = proposeRoom({
+      planes: null,
+      measurements: null,
+      depthFrames: frames,
+      walkedPath: path,
+      transform: { position: [0, 0.5, 0], rotation: [0, 0, 0], scale: 1 },
+    })
+    expect(shifted.suggestedScanTransform).toMatchObject({
+      confidence: 'low',
+      floorBasis: 'depth-histogram',
+    })
+    expect(shifted.suggestedScanTransform?.note).toContain('Estimated floor')
+    // A plane floor 0.6 m above where depth piles up: the mismatch is reported and confidence stays low.
+    const contested = proposeRoom({
+      planes: [
+        flatPlane('floor', 'horizontal-up', 0.6, [0, 5], [0, 4]),
+        flatPlane('ceiling', 'horizontal-down', 2.6, [0, 5], [0, 4]),
+      ],
+      measurements: null,
+      depthFrames: frames,
+      walkedPath: path,
+    })
+    expect(contested.suggestedScanTransform).toMatchObject({
+      confidence: 'low',
+      floorBasis: 'plane',
+    })
+    expect(contested.suggestedScanTransform?.note).toContain('disagree')
+    expect(contested.unknowns.join(' ')).toContain('floor level may be wrong')
+  })
+
+  test('a doorway the path goes through splits the wall instead of rejecting it', () => {
+    const world: World = {
+      walls: [
+        { a: [0, 0], b: [5, 0] },
+        { a: [5, 0], b: [5, 1.65] },
+        { a: [5, 2.35], b: [5, 4] },
+        { a: [5, 4], b: [0, 4] },
+        { a: [0, 4], b: [0, 0] },
+      ],
+      height: 2.6,
+    }
+    const { frames, path } = walk(world, loop(0.8, 0.8, 4.2, 3.2))
+    const out: Array<[number, number, number]> = [
+      ...path,
+      [4, CAMERA_HEIGHT, 2],
+      [6.5, CAMERA_HEIGHT, 2],
+      [4, CAMERA_HEIGHT, 2],
+    ]
+    const proposal = proposeRoom({
+      planes: null,
+      measurements: null,
+      depthFrames: frames,
+      walkedPath: out,
+    })
+    expect(proposal.polygon).not.toBeNull()
+    expect(proposal.unknowns.join(' ')).toContain('split at')
+    expect(Math.max(...proposal.polygon!.map((point) => point[0]))).toBeLessThan(5.8)
   })
 })
 

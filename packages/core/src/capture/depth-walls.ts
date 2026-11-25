@@ -68,12 +68,29 @@ export type DepthWallEvidence = {
   }>
   /** Floor boundaries kept as the boundary although depth runs past them, with no floor beyond. */
   likelyGlassIds: string[]
+  /**
+   * A floor plane that ends well short of a wall depth measured, with floor seen all the way: the
+   * wall is used, and both positions are reported because glass cannot be ruled out.
+   */
+  ambiguous: Array<{
+    floorBoundaryId: string
+    wallId: string
+    /** Mean distance from the walked path to each, metres. */
+    floorDistance: number
+    wallDistance: number
+  }>
+  /** Depth-observed floor cells as `ix * 65536 + iz` keys on a 0.15 m grid, for edge checks. */
+  floorCells: Float64Array
   /** The floor and ceiling levels used, and where they came from. */
   vertical: {
     floorY: number | null
     ceilingY: number | null
     floorBasis: 'given' | 'depth-histogram' | null
     ceilingBasis: 'given' | 'depth-histogram' | null
+    /** Metres between a given floor and the depth height peak, when they disagree by over 0.25 m. */
+    floorMismatch: number | null
+    /** A distinct, lower, strong depth height peak: a possible step or level change, y in metres. */
+    lowerLevelY: number | null
   }
   notes: string[]
   stats: {
@@ -114,6 +131,8 @@ const MIN_CELL_HITS = 3
 const MIN_CELL_SPREAD = 0.5
 const FLOOR_HIT_TOLERANCE = 0.08
 const FLOOR_CELL = 0.15
+/** Least floor area depth must have seen before its extent stands in for floor planes, m2. */
+const MIN_DEPTH_FLOOR_AREA = 3
 const INLIER_DISTANCE = 0.07
 const FLOOR_INLIER_DISTANCE = 0.12
 const MIN_DEPTH_LINE_LENGTH = 0.8
@@ -217,12 +236,16 @@ export function deriveDepthWalls(
     ceilingY: options.ceilingY ?? null,
     floorBasis: options.floorY === undefined || options.floorY === null ? null : 'given',
     ceilingBasis: options.ceilingY === undefined || options.ceilingY === null ? null : 'given',
+    floorMismatch: null,
+    lowerLevelY: null,
   }
   const empty = (reason?: string): DepthWallEvidence => ({
     candidates: [],
     rejected: [],
     seenThrough: [],
     likelyGlassIds: [],
+    ambiguous: [],
+    floorCells: new Float64Array(0),
     vertical,
     notes: reason ? [...notes, reason] : notes,
     stats,
@@ -235,6 +258,12 @@ export function deriveDepthWalls(
     }
     vertical.floorY = estimate.floorY
     vertical.floorBasis = 'depth-histogram'
+    vertical.lowerLevelY = estimate.lowerLevelY
+    if (estimate.lowerLevelY !== null) {
+      notes.push(
+        `A second strong depth height peak sits at y ${round(estimate.lowerLevelY, 2)} m, below the floor level used: a step or level change is possible. Check on site.`,
+      )
+    }
     notes.push(
       `The floor level (y ${round(estimate.floorY, 2)} m) is the strongest low peak in the depth heights, not a detected plane.`,
     )
@@ -249,6 +278,7 @@ export function deriveDepthWalls(
     // A given floor is cross-checked against where the depth points pile up.
     const check = estimateVerticalExtent(frames, transform, options)
     if (check.floorY !== null && Math.abs(check.floorY - vertical.floorY) > 0.25) {
+      vertical.floorMismatch = round(Math.abs(check.floorY - vertical.floorY), 2)
       notes.push(
         `Depth points pile up at y ${round(check.floorY, 2)} m, ${round(Math.abs(check.floorY - vertical.floorY), 2)} m from the floor level used (y ${round(vertical.floorY, 2)} m); the floor level may be wrong or there is a step.`,
       )
@@ -402,8 +432,45 @@ export function deriveDepthWalls(
 
   let floorLines: Fitted[] = []
   let floorPoints: Float32Array = new Float32Array(0)
-  if (options.floorPolygons?.length) {
-    const boundary = floorBoundaryPoints(options.floorPolygons)
+  // Wall feet sit within a few centimetres of the floor and look like floor to the height test, so
+  // floor cells beside structure are dropped; the floor is the open ground between the walls.
+  const structure = new Set<number>()
+  for (let i = 0; i < points.length; i += 2) {
+    structure.add(
+      cellKey(Math.floor(points[i]! / FLOOR_CELL), Math.floor(points[i + 1]! / FLOOR_CELL)),
+    )
+  }
+  for (const key of [...floorHits]) {
+    const ix = Math.floor(key / 65536) - 32768
+    const iz = (key % 65536) - 32768
+    let near = false
+    for (let dx = -1; dx <= 1 && !near; dx += 1) {
+      for (let dz = -1; dz <= 1 && !near; dz += 1) near = structure.has(cellKey(ix + dx, iz + dz))
+    }
+    if (near) floorHits.delete(key)
+  }
+  const floorCellKeys = Float64Array.from(floorHits)
+  let polygonsForFloor: ReadonlyArray<ReadonlyArray<Vec2>> = options.floorPolygons ?? []
+  if (
+    polygonsForFloor.length === 0 &&
+    floorHits.size * FLOOR_CELL * FLOOR_CELL >= MIN_DEPTH_FLOOR_AREA
+  ) {
+    // No floor planes: the floor depth itself saw stands in for them, as small squares.
+    polygonsForFloor = Array.from(floorHits, (key): Vec2[] => {
+      const ix = Math.floor(key / 65536) - 32768
+      const iz = (key % 65536) - 32768
+      const x0 = ix * FLOOR_CELL
+      const z0 = iz * FLOOR_CELL
+      return [
+        [x0, z0],
+        [x0 + FLOOR_CELL, z0],
+        [x0 + FLOOR_CELL, z0 + FLOOR_CELL],
+        [x0, z0 + FLOOR_CELL],
+      ]
+    })
+  }
+  if (polygonsForFloor.length) {
+    const boundary = floorBoundaryPoints(polygonsForFloor)
     if ('reason' in boundary) notes.push(boundary.reason)
     else {
       floorPoints = boundary.points
@@ -443,6 +510,7 @@ export function deriveDepthWalls(
   const rejected: DepthWallEvidence['rejected'] = []
   const seenThrough: DepthWallEvidence['seenThrough'] = []
   const likelyGlassIds: string[] = []
+  const ambiguous: DepthWallEvidence['ambiguous'] = []
   let accepted: Array<WallCandidate & { line: Fitted }> = []
 
   if (!options.path?.length) {
@@ -453,14 +521,27 @@ export function deriveDepthWalls(
   if (path.length === 0) {
     accepted = all
   } else {
-    const kept = all.filter((candidate) => {
-      const cut = cutsPath(candidate, path)
-      if (cut) {
-        rejected.push({ id: candidate.id, basis: candidate.basis, reason: cut })
-        return false
+    const kept: typeof all = []
+    for (const candidate of all) {
+      const pieces = splitAtPathCrossings(candidate, options.path ?? null)
+      if (pieces) {
+        notes.push(
+          `${candidate.id} was split at ${pieces.crossings} place(s) where the walked path crosses it (doorways), and the stretches beside the crossing were dropped.`,
+        )
+        if (pieces.parts.length === 0) {
+          rejected.push({
+            id: candidate.id,
+            basis: candidate.basis,
+            reason: 'the walked path crosses it and no stretch long enough remains',
+          })
+        }
+        for (const part of pieces.parts) kept.push(part)
+        continue
       }
-      return true
-    })
+      const cut = cutsPath(candidate, path)
+      if (cut) rejected.push({ id: candidate.id, basis: candidate.basis, reason: cut })
+      else kept.push(candidate)
+    }
     kept.sort((left, right) => distanceToPath(left, path) - distanceToPath(right, path))
     const floorCells = floorHits
     for (const candidate of kept) {
@@ -478,17 +559,31 @@ export function deriveDepthWalls(
         })
       } else if (
         blocker.basis === 'floor-boundary' &&
-        gap <= SHORT_FLOOR_GAP &&
         floorContinues(blocker, candidate, path, floorCells)
       ) {
-        // The floor plane stops a little short of a wall depth can see, the usual case with ARCore
-        // floors; depth sees floor all the way, so the plane edge is not the wall.
+        // Depth sees floor all the way to this line. A plane that stops a little short is the usual
+        // ARCore case; further out it is ambiguous (glass with floor beyond it looks the same), so
+        // the measured wall is used and both positions are reported.
         accepted = accepted.filter((other) => other !== blocker)
-        rejected.push({
-          id: blocker.id,
-          basis: blocker.basis,
-          reason: `the floor plane ends ${gap} m short of ${candidate.id}, and depth sees floor between them: the plane edge is not a wall`,
-        })
+        if (gap <= SHORT_FLOOR_GAP) {
+          rejected.push({
+            id: blocker.id,
+            basis: blocker.basis,
+            reason: `the floor plane ends ${gap} m short of ${candidate.id}, and depth sees floor between them: the plane edge is not a wall`,
+          })
+        } else {
+          ambiguous.push({
+            floorBoundaryId: blocker.id,
+            wallId: candidate.id,
+            floorDistance: round(distanceToPath(blocker, path), 2),
+            wallDistance: round(distanceToPath(candidate, path), 2),
+          })
+          rejected.push({
+            id: blocker.id,
+            basis: blocker.basis,
+            reason: `ambiguous: the floor ends ${gap} m before ${candidate.id}, where depth measured a wall; floor was seen in between, so glass is possible but not shown`,
+          })
+        }
         accepted.push(candidate)
       } else {
         seenThrough.push({ id: candidate.id, behindId: blocker.id, gap })
@@ -570,6 +665,8 @@ export function deriveDepthWalls(
     rejected,
     seenThrough,
     likelyGlassIds,
+    ambiguous,
+    floorCells: floorCellKeys,
     vertical,
     notes,
     stats,
@@ -591,7 +688,7 @@ export function estimateVerticalExtent(
   frames: readonly DepthFrameInput[],
   transform: ScanTransform,
   options: Pick<DepthWallOptions, 'maxFrames' | 'minConfidence' | 'maxDepthM'> = {},
-): { floorY: number | null; ceilingY: number | null } {
+): { floorY: number | null; ceilingY: number | null; lowerLevelY: number | null } {
   const bins = new Map<number, number>()
   const cameraHeights: number[] = []
   let total = 0
@@ -630,7 +727,8 @@ export function estimateVerticalExtent(
       }
     }
   }
-  if (total === 0 || cameraHeights.length === 0) return { floorY: null, ceilingY: null }
+  if (total === 0 || cameraHeights.length === 0)
+    return { floorY: null, ceilingY: null, lowerLevelY: null }
   cameraHeights.sort((left, right) => left - right)
   const lowestCamera = cameraHeights[0]!
   const highestCamera = cameraHeights[cameraHeights.length - 1]!
@@ -659,17 +757,22 @@ export function estimateVerticalExtent(
     )
     .map((bin) => ({ y: bin * HEIGHT_BIN, share: share(bin) }))
   const below = peaks.filter((peak) => peak.y < lowestCamera - 0.5)
-  const strongest = Math.max(0, ...below.map((peak) => peak.share))
-  const floor = below
-    .filter((peak) => peak.share >= 0.4 * strongest)
-    .sort((left, right) => left.y - right.y)[0]
-  if (!floor) return { floorY: null, ceilingY: null }
+  // The strongest peak is the floor; a distinct lower one is reported, not chosen.
+  const floor = [...below].sort((left, right) => right.share - left.share)[0]
+  if (!floor) return { floorY: null, ceilingY: null, lowerLevelY: null }
+  const lower = below
+    .filter((peak) => peak.y <= floor.y - 0.3 && peak.share >= 0.4 * floor.share)
+    .sort((left, right) => right.share - left.share)[0]
   const ceiling = peaks
     .filter(
       (peak) => peak.y > highestCamera + 0.4 && peak.y - floor.y >= 2 && peak.y - floor.y <= 6,
     )
     .sort((left, right) => right.share - left.share)[0]
-  return { floorY: round(floor.y, 2), ceilingY: ceiling ? round(ceiling.y, 2) : null }
+  return {
+    floorY: round(floor.y, 2),
+    ceilingY: ceiling ? round(ceiling.y, 2) : null,
+    lowerLevelY: lower ? round(lower.y, 2) : null,
+  }
 }
 
 function cellKey(ix: number, iz: number): number {
@@ -877,6 +980,51 @@ function onLine(
   const px = point[0] - q[0]
   const pz = point[1] - q[1]
   return { t: px * d[0] + pz * d[1], s: px * -d[1] + pz * d[0] }
+}
+
+/**
+ * Where consecutive walked-path samples step from one side of a line to the other inside its run,
+ * the path went through it (a doorway): the line is cut there, leaving 0.35 m either side. Null when
+ * the path never steps across it.
+ */
+function splitAtPathCrossings(
+  candidate: WallCandidate & { line: Fitted },
+  ordered: Float32Array | null,
+): { parts: Array<WallCandidate & { line: Fitted }>; crossings: number } | null {
+  if (!ordered || ordered.length < 4) return null
+  const crossingsAt: number[] = []
+  for (let i = 0; i + 1 < ordered.length / 2; i += 1) {
+    const a = onLine(candidate, [ordered[i * 2]!, ordered[i * 2 + 1]!])
+    const b = onLine(candidate, [ordered[i * 2 + 2]!, ordered[i * 2 + 3]!])
+    if (!((a.s > PATH_MARGIN && b.s < -PATH_MARGIN) || (a.s < -PATH_MARGIN && b.s > PATH_MARGIN))) {
+      continue
+    }
+    const t = a.t + (b.t - a.t) * (a.s / (a.s - b.s))
+    if (t >= candidate.line.tMin - 0.2 && t <= candidate.line.tMax + 0.2) crossingsAt.push(t)
+  }
+  if (crossingsAt.length === 0) return null
+  crossingsAt.sort((left, right) => left - right)
+  const cuts = crossingsAt.filter((t, index) => index === 0 || t - crossingsAt[index - 1]! > 0.7)
+  const edges = [
+    candidate.line.tMin,
+    ...cuts.flatMap((t) => [t - 0.35, t + 0.35]),
+    candidate.line.tMax,
+  ]
+  const parts: Array<WallCandidate & { line: Fitted }> = []
+  for (let i = 0; i < edges.length; i += 2) {
+    const tMin = edges[i]!
+    const tMax = edges[i + 1]!
+    if (tMax - tMin < MIN_DEPTH_LINE_LENGTH) continue
+    const line = { ...candidate.line, tMin, tMax }
+    const part = candidateOf(
+      `${candidate.id}.${parts.length + 1}`,
+      candidate.basis,
+      line,
+      candidate.frameIds,
+    )
+    parts.push(part)
+  }
+  return { parts, crossings: cuts.length }
 }
 
 /** Why the path says this line is not a boundary, or null. A wall has the whole path on one side. */
@@ -1194,4 +1342,44 @@ function distanceToSegment(p: Vec2, a: Vec2, b: Vec2): number {
       ? 0
       : Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / lengthSquared))
   return Math.hypot(p[0] - (a[0] + dx * t), p[1] - (a[1] + dz * t))
+}
+
+/** The least distance from the walked path to an edge segment, metres; infinity with no path. */
+export function distanceFromPath(path: Float32Array, from: Vec2, to: Vec2): number {
+  let best = Number.POSITIVE_INFINITY
+  for (let i = 0; i < path.length; i += 2) {
+    best = Math.min(best, distanceToSegment([path[i]!, path[i + 1]!], from, to))
+  }
+  return best
+}
+
+/**
+ * The share of an edge, sampled every 0.15 m and looked at 0.4 m inside it, where depth saw floor.
+ * Low where the floor was never seen up to the edge, so the edge may be glass or beyond the room.
+ */
+export function floorSeenAlongEdge(
+  evidence: DepthWallEvidence,
+  from: Vec2,
+  to: Vec2,
+  inward: Vec2,
+): number {
+  const length = Math.hypot(to[0] - from[0], to[1] - from[1])
+  if (length === 0 || evidence.floorCells.length === 0) return 0
+  const keys = new Set(evidence.floorCells)
+  const norm = Math.hypot(inward[0], inward[1]) || 1
+  let seen = 0
+  let total = 0
+  for (let distance = 0; distance <= length; distance += 0.15) {
+    const x = from[0] + ((to[0] - from[0]) * distance) / length + (inward[0] / norm) * 0.4
+    const z = from[1] + ((to[1] - from[1]) * distance) / length + (inward[1] / norm) * 0.4
+    const ix = Math.floor(x / FLOOR_CELL)
+    const iz = Math.floor(z / FLOOR_CELL)
+    total += 1
+    let hit = false
+    for (let dx = -1; dx <= 1 && !hit; dx += 1) {
+      for (let dz = -1; dz <= 1 && !hit; dz += 1) hit = keys.has(cellKey(ix + dx, iz + dz))
+    }
+    if (hit) seen += 1
+  }
+  return total ? seen / total : 0
 }

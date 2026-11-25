@@ -587,7 +587,7 @@ describe('propose_room_from_scan with raw depth and no planes', () => {
     return { depth, poseMatrix }
   }
 
-  async function depthBundle(withConfidence: boolean) {
+  async function depthBundle(withConfidence: boolean, trackingState = 'tracking') {
     const rgb: unknown[] = []
     const depthEntries: unknown[] = []
     const samples: unknown[] = []
@@ -619,7 +619,7 @@ describe('propose_room_from_scan with raw depth and no planes', () => {
           height: 480,
           intrinsics: null,
           pose: poseMatrix,
-          trackingState: 'tracking',
+          trackingState,
         })
         const bytes = new Uint8Array(depth.buffer.slice(0))
         const depthSha = await put(bytes)
@@ -714,5 +714,15 @@ describe('propose_room_from_scan with raw depth and no planes', () => {
     )
     // No confidence image is fine: the proposal notes it.
     expect(proposal.unknowns.join(' ')).toContain('no confidence image')
+  })
+
+  test('depth frames whose keyframe was not tracked are skipped and reported', async () => {
+    const manifest = await depthBundle(true, 'paused')
+    const { client } = await connect([{ id: 'scan_ffffffff', manifest }])
+    const proposal = json(
+      (await call(client, 'propose_room_from_scan', { scanId: 'scan_ffffffff' })).content[0],
+    )
+    expect(proposal.method).toBe('none')
+    expect(proposal.unreadableStreams.join(' ')).toContain('not tracked')
   })
 })

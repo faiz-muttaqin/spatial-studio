@@ -225,6 +225,8 @@ type Want = {
   planes?: boolean
   measurements?: boolean
   cloud?: boolean
+  /** The device-motion trajectory (the walked path). Loaded with `cloud` as well. */
+  motion?: boolean
 }
 
 async function loadBundle(
@@ -260,7 +262,7 @@ async function loadBundle(
     want.cloud
       ? readStream(host, manifest, 'point-cloud', CapturePointCloudPayloadSchema, problems)
       : null,
-    want.cloud
+    want.cloud || want.motion
       ? readStream(host, manifest, 'device-motion', DeviceMotionTrajectorySchema, problems)
       : null,
   ])
@@ -642,7 +644,12 @@ async function readDepthFrames(
 ): Promise<DepthFrameInput[]> {
   const index = bundle.depthIndex
   if (!index?.length) return []
-  const poses = new Map((bundle.rgb ?? []).map((frame) => [frame.id, frame.pose]))
+  // A frame the tracker had lost or paused has a pose that cannot be trusted, so its depth is left out.
+  const poses = new Map(
+    (bundle.rgb ?? [])
+      .filter((frame) => frame.trackingState === 'tracking')
+      .map((frame) => [frame.id, frame.pose]),
+  )
   const chosen = evenSample(index, MAX_DEPTH_FRAMES)
   const frames: DepthFrameInput[] = []
   let skipped = 0
@@ -683,7 +690,8 @@ async function readDepthFrames(
       confidence,
     })
   }
-  if (skipped) problems.push(`depth-keyframes: ${skipped} frame(s) unreadable or without a pose`)
+  if (skipped)
+    problems.push(`depth-keyframes: ${skipped} frame(s) unreadable, not tracked, or without a pose`)
   return frames
 }
 
@@ -698,7 +706,7 @@ async function proposeRoomFromScan(
     depth: true,
     planes: true,
     measurements: true,
-    cloud: true,
+    motion: true,
   })
   const depthFrames = await readDepthFrames(host, bundle, bundle.problems)
   const proposal = proposeRoom({
