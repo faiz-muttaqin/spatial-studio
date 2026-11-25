@@ -32,3 +32,9 @@ Not yet tested on a device: the deployed site, a sign-in through the app, planes
   - True north: confidence 0.93 from 277 samples, spread 1.2 degrees, segments agree, declination applied from opt-in location.
   - Point cloud: 17,907 points, 2nd to 98th percentile height span 4.6 m.
 - Open: no vertical planes on plain or glass walls; the live MCP scan tools were not yet deployed at the time of the scan.
+
+## 2026-11-25: live MCP read path on the live-site scan
+
+- Deployment at `b5dc543` (after the owner's VM caught up): `/mcp` lists 100 tools, including `list_scans`, `read_scan`, `view_scan_photos` and `propose_room_from_scan`.
+- On the live-site scan's project: `list_scans` found the scan; `read_scan` returned a compact summary with capture-provided text labelled unverified, 15 upward and 5 downward planes, no walls, percentile point bounds and the camera convention; `view_scan_photos` returned 2 keyframes (about 230 and 260 KB) with pose and intrinsics; `propose_room_from_scan` returned no outline with honest unknowns (no usable wall lines, ask for dimensions or rescan) and wrote nothing.
+- Finding: with no walls, the floor was taken as a small upward plane about 0.5 m below the largest one, which inflates the ceiling height; handed to the P3b wall-fitting work.
