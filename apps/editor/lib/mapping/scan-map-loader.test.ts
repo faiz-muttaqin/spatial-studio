@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { sameOriginUrl } from '../capture/source-resolver'
 import {
@@ -11,6 +11,10 @@ import {
   northInLevel,
   type PhotoDecoder,
 } from './scan-map-loader'
+
+// Each test loads a synthetic scan end to end (about 0.2-1 s locally); CI runners are several times
+// slower and crossed bun's 5 s default.
+setDefaultTimeout(30_000)
 
 // A box room (x -2..2, z -1.5..1.5, y 0..2.5) ray-cast into raw depth frames. Photos are faked by
 // the decoder, so the worker logic is tested without a browser.
