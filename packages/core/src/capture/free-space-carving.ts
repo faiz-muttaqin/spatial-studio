@@ -24,12 +24,14 @@ import {
  * filled, cut at doorway necks, reduced to its largest component, traced, simplified and squared to
  * the dominant wall direction.
  *
- * What this cannot know: rays pass through clear glass and carve the space behind it. Carving is
- * bounded by the walked path (the phone stood in free space, and nothing is carved more than
- * `REACH` from where it was) and by the floor the depth saw (free space counts only near floor
- * points, and past clear glass the floor is usually not seen), and every edge reports how much free space continues past it and how
- * far the floor planes stop short of it. An edge with such a sign is flagged `likelyGlass` and
- * rated low. Nothing here is a measured wall: the outline is an inference from what the camera saw.
+ * What this cannot know: rays pass through clear glass and carve the space behind it. Free space is
+ * kept only within 1.5 m of the convex hull of where the phone walked, and only near floor the
+ * depth saw, which limits how far a glass wall can extend the outline but does not stop it: a glass
+ * wall with the floor visible beyond it can still add up to 1.5 m past the hull. Every edge reports
+ * how much free space continues past it and how far the floor planes stop short of it, and an edge
+ * with such a sign is flagged `likelyGlass` and rated low. Noise pulls free-space outlines inwards,
+ * so each edge is refitted to the strong wall-band points around it and its support is measured
+ * against that refitted line. Nothing here is a measured wall: the outline is an inference.
  *
  * Everything works in level coordinates, like `deriveDepthWalls`; the scan node's transform is
  * applied while unprojecting. Depth pixels use the contract's convention (integer pixel indices).
@@ -109,12 +111,31 @@ const FREE_MIN = 3
 const OCC_MIN = 2
 const MIN_DEPTH_M = 0.4
 /** Free space is not carved further than this from where the phone was. */
-const REACH = 5
-const SNAP_DEG = 12
+/** Free space is kept within this distance of the convex hull of the walked positions, metres. */
+const HULL_GROW = 1.5
+/** Wall-band hits at this confidence and range, or better, make a cell occupied and fit edges. */
+const STRONG_CONFIDENCE = 100
+const STRONG_RANGE_M = 4.5
+/** Edge refit: hits within this distance of an edge, the fewest hits, and the share of the edge they must cover. */
+const FIT_CORRIDOR = 0.3
+const FIT_MIN_HITS = 20
+const FIT_MIN_COVERAGE = 0.3
+const FIT_ITERATIONS = 3
+const MIN_EDGE_M = 0.5
+/** Above this share of positions dropped by the doorway cut, the cut is not applied. */
+const MAX_CUT_SHARE = 0.15
+/** A frame this far from the median camera position has a bad pose and is left out, metres. */
+const POSE_OUTLIER_M = 30
+/** A carved area under this share of the walked hull's area is rated low. */
+const MIN_HULL_SHARE = 0.8
+const SUPPORT_HITS = 2
+const SUPPORT_BAND = 0.15
+const CLOSE_CELLS = 3
+const SNAP_DEG = 15
 /** Diagonal sides shorter than this are noise, metres. */
-const STUB = 0.35
+const STUB = 0.45
 /** A step this short between two sides running the same way is noise, metres. */
-const JOG = 0.25
+const JOG = 0.45
 /** The voting resultant must be this share of the total length before anything is squared. */
 const MIN_ORTHOGONAL_VOTE = 0.35
 const FLOOR_BAND = 0.1
@@ -124,7 +145,6 @@ const MIN_WALL_SHARE = 0.05
 const NECK = 0.55
 const NECK_SLACK = 1
 const MIN_AREA_M2 = 2
-const SUPPORT_RADIUS = 0.2
 const BEYOND_MIN_CELLS = 15
 const BEYOND_SHARE = 0.15
 const BEYOND_NEAR = 0.5
@@ -143,13 +163,16 @@ const DEFAULT_MAX_RAYS = 500_000
  */
 const DEFAULT_MIN_CONFIDENCE = 32
 const SIMPLIFY_TOLERANCE = 0.12
+const POST_SNAP_TOLERANCE = 0.1
 const OPEN_CELLS = 3
 
 type Frame = {
   /** Camera position, level x and z. */
   cam: Vec2
-  /** Level x, y, z triples of every depth point used. */
+  /** Level x, y, z triples of every depth point kept. */
   points: Float32Array
+  /** Per point: 1 when strong (confidence and range), 2 when it is also cast as a ray; 3 both. */
+  flags: Uint8Array
 }
 
 type Grid = {
@@ -165,6 +188,8 @@ type Pass = {
   grid: Grid
   occ: Uint16Array
   free: Uint8Array
+  /** Strong wall-band hits in the pass frame, x and z pairs, for fitting edges. */
+  hits: Float32Array
   /** Camera and path cells that fell in a part the neck cut dropped. */
   droppedCameras: number
   positions: number
@@ -203,7 +228,7 @@ export function carveRoomOutline(
     notes: [...notes, reason],
   })
 
-  const prepared = unproject(frames, transform, options, stats)
+  const prepared = unproject(frames, transform, options, stats, notes)
   const used = prepared.frames
   const allY = prepared.heights
   if (allY.length < 200 || used.length === 0) {
@@ -283,7 +308,17 @@ export function carveRoomOutline(
   if (!first) return none('No free space could be carved from the depth points.')
   const firstVote = dominantDirection(first.polygon)
   const rotation = firstVote && firstVote.strength >= MIN_ORTHOGONAL_VOTE ? -firstVote.phi : 0
-  const second = carvePass(bands, path, rotation, true) ?? first
+  let second = carvePass(bands, path, rotation, true) ?? first
+  if (second.necksCut && second.droppedCameras > MAX_CUT_SHARE * second.positions) {
+    // A doorway is somewhere the phone did not stay; a cut that drops this much of the walk is not one.
+    const uncut = carvePass(bands, path, rotation, false)
+    if (uncut) {
+      notes.push(
+        `The doorway cut would have dropped ${second.droppedCameras} of ${second.positions} camera positions, so it was not applied.`,
+      )
+      second = uncut
+    }
+  }
   const grid = second.grid
   stats.cellSize = round(grid.cell, 3)
   stats.gridWidth = grid.W
@@ -291,6 +326,11 @@ export function carveRoomOutline(
   stats.necksCut = second.necksCut
   stats.positions = second.positions
   stats.droppedPositions = second.droppedCameras
+  if (grid.cell > CELL * 1.5) {
+    notes.push(
+      `The grid is ${round(grid.cell * 100, 0)} cm a cell, coarser than the usual 5 cm, because the scanned extent is large; a bad pose or a very large space may be the cause.`,
+    )
+  }
   if (second.droppedCameras > 0) {
     notes.push(
       `${second.droppedCameras} camera positions lie outside the outline: in a part cut off as a doorway side, or where no floor was seen. The phone walked there, so the outline may leave out part of the scanned space; check on site.`,
@@ -298,21 +338,31 @@ export function carveRoomOutline(
   }
 
   const snapped = snapToWalls(second.polygon)
-  const polygonInGrid = snapped?.corners ?? second.polygon
   if (snapped?.snapped)
     stats.snapAngleDeg = round((((((snapped.phi - rotation) * 180) / Math.PI) % 90) + 90) % 90, 1)
-  if (polygonInGrid.length < 3)
-    return none('The traced outline collapsed to fewer than three corners.')
+  const squared = simplifyClosed(snapped?.corners ?? second.polygon, POST_SNAP_TOLERANCE)
+  if (squared.length < 3) return none('The traced outline collapsed to fewer than three corners.')
+  const refit = refitEdges(squared, second.hits)
+  const polygonInGrid = refit.polygon
   const area = Math.abs(shoelace(polygonInGrid))
   if (area < MIN_AREA_M2) {
     return none(
       `The carved free space is only ${round(area, 1)} m², too small to be a room outline.`,
     )
   }
+  // Carved space much smaller than the ground the phone walked means the outline shrank.
+  const hullArea = Math.abs(shoelace(convexHull(positionsOf(bands, path, rotation))))
+  const shrunk = hullArea > 0 && area < MIN_HULL_SHARE * hullArea
+  if (shrunk) {
+    notes.push(
+      `The carved area (${round(area, 1)} m²) is much smaller than the area the phone walked around (${round(hullArea, 1)} m²), so the outline is probably too small; every edge is rated low.`,
+    )
+  }
 
   const edges = describeEdges(
     polygonInGrid,
-    snapped?.axes ?? [],
+    refit.fitted,
+    shrunk,
     second,
     options.floorPolygons,
     rotation,
@@ -328,15 +378,76 @@ export function carveRoomOutline(
 
 // ---------- unprojection ----------
 
+/**
+ * Frames chosen by pose coverage, not evenly by index: one per cell of position (0.5 m) and heading
+ * (30 degrees) first, then second ones, until `wanted`. A frame whose pose is far from the median
+ * position is a bad pose and is left out, since one would stretch the grid.
+ */
+function selectFrames(
+  frames: readonly DepthFrameInput[],
+  wanted: number,
+  transform: ScanTransform,
+  notes: string[],
+): number[] {
+  const info: Array<{ index: number; x: number; z: number; heading: number }> = []
+  frames.forEach((frame, index) => {
+    if (frame.pose.length !== 16) return
+    const origin = captureToLevel(transform, [frame.pose[12]!, frame.pose[13]!, frame.pose[14]!])
+    const forward = captureDirectionToLevel(transform, [
+      -frame.pose[8]!,
+      -frame.pose[9]!,
+      -frame.pose[10]!,
+    ])
+    info.push({ index, x: origin[0], z: origin[2], heading: Math.atan2(forward[2], forward[0]) })
+  })
+  if (info.length === 0) return []
+  const median = (values: number[]) =>
+    [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)]!
+  const mx = median(info.map((i) => i.x))
+  const mz = median(info.map((i) => i.z))
+  const kept = info.filter((i) => Math.hypot(i.x - mx, i.z - mz) <= POSE_OUTLIER_M)
+  if (kept.length < info.length) {
+    notes.push(
+      `${info.length - kept.length} frame(s) with a pose more than ${POSE_OUTLIER_M} m from the others were left out as bad poses.`,
+    )
+  }
+  if (kept.length <= wanted) return kept.map((i) => i.index)
+  const buckets = new Map<string, number[]>()
+  for (const i of kept) {
+    const key = `${Math.floor(i.x / 0.5)}:${Math.floor(i.z / 0.5)}:${Math.floor(((i.heading + Math.PI) / (2 * Math.PI)) * 12)}`
+    const list = buckets.get(key)
+    if (list) list.push(i.index)
+    else buckets.set(key, [i.index])
+  }
+  const lists = [...buckets.values()]
+  const chosen: number[] = []
+  for (let round = 0; chosen.length < wanted; round += 1) {
+    let any = false
+    for (const list of lists) {
+      if (round < list.length && chosen.length < wanted) {
+        chosen.push(list[round]!)
+        any = true
+      }
+    }
+    if (!any) break
+  }
+  return chosen.sort((a, b) => a - b)
+}
+
+/**
+ * Every confident pixel is kept as a possible wall hit (strong ones make cells occupied and fit
+ * edges); only every `step`-th pixel is also cast as a ray, which is what bounds the runtime.
+ */
 function unproject(
   frames: readonly DepthFrameInput[],
   transform: ScanTransform,
   options: CarveOptions,
   stats: CarvedOutline['stats'],
+  notes: string[],
 ): { frames: Frame[]; heights: Float32Array } {
   const minConfidence = options.minConfidence ?? DEFAULT_MIN_CONFIDENCE
   const maxDepth = options.maxDepthM ?? 6
-  const chosen = evenIndices(frames.length, options.maxFrames ?? 120)
+  const chosen = selectFrames(frames, options.maxFrames ?? 120, transform, notes)
   let pixels = 0
   for (const index of chosen) pixels += frames[index]!.width * frames[index]!.height
   const step = Math.max(1, Math.ceil(Math.sqrt(pixels / (options.maxRays ?? DEFAULT_MAX_RAYS))))
@@ -345,7 +456,7 @@ function unproject(
   for (const index of chosen) {
     const frame = frames[index]!
     const { width, height, intrinsics, depth, pose } = frame
-    if (depth.length < width * height || pose.length !== 16) continue
+    if (depth.length < width * height) continue
     const origin = captureToLevel(transform, [pose[12]!, pose[13]!, pose[14]!])
     const axes = [0, 1, 2].map((column) => {
       const axis = captureDirectionToLevel(transform, [
@@ -359,14 +470,19 @@ function unproject(
     const confidence =
       frame.confidence && frame.confidence.length >= width * height ? frame.confidence : null
     const points: number[] = []
-    for (let v = 0; v < height; v += step) {
-      for (let u = 0; u < width; u += step) {
+    const flags: number[] = []
+    for (let v = 0; v < height; v += 1) {
+      for (let u = 0; u < width; u += 1) {
         const pixel = v * width + u
         const millimetres = depth[pixel]!
         if (millimetres === 0) continue
         const d = millimetres / 1000
         if (d < MIN_DEPTH_M || d > maxDepth) continue
-        if (confidence && confidence[pixel]! < minConfidence) continue
+        const level = confidence ? confidence[pixel]! : 255
+        if (level < minConfidence) continue
+        const strong = level >= STRONG_CONFIDENCE && d <= STRONG_RANGE_M
+        const ray = v % step === 0 && u % step === 0
+        if (!(strong || ray)) continue
         // Official ARCore sample convention: integer pixel indices, no half-pixel offset.
         const x = ((u - intrinsics.cx) / intrinsics.fx) * d
         const y = ((intrinsics.cy - v) / intrinsics.fy) * d
@@ -375,13 +491,18 @@ function unproject(
         const ly = origin[1] + a0[1]! * x + a1[1]! * y + a2[1]! * z
         const lz = origin[2] + a0[2]! * x + a1[2]! * y + a2[2]! * z
         points.push(lx, ly, lz)
+        flags.push((strong ? 1 : 0) | (ray ? 2 : 0))
         heights.push(ly)
       }
     }
     if (points.length === 0) continue
-    out.push({ cam: [origin[0], origin[2]], points: Float32Array.from(points) })
+    out.push({
+      cam: [origin[0], origin[2]],
+      points: Float32Array.from(points),
+      flags: Uint8Array.from(flags),
+    })
     stats.framesUsed += 1
-    stats.rays += points.length / 3
+    stats.rays += flags.filter((flag) => flag & 2).length
   }
   return { frames: out, heights: Float32Array.from(heights) }
 }
@@ -390,6 +511,8 @@ type Banded = {
   cam: Vec2
   /** Wall-band hits, x and z pairs. */
   wall: Float32Array
+  /** 1 per wall-band hit that is strong, 2 when it is cast as a ray. */
+  wallFlags: Uint8Array
   /** Other hits that only carve: x, z, and 2 for a floor hit, 1 for a ceiling hit, 0 otherwise (floor and ceiling hits are free themselves). */
   carve: Float32Array
 }
@@ -403,19 +526,36 @@ function classify(
 ): Banded[] {
   return frames.map((frame) => {
     const wall: number[] = []
+    const wallFlags: number[] = []
     const carve: number[] = []
-    const { points } = frame
+    const { points, flags } = frame
     for (let i = 0; i < points.length; i += 3) {
       const x = points[i]!
       const y = points[i + 1]!
       const z = points[i + 2]!
-      if (y >= bandLo && y <= bandHi) wall.push(x, z)
+      const flag = flags[i / 3]!
+      if (y >= bandLo && y <= bandHi) {
+        wall.push(x, z)
+        wallFlags.push(flag)
+      } else if (!(flag & 2)) continue
       else if (y < floorY + FLOOR_BAND) carve.push(x, z, 2)
       else if (ceilingY !== null && y > ceilingY - FLOOR_BAND) carve.push(x, z, 1)
       else carve.push(x, z, 0)
     }
-    return { cam: frame.cam, wall: Float32Array.from(wall), carve: Float32Array.from(carve) }
+    return {
+      cam: frame.cam,
+      wall: Float32Array.from(wall),
+      wallFlags: Uint8Array.from(wallFlags),
+      carve: Float32Array.from(carve),
+    }
   })
+}
+
+/** Camera and path positions in the pass frame. */
+function positionsOf(bands: readonly Banded[], path: Float32Array, rotation: number): Vec2[] {
+  const out: Vec2[] = bands.map((band) => rotatePoint(band.cam, rotation))
+  for (let i = 0; i < path.length; i += 2) out.push(rotatePoint([path[i]!, path[i + 1]!], rotation))
+  return out
 }
 
 // ---------- one carving pass ----------
@@ -443,12 +583,7 @@ function carvePass(
     if (z > maxZ) maxZ = z
   }
   let wallHits = 0
-  const cams: Vec2[] = bands.map((band) => [
-    rx(band.cam[0], band.cam[1]),
-    rz(band.cam[0], band.cam[1]),
-  ])
-  for (let i = 0; i < path.length; i += 2)
-    cams.push([rx(path[i]!, path[i + 1]!), rz(path[i]!, path[i + 1]!)])
+  const cams = positionsOf(bands, path, rotation)
   for (const [x, z] of cams) see(x, z)
   for (const band of bands) {
     wallHits += band.wall.length / 2
@@ -466,13 +601,17 @@ function carvePass(
   const ix = (x: number) => Math.floor((x - minX) / cell) + 1
   const iz = (z: number) => Math.floor((z - minZ) / cell) + 1
 
-  // Wall hits first, then carve free space along every ray, stopping at occupied cells.
+  // Strong wall hits make cells occupied, then every ray carves free space, stopping at occupied cells.
   const occ = new Uint16Array(W * H)
+  const hits: number[] = []
   for (const band of bands) {
     for (let k = 0; k < band.wall.length; k += 2) {
-      const at =
-        iz(rz(band.wall[k]!, band.wall[k + 1]!)) * W + ix(rx(band.wall[k]!, band.wall[k + 1]!))
+      if (!(band.wallFlags[k / 2]! & 1)) continue
+      const hx = rx(band.wall[k]!, band.wall[k + 1]!)
+      const hz = rz(band.wall[k]!, band.wall[k + 1]!)
+      const at = iz(hz) * W + ix(hx)
       if (occ[at]! < 65535) occ[at]! += 1
+      hits.push(hx, hz)
     }
   }
   const free = new Uint8Array(W * H)
@@ -487,6 +626,7 @@ function carvePass(
     const cx = ix(cams[index]![0])
     const cz = iz(cams[index]![1])
     for (let k = 0; k < band.wall.length; k += 2) {
+      if (!(band.wallFlags[k / 2]! & 2)) continue
       traceRay(
         cx,
         cz,
@@ -505,17 +645,11 @@ function carvePass(
     }
   })
 
-  // Where the phone stood is free space, and nothing is carved far from where it stood.
+  // Where the phone stood is free space; free space is kept only near the ground it walked.
   const stood = new Uint8Array(W * H)
-  const reach = new Uint8Array(W * H)
-  const reachCells = Math.ceil(REACH / cell)
   const forceCells = Math.max(1, Math.round(PATH_FORCE_RADIUS / cell))
-  for (const [x, z] of cams) {
-    const cx = ix(x)
-    const cz = iz(z)
-    stamp(reach, W, H, cx, cz, reachCells)
-    stamp(stood, W, H, cx, cz, forceCells)
-  }
+  for (const [x, z] of cams) stamp(stood, W, H, ix(x), iz(z), forceCells)
+  const reach = hullReach(convexHull(cams), grid)
 
   const supported = dilate(floorSeen, W, H, Math.round(FLOOR_REACH / cell))
   let mask: Uint8Array = new Uint8Array(W * H)
@@ -524,14 +658,13 @@ function carvePass(
     mask[i] = reach[i] && (room || (stood[i] && occ[i]! < OCC_MIN)) ? 1 : 0
   }
   // Closing joins gaps in the free space, but must not bridge a thin wall: occupied cells stay out.
-  mask = erode(dilate(mask, W, H, 2), W, H, 2)
+  mask = erode(dilate(mask, W, H, CLOSE_CELLS), W, H, CLOSE_CELLS)
   for (let i = 0; i < mask.length; i += 1) if (occ[i]! >= OCC_MIN) mask[i] = 0
   mask = fillHoles(mask, W, H)
   mask = dropUnseenFloor(mask, supported, stood, W, H, cell)
   // Opening drops spurs thinner than about 0.3 m, which are noise along a wall, not part of a room.
   mask = dilate(erode(mask, W, H, OPEN_CELLS), W, H, OPEN_CELLS)
   const camCells = cams.map(([x, z]) => iz(z) * W + ix(x))
-  let droppedCameras = 0
   let necksCut = false
   if (cutDoors) {
     const cut = cutNecks(mask, W, H, Math.round(NECK / cell), camCells)
@@ -539,9 +672,8 @@ function carvePass(
     mask = cut.mask
   }
   mask = largestComponent(mask, W, H)
-  if (cutDoors) {
-    for (const c of camCells) if (!mask[c]) droppedCameras += 1
-  }
+  let droppedCameras = 0
+  for (const c of camCells) if (!mask[c]) droppedCameras += 1
 
   const loop = traceOutline(mask, W, H)
   if (!loop || loop.length < 4) return null
@@ -551,10 +683,104 @@ function carvePass(
     grid,
     occ,
     free,
+    hits: Float32Array.from(hits),
     droppedCameras,
     positions: camCells.length,
     necksCut,
   }
+}
+
+/** Convex hull of points (monotone chain); fewer than three points come back as they are. */
+function convexHull(points: readonly Vec2[]): Vec2[] {
+  const sorted = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1])
+  if (sorted.length < 3) return sorted
+  const cross = (o: Vec2, a: Vec2, b: Vec2) =>
+    (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+  const build = (list: Vec2[]) => {
+    const half: Vec2[] = []
+    for (const p of list) {
+      while (half.length >= 2 && cross(half[half.length - 2]!, half[half.length - 1]!, p) <= 0)
+        half.pop()
+      half.push(p)
+    }
+    half.pop()
+    return half
+  }
+  return [...build(sorted), ...build([...sorted].reverse())]
+}
+
+/** Cells inside the hull or within `HULL_GROW` of it. */
+function hullReach(hull: readonly Vec2[], grid: Grid): Uint8Array {
+  const { W, H, cell, minX, minZ } = grid
+  const out = new Uint8Array(W * H)
+  if (hull.length === 0) return out
+  for (let z = 0; z < H; z += 1) {
+    for (let x = 0; x < W; x += 1) {
+      const p: Vec2 = [minX + (x - 1 + 0.5) * cell, minZ + (z - 1 + 0.5) * cell]
+      let near = hull.length >= 3 && pointInPolygon(p, hull)
+      for (let i = 0; i < hull.length && !near; i += 1) {
+        const a = hull[i]!
+        const b = hull[(i + 1) % hull.length]!
+        near = distToSegment(p, a, b) <= HULL_GROW
+      }
+      if (near) out[z * W + x] = 1
+    }
+  }
+  return out
+}
+
+/**
+ * Moves each edge to the middle of the strong wall-band hits around it (median offset, a few
+ * rounds so a shrunken edge can walk back out to the wall), then re-intersects neighbouring edges.
+ * An edge with too few hits, or hits covering too little of it, keeps its place and is reported
+ * as not fitted.
+ */
+function refitEdges(
+  polygon: readonly Vec2[],
+  hits: Float32Array,
+): { polygon: Vec2[]; fitted: boolean[] } {
+  const n = polygon.length
+  const lines = polygon.map((from, i) => {
+    const to = polygon[(i + 1) % n]!
+    const length = Math.hypot(to[0] - from[0], to[1] - from[1]) || 1
+    const ux = (to[0] - from[0]) / length
+    const uz = (to[1] - from[1]) / length
+    return { from, ux, uz, length, nx: -uz, nz: ux, shift: 0, fitted: false }
+  })
+  for (const line of lines) {
+    const base = line.nx * line.from[0] + line.nz * line.from[1]
+    for (let round = 0; round < FIT_ITERATIONS; round += 1) {
+      const offsets: number[] = []
+      const bins = new Set<number>()
+      for (let k = 0; k < hits.length; k += 2) {
+        const px = hits[k]!
+        const pz = hits[k + 1]!
+        const t = (px - line.from[0]) * line.ux + (pz - line.from[1]) * line.uz
+        if (t < -0.2 || t > line.length + 0.2) continue
+        const d = line.nx * px + line.nz * pz - base
+        if (Math.abs(d - line.shift) > FIT_CORRIDOR) continue
+        offsets.push(d)
+        bins.add(Math.floor(Math.max(0, Math.min(line.length, t)) / 0.2))
+      }
+      const binCount = Math.max(1, Math.ceil(line.length / 0.2))
+      if (offsets.length < FIT_MIN_HITS || bins.size / binCount < FIT_MIN_COVERAGE) {
+        line.fitted = false
+        break
+      }
+      offsets.sort((a, b) => a - b)
+      line.shift = offsets[Math.floor(offsets.length / 2)]!
+      line.fitted = true
+    }
+  }
+  const moved = lines.map((line) => ({
+    p: [line.from[0] + line.nx * line.shift, line.from[1] + line.nz * line.shift] as Vec2,
+    d: [line.ux, line.uz] as Vec2,
+  }))
+  const corners = polygon.map((corner, i) => {
+    const hit = intersectLines(moved[(i + n - 1) % n]!, moved[i]!)
+    return hit && Math.hypot(hit[0] - corner[0], hit[1] - corner[1]) < 1.5 ? hit : corner
+  })
+  return { polygon: corners, fitted: lines.map((line) => line.fitted) }
 }
 
 /**
@@ -1026,7 +1252,8 @@ function rotatePoint(p: Vec2, angle: number): Vec2 {
  */
 function describeEdges(
   polygon: readonly Vec2[],
-  axes: ReadonlyArray<'axis' | 'free'>,
+  fitted: readonly boolean[],
+  shrunk: boolean,
   pass: Pass,
   floorPolygons: CarveOptions['floorPolygons'],
   rotation: number,
@@ -1052,7 +1279,6 @@ function describeEdges(
       nz = -nz
     }
     const samples = Math.max(1, Math.floor(length / 0.1))
-    let supported = 0
     let withBeyond = 0
     let beyondCells = 0
     let beyondMax = 0
@@ -1062,12 +1288,6 @@ function describeEdges(
       const t = ((k + 0.5) / samples) * length
       const px = from[0] + ux * t
       const pz = from[1] + uz * t
-      let near = false
-      for (let o = -SUPPORT_RADIUS; o <= SUPPORT_RADIUS + 1e-9 && !near; o += cell) {
-        const at = cellAt(px + nx * o, pz + nz * o)
-        if (at >= 0 && pass.occ[at]! >= OCC_MIN) near = true
-      }
-      if (near) supported += 1
       if (k % 2 === 0) {
         let hit = false
         for (let d = BEYOND_NEAR; d <= BEYOND_FAR; d += 0.1) {
@@ -1095,7 +1315,7 @@ function describeEdges(
       share: round(withBeyond / probes, 3),
       maxDistance: round(beyondMax, 2),
     }
-    const wallSupport = round(supported / samples, 3)
+    const wallSupport = hitSupport(from, to, pass.hits)
     const floorGap = floors.length > 0 ? round(worstFloorGap, 2) : null
     const freeBeyond = beyond.cells >= BEYOND_MIN_CELLS && beyond.share >= BEYOND_SHARE
     const floorShort = floors.length > 0 && farFromFloor / samples >= 0.5
@@ -1118,7 +1338,19 @@ function describeEdges(
     } else if (wallSupport < GOOD_SUPPORT) {
       reasons.push(`Wall points lie along ${Math.round(wallSupport * 100)}% of its length.`)
     }
-    const confident = !likelyGlass && wallSupport >= GOOD_SUPPORT
+    if (!fitted[index]) {
+      reasons.push(
+        'Too few strong wall points lie around it to refit it, so its position and support are not checked against the wall.',
+      )
+    }
+    if (length < MIN_EDGE_M) reasons.push(`It is only ${round(length, 2)} m long.`)
+    if (shrunk) reasons.push('The outline is much smaller than the ground the phone walked.')
+    const confident =
+      !likelyGlass &&
+      wallSupport >= GOOD_SUPPORT &&
+      fitted[index] === true &&
+      length >= MIN_EDGE_M &&
+      !shrunk
     return {
       index,
       from,
@@ -1133,9 +1365,33 @@ function describeEdges(
         reasons.length > 0
           ? reasons.join(' ')
           : `The free space the camera's rays crossed ends here, with wall points along ${Math.round(wallSupport * 100)}% of the edge; an inference, not a measured wall.`,
-      snap: axes[index] ?? 'free',
+      snap:
+        Math.min(Math.abs(to[0] - from[0]), Math.abs(to[1] - from[1])) <= 0.02 * length
+          ? 'axis'
+          : 'free',
     }
   })
+}
+
+/** Share of an edge, in 0.1 m bins, with at least two strong wall-band hits within 0.15 m of it. */
+function hitSupport(from: Vec2, to: Vec2, hits: Float32Array): number {
+  const length = Math.hypot(to[0] - from[0], to[1] - from[1])
+  if (length === 0) return 0
+  const ux = (to[0] - from[0]) / length
+  const uz = (to[1] - from[1]) / length
+  const bins = Math.max(1, Math.floor(length / 0.1))
+  const counts = new Uint16Array(bins)
+  for (let k = 0; k < hits.length; k += 2) {
+    const dx = hits[k]! - from[0]
+    const dz = hits[k + 1]! - from[1]
+    const t = dx * ux + dz * uz
+    if (t < 0 || t > length || Math.abs(-dx * uz + dz * ux) > SUPPORT_BAND) continue
+    const bin = Math.min(bins - 1, Math.floor((t / length) * bins))
+    if (counts[bin]! < 65535) counts[bin]! += 1
+  }
+  let covered = 0
+  for (const count of counts) if (count >= SUPPORT_HITS) covered += 1
+  return round(covered / bins, 3)
 }
 
 /** Distance from a point to the nearest floor plane ring, 0 when inside one. */
@@ -1149,11 +1405,6 @@ function floorGapAt(point: Vec2, rings: ReadonlyArray<ReadonlyArray<Vec2>>): num
     }
   }
   return Number.isFinite(best) ? best : 0
-}
-
-function evenIndices(count: number, wanted: number): number[] {
-  if (count <= wanted) return Array.from({ length: count }, (_, i) => i)
-  return Array.from({ length: wanted }, (_, i) => Math.floor((i * count) / wanted))
 }
 
 function round(value: number, places = 3): number {

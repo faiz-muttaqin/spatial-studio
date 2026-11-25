@@ -358,6 +358,12 @@ export function proposeRoom(input: RoomProposalInput): RoomProposal {
 
 /** Most walked-path points that may lie outside a carved outline before it is rejected. */
 const CARVED_PATH_OUTSIDE = 0.02
+/** At most this share of positions dropped by the doorway cut is excused from the path check. */
+const CARVED_MAX_DROPPED = 0.1
+/** Vetoes against a line outline that is mostly backed by walls. */
+const CARVED_MIN_AGREEMENT = 0.7
+const CARVED_MIN_AREA_SHARE = 0.8
+const CARVED_MAX_CORNERS = 12
 /** A carved outline with more than this share of likely-glass edges is mostly open or glass. */
 const CARVED_GLASS_SHARE = 0.5
 
@@ -371,9 +377,12 @@ type OutlineChoice = { useCarved: boolean; agreement: number | null; decision: s
  * 3. With an outline whose every edge rests on a plane or a fitted line and is not rated low, that
  *    outline is kept: carving only reports how much it overlaps.
  * 4. Otherwise the walls are sparse (an assumed, floor-boundary or low edge) and the carved outline
- *    is used. The overlap between the two is reported either way.
+ *    is used, unless it is vetoed: a carved outline with over 12 corners and under half its edges
+ *    rated medium is not used, and neither is one that, against a line outline of which at least
+ *    half the edges are backed by a plane or fitted line, agrees under 70% or has under 80% of its
+ *    area (noise shrinks free-space outlines). The overlap between the two is reported either way.
  */
-function chooseOutline(
+export function chooseOutline(
   lines: RoomProposal | null,
   carved: CarvedOutline | null,
   path: Float32Array,
@@ -399,7 +408,10 @@ function chooseOutline(
     const dropped =
       carved.stats.positions > 0 ? carved.stats.droppedPositions / carved.stats.positions : 0
     const { outside, total } = pathOutside(path, polygon)
-    if (total > 0 && outside / total > CARVED_PATH_OUTSIDE + dropped) {
+    if (
+      total > 0 &&
+      outside / total > CARVED_PATH_OUTSIDE + Math.min(dropped, CARVED_MAX_DROPPED)
+    ) {
       return {
         useCarved: false,
         agreement: null,
@@ -438,11 +450,38 @@ function chooseOutline(
       decision: `Every edge of the outline from planes and lines rests on a wall, so it was kept.${overlap}`,
     }
   }
+  const backedEdges = lines.edges.filter(
+    (edge) => edge.basis === 'plane-estimate' || edge.basis === 'depth-fit',
+  ).length
+  const mostlyBacked = backedEdges >= lines.edges.length / 2
+  const linesArea = polygonArea(lines.polygon)
+  const carvedArea = polygonArea(polygon)
+  const medium = carved.edges.filter((edge) => edge.confidence === 'medium').length
+  const veto =
+    polygon.length > CARVED_MAX_CORNERS && medium < carved.edges.length / 2
+      ? `it has ${polygon.length} corners and under half its edges are rated medium`
+      : mostlyBacked && agreement !== null && agreement < CARVED_MIN_AGREEMENT
+        ? `it overlaps the line outline by only ${Math.round(agreement * 100)}%, and most of that outline's edges rest on a wall`
+        : mostlyBacked && carvedArea < CARVED_MIN_AREA_SHARE * linesArea
+          ? `its area (${round(carvedArea, 1)} m²) is under 80% of the line outline's (${round(linesArea, 1)} m²), which noise in free space causes, and most of that outline's edges rest on a wall`
+          : null
+  if (veto) {
+    return { useCarved: false, agreement, decision: `The carved outline was not used: ${veto}.` }
+  }
   return {
     useCarved: true,
     agreement,
     decision: `Walls are sparse: the outline from planes and lines has assumed, floor-boundary or low-confidence edges, so the carved outline was used.${overlap}`,
   }
+}
+
+function polygonArea(points: readonly Vec2[]): number {
+  let sum = 0
+  points.forEach(([x1, z1], index) => {
+    const [x2, z2] = points[(index + 1) % points.length]!
+    sum += x1 * z2 - x2 * z1
+  })
+  return Math.abs(sum) / 2
 }
 
 /** Overlap of two outlines as a share of their union, from points on a 0.1 m grid. */

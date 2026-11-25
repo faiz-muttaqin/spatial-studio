@@ -12,6 +12,20 @@ export type World = {
   height: number
   /** Floor and ceiling return depth only up to this x, like ground and sky outside a glass wall. */
   indoorUntilX?: number
+  /** Sensor noise: range error as a share of distance plus a fixed term, dropout, low-confidence pixels, hand wander. */
+  noise?: Noise
+}
+export type Noise = {
+  /** Gaussian range error as a share of distance, for example 0.04. */
+  relative: number
+  /** Fixed Gaussian range error, metres. */
+  fixed: number
+  /** Share of pixels with no depth. */
+  dropout: number
+  /** Share of pixels with confidence below 100. */
+  lowConfidence: number
+  /** Standard deviation of position (m) and heading (rad) wander between frames. */
+  wander: { position: number; yaw: number }
 }
 export type Camera = { x: number; z: number; yaw: number; pitch: number }
 
@@ -91,6 +105,15 @@ export function renderFrame(
         best = Math.min(best, flat)
       }
       if (!Number.isFinite(best)) continue
+      const noise = world.noise
+      if (noise) {
+        if (random() < noise.dropout) continue
+        const sigma = noise.relative * best + noise.fixed
+        depth[v * WIDTH + u] = Math.max(1, Math.round((best + gaussian(random) * sigma) * 1000))
+        if (random() < noise.lowConfidence)
+          confidence[v * WIDTH + u] = 20 + Math.floor(random() * 80)
+        continue
+      }
       depth[v * WIDTH + u] = Math.round((best + (random() - 0.5) * 0.02) * 1000)
     }
   }
@@ -98,6 +121,10 @@ export function renderFrame(
 }
 
 /** A walk along `positions`, turning through `turns` headings at each stop. */
+export function gaussian(random: () => number): number {
+  return Math.sqrt(-2 * Math.log(random() + 1e-12)) * Math.cos(2 * Math.PI * random())
+}
+
 export function walk(
   world: World,
   positions: Vec2[],
@@ -112,7 +139,16 @@ export function walk(
     for (let turn = 0; turn < turns; turn += 1) {
       const yaw = yawFrom + (yawSpan * turn) / turns
       const pitch = [-0.35, 0, 0.35][turn % 3]!
-      frames.push(renderFrame(`d${stop}-${turn}`, world, { x, z, yaw, pitch }, random))
+      const wander = world.noise?.wander
+      const camera = wander
+        ? {
+            x: x + gaussian(random) * wander.position,
+            z: z + gaussian(random) * wander.position,
+            yaw: yaw + gaussian(random) * wander.yaw,
+            pitch,
+          }
+        : { x, z, yaw, pitch }
+      frames.push(renderFrame(`d${stop}-${turn}`, world, camera, random))
     }
     path.push([x, CAMERA_HEIGHT, z])
   })
