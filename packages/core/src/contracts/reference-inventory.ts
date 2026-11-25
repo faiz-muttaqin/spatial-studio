@@ -1035,6 +1035,10 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     ['frameCount'],
   ),
   ...described(
+    "A gaussian-splat stream's metadata in a scan bundle's manifest (the trainer and the frame the splat is in): capture metadata, never a node's.",
+    ['frame', 'trainer'],
+  ),
+  ...described(
     "A scan bundle manifest's true-north estimate (the Mapping view reads it to draw a north arrow): capture metadata, never a node's.",
     ['trueNorth'],
   ),

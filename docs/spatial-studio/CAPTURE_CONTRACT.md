@@ -139,6 +139,25 @@ Optional and additive: a v1 to v1.2 reader ignores the new fields, and a bundle 
 - `metadata.arcore.torch`: `{ supported: boolean | null, framesOn: number, framesOff: number }`. `supported` is the result of `session.isSupported(config)` for the torch configuration, or null when the torch was never asked for; when it is false the torch stayed off and `metadata.warnings` carries `torch-unsupported`. A `configure` exception adds `torch-configure-failed` instead, and switching the torch after the first keyframe adds `torch-toggled-mid-scan` (ARCore may restart tracking on a configuration change; not yet verified on a device).
 - `metadata.arcore.motionGuard`: `{ maxSpeedMps, maxTurnDegPerSecond, keyframeMaxSpeedMps, keyframeMaxTurnDegPerSecond, keyframeMaxHoldMs, fastKeyframeSkips, poseJumps: [{ timestampNs, metres, degrees, recoveredTimestampNs: number | null, manualResume: boolean }] }`. `maxSpeedMps` and `maxTurnDegPerSecond` only drive the on-screen hint. Keyframes whose capture was due while the camera moved faster than the looser `keyframe*` limits were held back, never longer than `keyframeMaxHoldMs`; `fastKeyframeSkips` counts episodes in which a due keyframe was held back (one per episode, not per frame) and `metadata.warnings` carries `keyframes-skipped-fast` when it is above zero. A pose jump is ARCore moving the camera pose further in one frame than a hand-held phone can while still reporting `TRACKING`. A jump ends when the pose jumps back, walks back onto the old trajectory, or the user taps "Resume recording here" (`manualResume`). While a jump is unresolved no keyframes, depth frames or points are recorded; the trajectory keeps recording. `metadata.warnings` carries `pose-jump` for each scan with at least one event, and `pose-jump-unrecovered` when the last one never recovered. At most 50 events are kept.
 
+### Gaussian splat stream (v1.4)
+
+Optional and additive: a v1 to v1.3 reader ignores the stream, and a bundle without it stays valid. A splat is trained offline from the bundle (see [BRUSH_WORKFLOW.md](BRUSH_WORKFLOW.md)) and attached to an existing scan afterwards, which gives the manifest a new hash.
+
+| Field | Value |
+|---|---|
+| `kind`, `id`, `role` | `gaussian-splat`, `gaussian-splat`, `splat` |
+| `frameId` | The frame of the `rgb-keyframes` stream (`world` for the companion), so the splat draws in the world its poses were given in, with no extra transform. |
+| `artifact.mediaType` | `application/ply`: the binary little-endian 3DGS PLY Brush writes (`x y z`, `f_dc_0..2`, optional `f_rest_*`, `opacity`, `scale_0..2`, `rot_0..3`). Compressed formats (SPZ, SOG, compressed PLY) are not accepted in v1.4. |
+| `artifact.byteLength` | At most 96 MiB (`CAPTURE_MAX_SPLAT_ARTIFACT_BYTES`), above the 16 MB of other artifacts. The artifact route accepts this size only for `PUT` requests that send `X-Artifact-Kind: gaussian-splat`. The bound sits under the 100 MB request limit of the deployment proxy. |
+| `metadata` | `{ format: "ply", shDegree: 0 to 3, units: "m", frame, splatCount, trainer, trainerVersion?, datasetSha256? }`. `frame` is the convention of the frame the training poses were in (`arcore-world` for the companion). `shDegree` is read from the number of `f_rest_*` properties. |
+
+Rules:
+
+- Units are metres, and the splat is in the same frame as the keyframes it was trained from. Brush keeps the poses it is given, so a splat trained from the Brush dataset export needs no transform. This was reasoned from Brush's source (`nerfstudio.rs`, `opengl_c2w_to_pose`) and has not been checked against a trained splat from a real scan.
+- The viewer layer draws the degree-0 colour only. Higher-order spherical harmonics stay in the file for other viewers and are not used for view-dependent colour. It draws at most 1,000,000 splats and thins a larger file evenly.
+- A splat is a trained estimate. It can carry floaters where ARCore drifted or exposure changed, and it is not a measurement. Consumers must not derive wall positions or dimensions from it.
+- Replacing a splat writes a new manifest with one `gaussian-splat` stream; earlier artifacts stay in the store.
+
 ## Android bridge, protocol v1
 
 The companion is a Kotlin WebView shell that loads the deployed web app and adds a narrow native bridge. It does not fork the editor or the scene graph.

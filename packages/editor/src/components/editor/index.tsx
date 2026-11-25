@@ -71,7 +71,10 @@ import { useKeyboard } from '../../hooks/use-keyboard'
 import { useSaveShortcut } from '../../hooks/use-save-shortcut'
 import { useSceneLoader } from '../../hooks/use-scene-loader'
 import { type HINT_KEY_NAMES, toolHintKey, toolHintKeyDescriptor } from '../../i18n/node-messages'
-import { CaptureSourceResolverProvider } from '../../lib/capture-source-context'
+import {
+  BrushDatasetUrlProvider,
+  CaptureSourceResolverProvider,
+} from '../../lib/capture-source-context'
 import { useCeilingEditSessionOwner } from '../../lib/ceiling-edit-session'
 import { showsWholeBuilding, useEditorLevelDisplay } from '../../lib/editor-level-display'
 import { isSceneView } from '../../lib/editor-views'
@@ -295,6 +298,8 @@ export interface EditorProps {
    * scans stay reference entries that draw nothing.
    */
   captureSourceResolver?: CaptureSourceResolver
+  /** The link to a scan's Brush dataset zip. Omit it and the scan evidence panel has no download. */
+  brushDatasetUrl?: (scanId: string) => string
   /** Host-owned content mounted inside the editor's React Three Fiber scene. */
   viewerSceneSlot?: ReactNode
   /** Host-owned SVG content mounted in the transformed floor-plan scene. */
@@ -2230,9 +2235,11 @@ function EditorFrame(props: EditorProps) {
   return (
     <Profiler id="editor" onRender={recordEditorRender}>
       <CaptureSourceResolverProvider value={props.captureSourceResolver ?? null}>
-        <FloorplanDimensionHitsGate>
-          <EditorContent {...props} />
-        </FloorplanDimensionHitsGate>
+        <BrushDatasetUrlProvider value={props.brushDatasetUrl ?? null}>
+          <FloorplanDimensionHitsGate>
+            <EditorContent {...props} />
+          </FloorplanDimensionHitsGate>
+        </BrushDatasetUrlProvider>
       </CaptureSourceResolverProvider>
     </Profiler>
   )

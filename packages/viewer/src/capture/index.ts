@@ -46,6 +46,7 @@ export {
   captureModelFormat,
   isCaptureModelArtifact,
   isCapturePointCloudArtifact,
+  isCaptureSplatArtifact,
   isCaptureStreamRenderable,
 } from './stream-rendering'
 export {

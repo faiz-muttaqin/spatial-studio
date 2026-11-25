@@ -15799,6 +15799,16 @@ msgstr "Fermer la photo"
 msgid "editor.panels.scanEvidence.device"
 msgstr "Appareil"
 
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# Source-Hash: 68788f72f02d1842
+# Review: required
+# English: "Download Brush dataset (.zip)"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.downloadDataset"
+msgstr "Télécharger le jeu de données Brush (.zip)"
+
 # Source-Hash: b5e1914dc8543d0c
 # Review: required
 # AI-Provider: claude-code
@@ -15848,6 +15858,16 @@ msgstr "Modèle 3D"
 #, fuzzy
 msgid "editor.panels.scanEvidence.layer.pointCloud"
 msgstr "Nuage de points"
+
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# Source-Hash: 304dd23179d91e45
+# Review: required
+# English: "Gaussian splat"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.layer.splat"
+msgstr "Gaussian splat"
 
 # Source-Hash: d162bd068d79cdf1
 # Review: required
@@ -15968,6 +15988,16 @@ msgstr "{part} : pas encore prêt."
 #, fuzzy
 msgid "editor.panels.scanEvidence.photoDialog"
 msgstr "Photo de la capture"
+
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# Source-Hash: 4e9342f662a95727
+# Review: required
+# English: "Photoreal capture"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.photoreal"
+msgstr "Capture photoréaliste"
 
 # Source-Hash: e44ffe32c2b2e0f6
 # Review: required
@@ -16119,6 +16149,66 @@ msgstr "Longueur"
 msgid "editor.panels.scanEvidence.roomWidth"
 msgstr "Largeur"
 
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# Source-Hash: f33d15ea7956c64b
+# Review: required
+# English: "Splat attached ({count} splats)."
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.splatDone"
+msgstr "Splat joint ({count} splats)."
+
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# Source-Hash: 9070224792ab9475
+# Review: required
+# English: "The splat could not be attached."
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.splatFailed"
+msgstr "Impossible de joindre le splat."
+
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# Source-Hash: f2534ebaf313782e
+# Review: required
+# English: "This is not a binary 3D Gaussian splat PLY."
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.splatInvalid"
+msgstr "Ce n’est pas un PLY binaire de Gaussian splat 3D."
+
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# Source-Hash: fa1c6614b0e3c53e
+# Review: required
+# English: "The file is larger than 96 MiB."
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.splatTooLarge"
+msgstr "Le fichier dépasse 96 Mio."
+
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# Source-Hash: e3ab4c8cbb893524
+# Review: required
+# English: "Trained with"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.splatTrainer"
+msgstr "Entraîné avec"
+
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# Source-Hash: 756844bbc7a4b1cf
+# Review: required
+# English: "Uploading…"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.splatUploading"
+msgstr "Envoi en cours…"
+
 # Source-Hash: a4364c1ff0695334
 # Review: required
 # AI-Provider: claude-code
@@ -16188,6 +16278,16 @@ msgstr "Pertes de suivi"
 #, fuzzy
 msgid "editor.panels.scanEvidence.unavailable"
 msgstr "Les données de capture n’ont pas pu être chargées."
+
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# Source-Hash: 2ec763e855791550
+# Review: required
+# English: "Upload trained splat (.ply)"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.uploadSplat"
+msgstr "Envoyer un splat entraîné (.ply)"
 
 # Source-Hash: 7e1647f9ce51509e
 # Review: required
