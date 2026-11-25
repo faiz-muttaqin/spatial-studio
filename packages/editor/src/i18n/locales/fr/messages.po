@@ -1144,6 +1144,426 @@ msgstr "Appentis"
 msgid "app.lib.buildTabState.wall"
 msgstr "Mur"
 
+# Source-Hash: 0657f670dfde573a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Technical details"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.details"
+msgstr "Détails techniques"
+
+# Source-Hash: 0fac904d1e7dde70
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Scan a room with a phone and attach it to see its top-down map here."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.empty.body"
+msgstr "Relevez une pièce avec un téléphone et joignez-la pour voir ici sa carte vue du dessus."
+
+# Source-Hash: 3554daf658b7f235
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "No capture scans in this project"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.empty.title"
+msgstr "Aucun relevé de capture dans ce projet"
+
+# Source-Hash: e99cebd681449667
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The map could not be built: {reason}"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.failed"
+msgstr "La carte n’a pas pu être construite : {reason}"
+
+# Source-Hash: 8e5c71905dfa8a54
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Fit"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.fit"
+msgstr "Ajuster"
+
+# Source-Hash: d7ee1cefa20d0e32
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Layer"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.layer"
+msgstr "Couche"
+
+# Source-Hash: df0f7f8e75704297
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Floor only"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.layer.floor"
+msgstr "Sol uniquement"
+
+# Source-Hash: 6d498dc88d305fb5
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Top surfaces"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.layer.top"
+msgstr "Surfaces supérieures"
+
+# Source-Hash: f94cb8139f3bbeba
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "North"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.north"
+msgstr "Nord"
+
+# Source-Hash: 4e32cd20ba726f2c
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "This is magnetic north, not true north."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.north.magnetic"
+msgstr "Il s’agit du nord magnétique, pas du nord vrai."
+
+# Source-Hash: 6eae717510c65c96
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Compass north from the scan."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.north.scan"
+msgstr "Nord de la boussole du relevé."
+
+# Source-Hash: 8e0de9b578d10f80
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The site north rotation is {degrees} degrees and is not shown here."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.north.site"
+msgstr "La rotation du nord du site est de {degrees} degrés et n’est pas affichée ici."
+
+# Source-Hash: f9dfd61493ca94a4
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "N"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.northLetter"
+msgstr "N"
+
+# Source-Hash: 33d9f6f2450148bb
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "{kind}: its coordinate frame is not usable, so it is read as the capture world."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.note.frameCoordinates"
+msgstr "{kind} : son repère de coordonnées est inutilisable, il est lu comme le monde de capture."
+
+# Source-Hash: ba1fdf07762f2dc7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Fusing stopped at the time budget after {frames} frames."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.note.fuseTimeBudget"
+msgstr "La fusion s’est arrêtée au budget de temps après {frames} images."
+
+# Source-Hash: adcd19fe34135732
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Reading stopped at the memory limit after {frames} frames; later keyframes were left out."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.note.memoryBudget"
+msgstr "La lecture s’est arrêtée à la limite de mémoire après {frames} images ; les images clés suivantes ont été ignorées."
+
+# Source-Hash: f1a5338e17fbe921
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The room outline could not be computed, so none is available."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.note.outlineFailed"
+msgstr "Le contour de la pièce n’a pas pu être calculé ; il n’y en a donc aucun."
+
+# Source-Hash: 2c7830ed41ea9784
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The room outline was skipped at the time budget."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.note.outlineSkipped"
+msgstr "Le contour de la pièce a été ignoré à cause du budget de temps."
+
+# Source-Hash: 543e31d939e360e1
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Photos that could not be used: {count}. Their frames add shape but no colour."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.note.photosUnused"
+msgstr "Photos inutilisables : {count}. Leurs images apportent la forme mais pas la couleur."
+
+# Source-Hash: fc0f225a29051119
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Some scan streams could not be read; the technical details say which."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.note.streamsUnreadable"
+msgstr "Certains flux du relevé n’ont pas pu être lus ; les détails techniques indiquent lesquels."
+
+# Source-Hash: 1039107e04b5d061
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Reading stopped at the time budget; later keyframes were left out."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.note.timeBudgetReading"
+msgstr "La lecture s’est arrêtée au budget de temps ; les images clés suivantes ont été ignorées."
+
+# Source-Hash: 28a939dccbff00d7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Notes"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.notes"
+msgstr "Notes"
+
+# Source-Hash: 520dd6a76101fa4f
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Map opacity"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.opacity"
+msgstr "Opacité de la carte"
+
+# Source-Hash: de81ab8273a09913
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Rebuild"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.rebuild"
+msgstr "Reconstruire"
+
+# Source-Hash: 34d880acd9e42b93
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Something went wrong while building it."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.refusal.failed"
+msgstr "Une erreur est survenue pendant la construction."
+
+# Source-Hash: 496fd9fa4af29403
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The scan manifest does not match the capture contract."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.refusal.manifestInvalid"
+msgstr "Le manifeste du relevé ne respecte pas le contrat de capture."
+
+# Source-Hash: 2c142cc146346474
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The scan manifest could not be read."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.refusal.manifestUnreadable"
+msgstr "Le manifeste du relevé n’a pas pu être lu."
+
+# Source-Hash: e28de3c689602fd7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "This scan has no depth keyframes with photo keyframes."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.refusal.noDepth"
+msgstr "Ce relevé n’a pas d’images clés de profondeur avec des images clés photo."
+
+# Source-Hash: 084dcdcffe0b664c
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "No depth frame could be read with a tracked pose."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.refusal.noFrames"
+msgstr "Aucune image de profondeur avec une pose suivie n’a pu être lue."
+
+# Source-Hash: 8bddd6448bbd1068
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "No points lie between the floor and the ceiling."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.refusal.noMap"
+msgstr "Aucun point ne se trouve entre le sol et le plafond."
+
+# Source-Hash: ffdb7bce5f55650a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "No surface was seen in two or more depth frames."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.refusal.noSurface"
+msgstr "Aucune surface n’a été vue dans au moins deux images de profondeur."
+
+# Source-Hash: 25f597a5d485eac0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Reading the scan took too long."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.refusal.timeout"
+msgstr "La lecture du relevé a pris trop de temps."
+
+# Source-Hash: 61ecb75a10705708
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Restart"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.restart"
+msgstr "Redémarrer"
+
+# Source-Hash: 7e42201ee9800142
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Turned with the building, like the 2D plan. A turn set by hand in the 2D plan is not followed."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.rotationHint"
+msgstr "Tournée avec le bâtiment, comme le plan 2D. Une rotation réglée à la main dans le plan 2D n’est pas suivie."
+
+# Source-Hash: 053d7b00b76fe936
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "{metres} m"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.scaleBar"
+msgstr "{metres} m"
+
+# Source-Hash: 42e13fe46f56a780
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Scan"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.scan"
+msgstr "relevé 3D"
+
+# Source-Hash: af8156ce27f17334
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Map"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.toggle.map"
+msgstr "Carte"
+
+# Source-Hash: 5607bb312ed3a662
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Walked path"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.toggle.path"
+msgstr "Parcours"
+
+# Source-Hash: 412326a406911146
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Room proposal"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.toggle.proposal"
+msgstr "Proposition de pièce"
+
+# Source-Hash: 3e7408ed44676176
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Rooms"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.toggle.rooms"
+msgstr "Pièces"
+
+# Source-Hash: aac9a732d2159ccc
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Walls"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.mapping.toggle.walls"
+msgstr "Murs"
+
+# Source-Hash: 6312020ceef0ea49
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Mapping"
+#: apps/editor/lib/bootstrap.ts
+#, fuzzy
+msgid "app.mapping.view"
+msgstr "Cartographie"
+
 # Source-Hash: 51d4b567c394bc97
 # Review: required
 # AI-Provider: claude-code

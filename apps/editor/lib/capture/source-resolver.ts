@@ -57,7 +57,7 @@ export function createCaptureSourceResolver(options: ResolverOptions = {}): Capt
 
 const ARTIFACT_PATH = /^\/api\/artifacts\/[0-9a-f]{64}$/
 
-function sameOriginUrl(value: string, base: string, origin: string): string {
+export function sameOriginUrl(value: string, base: string, origin: string): string {
   let url: URL
   try {
     url = new URL(value, base)
