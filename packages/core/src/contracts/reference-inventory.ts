@@ -1012,11 +1012,6 @@ const described = (reason: string, paths: readonly string[]) =>
 /** Metadata keys found in editor sources that are not references. */
 export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[] = [
   { path: 'metadata.roomBoundary', reason: 'Boolean opt-out from room boundary detection.' },
-  {
-    path: 'metadata.trueNorth',
-    reason:
-      "A capture manifest's north estimate, read by the mapping view: bundle metadata, not a node's.",
-  },
   ...described(
     "author_scene's provenance: the payload's own ids on walls and openings, a room's seed, a level's elevation, a slab's finish, a wall's colour, and on the building the stored payload's script hash, the payload items waiting for an add_object piece (by payload id and piece id) and when it was written; none of it names a node.",
     [
