@@ -29,6 +29,17 @@ describe('readBodyWithin', () => {
     expect(bytes).toEqual(new Uint8Array([1, 2, 3]))
   })
 
+  test('with an honest Content-Length the body fills one buffer; a liar is cut off or trimmed', async () => {
+    const honest = streamedRequest([new Uint8Array([1, 2]), new Uint8Array([3])], {
+      'content-length': '3',
+    })
+    expect(await readBodyWithin(honest, 10)).toEqual(new Uint8Array([1, 2, 3]))
+    const longer = streamedRequest([new Uint8Array(6)], { 'content-length': '3' })
+    expect(await readBodyWithin(longer, 10)).toBeNull()
+    const shorter = streamedRequest([new Uint8Array([9])], { 'content-length': '3' })
+    expect(await readBodyWithin(shorter, 10)).toEqual(new Uint8Array([9]))
+  })
+
   test('refuses a declared Content-Length over the limit without reading', async () => {
     const request = streamedRequest([new Uint8Array(11)], { 'content-length': '11' })
     expect(await readBodyWithin(request, 10)).toBeNull()

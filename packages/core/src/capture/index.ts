@@ -8,6 +8,24 @@ export {
   CAPTURE_MAX_BOUNDARY_MARKS,
 } from './boundary-marks'
 export {
+  BRUSH_ACCEPTED_CAMERA_MODELS,
+  BRUSH_IMAGE_DIR,
+  BRUSH_POINTS_FILE,
+  BRUSH_TRANSFORMS_FILE,
+  type BrushCloudInput,
+  type BrushDataset,
+  type BrushDatasetInput,
+  type BrushFrame,
+  type BrushImage,
+  type BrushSkippedFrame,
+  type BrushTransforms,
+  buildBrushDataset,
+  buildPointsPly,
+  matrixFromRows,
+  matrixRows,
+  projectToKeyframe,
+} from './brush-dataset'
+export {
   type CloudSummary,
   type PathSummary,
   pathPositions,
@@ -200,6 +218,24 @@ export {
   PushCaptureSource,
   type PushCaptureSourceOptions,
 } from './source'
+export {
+  type AttachSplatInput,
+  CAPTURE_MAX_RENDERED_SPLATS,
+  CAPTURE_MAX_SPLAT_ARTIFACT_BYTES,
+  describeSplatPly,
+  GAUSSIAN_SPLAT_KIND,
+  GAUSSIAN_SPLAT_MEDIA_TYPE,
+  GAUSSIAN_SPLAT_ROLE,
+  GAUSSIAN_SPLAT_STREAM_ID,
+  type GaussianSplatData,
+  type GaussianSplatMetadata,
+  GaussianSplatMetadataSchema,
+  parseGaussianSplatPly,
+  readSplatPlyHeader,
+  SplatPlyError,
+  type SplatPlyHeader,
+  withGaussianSplatStream,
+} from './splat'
 export {
   type BrowserCapabilities,
   BrowserCapabilitiesSchema,

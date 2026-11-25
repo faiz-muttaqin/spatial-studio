@@ -39,6 +39,7 @@ export function isCaptureStreamRenderable(
       PointCloudPayloadSchema.safeParse(stream.inline).success
     )
   }
+  if (layerKey === 'splat') return isCaptureSplatArtifact(stream.artifact)
   if (layerKey === 'surfaceMesh') {
     return (
       streamHydratesJsonPayload(stream) || SurfaceMeshPayloadSchema.safeParse(stream.inline).success
@@ -84,6 +85,14 @@ export function isCapturePointCloudArtifact(
 ): boolean {
   if (!artifact) return false
   return PLY_MEDIA_TYPES.has(artifact.mediaType) || hasExtension(artifact.uri, ['.ply'])
+}
+
+/** A gaussian-splat stream's artifact: the contract's binary PLY (CAPTURE_CONTRACT.md, v1.4). */
+export function isCaptureSplatArtifact(artifact: CaptureArtifactReference | undefined): boolean {
+  return (
+    artifact !== undefined &&
+    (artifact.mediaType === 'application/ply' || hasExtension(artifact.uri, ['.ply']))
+  )
 }
 
 function hasExtension(uri: string | undefined, extensions: readonly string[]): boolean {
