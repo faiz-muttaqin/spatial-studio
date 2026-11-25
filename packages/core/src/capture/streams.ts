@@ -48,6 +48,8 @@ export const RgbKeyframeSchema = z
     intrinsics: CameraIntrinsicsSchema.nullable(),
     pose: CaptureMatrix4Schema.nullable(),
     trackingState: CaptureTrackingStateSchema,
+    /** v1.3: whether the ARCore torch was on for this frame. Absent means unknown. */
+    torch: z.boolean().optional(),
   })
   .superRefine((frame, context) => {
     if (Math.max(frame.width, frame.height) > CAPTURE_MAX_IMAGE_LONG_EDGE) {
