@@ -36,13 +36,15 @@ A bundle is one `CaptureSessionManifest` schema version 2 (`packages/core/src/ca
 |---|---|---|---|
 | `device-motion` | `deviceMotion` | inline `DeviceMotionTrajectory`, `coordinateSystem: "arcore-world"` | Existing viewer layer renders it. Tracking loss starts a new `segment`. |
 | `point-cloud` | `pointCloud` | artifact `application/json`, `PointCloudPayload` | Existing viewer layer renders it. ARCore feature points with confidence at least 0.3, voxel downsampled. |
-| `rgb-keyframes` | `photos` | artifact `application/json` index, plus one `image/jpeg` artifact per frame | Index entry: `{ id, timestamp, image: { uri, sha256 }, width, height, intrinsics: { fx, fy, cx, cy } | null, pose: number[16] | null, trackingState }`. Browser-photo frames have `intrinsics` and `pose` null. |
-| `depth-keyframes` | `depth` | artifact `application/json` index, plus one `application/octet-stream` artifact per frame | Raw uint16 little-endian millimetres, row-major, `width` x `height`; optional uint8 confidence artifact. Each entry names its `rgbKeyframeId` and depth intrinsics. Only when ARCore reports Depth API support. |
-| `plane-set` | `planes` | artifact `application/json` | ARCore planes: `{ id, orientation: "horizontal-up" | "horizontal-down" | "vertical", centerPose: number[16], extent: [x, z], polygon: [[x, z], ...] (plane-local metres), subsumedBy: string | null }`. Primary input for wall, floor and ceiling candidates. |
-| `manual-measurements` | `measurements` | artifact `application/json` | `{ units: "m", room: { width, length, height } (each nullable), openings: [{ kind: "door" | "window", wall, width, height, sill }], notes, source: "manual" }`. |
-| `device-capabilities` | `capabilities` | inline | Output of the capability probe at capture time (see `capabilities.get`). |
+| `rgb-keyframes` | `photos` | artifact `application/json` index `{ frames: [entry, ...] }`, plus one `image/jpeg` artifact per frame | Entry: `{ id, timestamp, image: { uri, sha256 }, width, height, intrinsics: { fx, fy, cx, cy } | null, pose: number[16] | null, trackingState: "tracking" | "paused" | "stopped" | "none" }`. Browser-photo frames have `intrinsics` and `pose` null and `trackingState: "none"`. At most 300 entries; ids unique. |
+| `depth-keyframes` | `depth` | artifact `application/json` index `{ frames: [entry, ...] }`, plus one `application/octet-stream` artifact per frame | Entry: `{ id, rgbKeyframeId, timestamp, width, height, intrinsics: { fx, fy, cx, cy }, depth: { uri, sha256 }, confidence: { uri, sha256 } | null }`. Depth is raw uint16 little-endian millimetres, row-major, `width` x `height`; confidence is uint8 in the same layout. Only when ARCore reports Depth API support. |
+| `plane-set` | `planes` | artifact `application/json` `{ planes: [plane, ...] }` | ARCore planes: `{ id, orientation: "horizontal-up" | "horizontal-down" | "vertical", centerPose: number[16], extent: [x, z], polygon: [[x, z], ...] (plane-local metres, at least 3 points), subsumedBy: string | null }`. Primary input for wall, floor and ceiling candidates. |
+| `manual-measurements` | `measurements` | artifact `application/json` | `{ units: "m", room: { width, length, height } (each positive or null), openings: [{ kind: "door" | "window", wall: string | null, width, height, sill }], notes, source: "manual" }`. Opening `width`, `height` and `sill` are nullable; an unknown value stays null. |
+| `device-capabilities` | `capabilities` | inline | `{ probedAt (unix ms), browser: BrowserCapabilities | null, native: capabilities.get result | null }`. `browser` reports secure context, camera, WebXR `immersive-ar` (`supported`, `unsupported` or `unknown`; optional features stay `unknown` because they are only negotiated at session start), and orientation and motion permission state. |
 
-`metadata` on the manifest: `{ provider, appVersion, bridgeVersion?, device: { manufacturer, model, os }, createdAt, trackingLossCount, warnings: string[] }`.
+`metadata` on the manifest: `{ provider, appVersion, bridgeVersion?, device: { manufacturer, model, os } (each nullable), createdAt (ISO 8601), trackingLossCount, warnings: string[] }`.
+
+The payload schemas live in `packages/core/src/capture/streams.ts` (exported from `@pascal-app/core/capture`); a bundle that fails them is invalid.
 
 ## Android bridge, protocol v1
 
