@@ -1,5 +1,6 @@
 import { DiskArtifactStore, resolveDefaultDatabasePath } from '@pascal-app/mcp/storage'
 import { artifactMediaType } from '@/lib/artifact-media-type'
+import { MAX_ARTIFACT_BYTES, readBodyWithin } from '@/lib/artifact-upload-limit'
 import {
   guardSceneApiRequest,
   sceneApiJson,
@@ -40,7 +41,14 @@ export async function PUT(request: Request, { params }: { params: Promise<{ sha2
   const { sha256 } = await params
   if (!/^[0-9a-f]{64}$/.test(sha256))
     return sceneApiJson(request, { error: 'invalid_hash' }, { status: 400 })
-  const bytes = await request.arrayBuffer()
+  const bytes = await readBodyWithin(request, MAX_ARTIFACT_BYTES)
+  if (!bytes) {
+    return sceneApiJson(
+      request,
+      { error: 'too_large', maxBytes: MAX_ARTIFACT_BYTES },
+      { status: 413 },
+    )
+  }
   try {
     await new DiskArtifactStore(resolveDefaultDatabasePath()).put(sha256, bytes)
   } catch (error) {

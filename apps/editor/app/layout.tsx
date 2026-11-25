@@ -28,6 +28,8 @@ const barlow = Barlow({
   display: 'swap',
 })
 
+// Shared by every page. Pages outside `(studio)` get no node registry or editor
+// plugins; `(studio)/layout.tsx` loads them for the viewer and editor routes.
 export default async function RootLayout({
   children,
 }: Readonly<{

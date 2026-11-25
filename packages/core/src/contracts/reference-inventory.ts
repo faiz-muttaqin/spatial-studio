@@ -1031,6 +1031,10 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     ['kind'],
   ),
   ...described(
+    "A capture stream's own metadata in a scan bundle's manifest (the photo count `/scan` writes on its rgb-keyframes stream): capture metadata, never a node's.",
+    ['frameCount'],
+  ),
+  ...described(
     "The CLI's Architect API request metadata (`pascal architect run`): the project the turn targets and its credit cap, sent to the API, never stored on a node.",
     ['pascal_max_credits', 'project_id'],
   ),

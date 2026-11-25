@@ -1,10 +1,10 @@
 {
   "version": 3,
   "files": {
-    "apps/editor/app/embed/[id]/page.tsx": [
+    "apps/editor/app/(studio)/embed/[id]/page.tsx": [
       "{name} · Pascal"
     ],
-    "apps/editor/app/import/import-client.tsx": [
+    "apps/editor/app/(studio)/import/import-client.tsx": [
       " · {?} m² of floor",
       "Contents",
       "Creating the scene…",
@@ -14,11 +14,17 @@
       "Try again",
       "node"
     ],
-    "apps/editor/app/import/page.tsx": [
+    "apps/editor/app/(studio)/import/page.tsx": [
       "Home",
       "Import",
       "Import a scene",
       "Review the file before it becomes a scene. Nothing is created until you confirm."
+    ],
+    "apps/editor/app/(studio)/project/[id]/page.tsx": [
+      "All projects",
+      "Project not found",
+      "There is no project with id",
+      "on this editor."
     ],
     "apps/editor/app/login/login-form.tsx": [
       "Could not reach the editor.",
@@ -38,12 +44,6 @@
       "Settings",
       "Settings",
       "Your projects live here. Start one to begin designing."
-    ],
-    "apps/editor/app/project/[id]/page.tsx": [
-      "All projects",
-      "Project not found",
-      "There is no project with id",
-      "on this editor."
     ],
     "apps/editor/app/settings/page.tsx": [
       "About",

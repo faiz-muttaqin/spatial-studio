@@ -1,6 +1,6 @@
 'use client'
 
-import { usePascalI18n } from '@pascal-app/core'
+import { usePascalI18n } from '@pascal-app/core/i18n'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 

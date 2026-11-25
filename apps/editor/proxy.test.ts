@@ -41,6 +41,15 @@ test('a password gates pages behind login and keeps the requested path', () => {
   expect(gateRequest(request('/api/plugins/mint/session'))?.status).toBe(401)
 })
 
+test('the phone scanner is gated like every other page', () => {
+  process.env.PASCAL_ADMIN_PASSWORD = 'secret'
+  const response = gateRequest(request('/scan'))
+  expect(response?.status).toBe(307)
+  expect(response?.headers.get('location')).toBe('https://pascal.example/login?next=%2Fscan')
+  const cookie = `${SESSION_COOKIE}=${issueSession()}`
+  expect(gateRequest(request('/scan', { cookie }))).toBeNull()
+})
+
 test('the home page sends a signed-out visitor to login without a next param', () => {
   process.env.PASCAL_ADMIN_PASSWORD = 'secret'
   const response = gateRequest(request('/'))

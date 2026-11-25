@@ -1,8 +1,8 @@
 'use client'
 
-// Node registry bootstrap is loaded once at the root via
-// `<ClientBootstrap>` in `app/layout.tsx` — no per-page side-effect
-// import here.
+// Node registry bootstrap is loaded once for the route group via
+// `<RegistryBootstrap>` in `app/(studio)/layout.tsx` — no per-page
+// side-effect import here.
 import { type MessageDescriptor, usePascalI18n } from '@pascal-app/core'
 import {
   applySceneGraphToEditor,
