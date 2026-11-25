@@ -19,6 +19,15 @@
         android:background="@color/hud_scrim"
         android:visibility="gone" />
 
+    <Button
+        android:id="@+id/scan_model_toggle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="start|center_vertical"
+        android:layout_margin="8dp"
+        android:minHeight="0dp"
+        android:text="@string/scan_model_hide" />
+
     <LinearLayout
         android:id="@+id/scan_hud"
         android:layout_width="match_parent"

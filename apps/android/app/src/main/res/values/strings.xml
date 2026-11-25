@@ -53,6 +53,8 @@
     <string name="scan_location_confirm_message">The page asked to save your approximate location with this scan. It is used to correct the compass to true north when the scan is processed. You can switch it off while scanning.</string>
     <string name="scan_location_allow">Allow</string>
     <string name="scan_location_decline">Not now</string>
+    <string name="scan_model_hide">Hide room model</string>
+    <string name="scan_model_show">Show room model</string>
     <string name="mark_start">Mark boundary</string>
     <string name="mark_stop">Stop marking</string>
     <string name="mark_undo">Undo</string>

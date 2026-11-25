@@ -23,6 +23,15 @@
 
 Next actionable work: see the latest dated entry below. For each session record date / phase / branch / PR / base SHA / files / commands with actual results / device evidence / blockers / next task.
 
+### 2026-11-25: R7 live edge lines and mini room model (Android)
+
+- Branch `fix/amazing-noyce-41c725` from `d72113d4` (contains #18 and #19). Android only; the bundle and contract are unchanged.
+- Added `scan/EdgeModel.kt`: a pure edge model from ARCore planes, updated about three times a second on its own thread (`LiveEdges`). Floor and ceiling come from horizontal planes (existing `BoundaryMarking` picks); walls are the horizontal footprints of vertical planes. Floor-wall lines, vertical corner lines where confirmed walls meet, and wall-ceiling lines when a ceiling is known. Stability: a new wall fades in over three updates, near-collinear footprints merge, an unreported wall fades out in about two seconds, corners and the outline use confirmed walls only. A closed loop of corners gives a floor polygon (ear clipping).
+- Added `scan/gl/EdgeOverlay.kt`: white lines on the camera view and a translucent dollhouse at 1:20 placed about 0.9 m ahead of the user on the floor (re-placed after walking 3 m away), with a Hide room model button. Vertex data is rebuilt only when a new snapshot arrives. Coverage grid, motion guards and #18's torch and clock behaviour are untouched.
+- Not done: depth-fitted wall lines (neither the web worker round trip nor a Kotlin port of the robust line fit), depth-testing the lines against the ARCore depth image, and recording the edge model as a derived stream. Planes alone give no wall where ARCore found no vertical plane. The worker-versus-Kotlin choice needs an on-device latency measurement that has not been made.
+- Tests: `EdgeModelTest` (11 cases: room edges, no ceiling, no floor, closed and open outline, fade in, ghost removal, collinear merge, tiny or low planes, subsumed and lost planes, L-shaped triangulation). `./gradlew :app:testDebugUnitTest :app:assembleDebug :app:lintDebug` passes. No TS changes.
+- Device evidence: none yet. GL cost per frame and visual quality are unmeasured; not installed on the phone.
+
 ### 2026-11-25: P2N.3 live telemetry spike (port vs loopback WebSocket)
 
 - Branch `p2n3-live-telemetry-spike` from `5b66e565`. Decision in [SENSING_RESEARCH.md](SENSING_RESEARCH.md#spike-result-p2n3-2026-11-25): a binary `WebMessagePort`, not a loopback WebSocket.

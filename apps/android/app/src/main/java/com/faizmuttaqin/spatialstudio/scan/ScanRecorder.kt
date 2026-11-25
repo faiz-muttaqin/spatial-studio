@@ -56,6 +56,9 @@ class ScanRecorder(
     private val continuity = PoseContinuity()
     private val motion = MotionGuard()
     val coverage = CoverageGrid()
+
+    /** Live edge model (R7): fed from the plane snapshot a few times a second, computed off the GL thread. */
+    val edges = LiveEdges()
     private val coverageDepthGate = IntervalGate(COVERAGE_DEPTH_INTERVAL_NS)
     private val guidanceGate = IntervalGate(GUIDANCE_INTERVAL_NS)
     private val poseJumps = Collections.synchronizedList(ArrayList<PoseJumpEvent>())
@@ -155,6 +158,7 @@ class ScanRecorder(
     private val planeIds = HashMap<Plane, String>()
     private var lastPointCloudTimestamp = -1L
     private val planeGate = IntervalGate(1_000_000_000L)
+    private val edgeGate = IntervalGate(EDGE_INTERVAL_NS)
     private val pose = FloatArray(16)
     private var stopped = false
 
@@ -223,12 +227,17 @@ class ScanRecorder(
             }
         }
 
-        if (planeGate.ready(timestamp)) {
+        val planesDue = planeGate.ready(timestamp)
+        val edgesDue = edgeGate.ready(timestamp)
+        if (planesDue || edgesDue) {
             val planes = snapshotPlanes(session)
-            latestPlanes = planes
-            planeCount = planes.count { it.trackingState == "tracking" && it.subsumedBy == null }
-            Log.i(TAG, "planes: ${planes.size} known, $planeCount tracking")
-            updateFloor(planes)
+            if (planesDue) {
+                latestPlanes = planes
+                planeCount = planes.count { it.trackingState == "tracking" && it.subsumedBy == null }
+                Log.i(TAG, "planes: ${planes.size} known, $planeCount tracking")
+                updateFloor(planes)
+            }
+            if (edgesDue) edges.submit(planes)
         }
         if (coverageDepthGate.ready(timestamp)) sampleCoverageDepth(frame, camera)
         publishGuidance(timestamp, pose)
@@ -605,6 +614,7 @@ class ScanRecorder(
     @Synchronized
     fun stop() {
         stopped = true
+        edges.shutdown()
     }
 
     /** `metadata.arcore.torch` and `metadata.arcore.motionGuard` (contract v1.3). Call after [captured]. */
@@ -705,6 +715,7 @@ class ScanRecorder(
         const val WARNING_TORCH_CONFIGURE_FAILED = "torch-configure-failed"
         private const val MAX_POSE_JUMPS = 50
         private const val COVERAGE_DEPTH_INTERVAL_NS = 250_000_000L
+        private const val EDGE_INTERVAL_NS = 333_000_000L
         private const val GUIDANCE_INTERVAL_NS = 250_000_000L
         private const val COVERAGE_DEPTH_STRIDE = 6
         private const val MAX_LONG_EDGE = 1920
