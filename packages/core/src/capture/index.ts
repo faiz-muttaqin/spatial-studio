@@ -16,6 +16,15 @@ export {
   transformPositions,
 } from './cloud-summary'
 export {
+  buildDenseCloud,
+  type DenseCloud,
+  type DenseCloudFrame,
+  type DenseCloudOptions,
+  type DenseCloudStats,
+  type RgbImage,
+  sampleWeight,
+} from './dense-cloud'
+export {
   type BeyondEdge,
   type DepthFrameInput,
   type DepthWallBasis,
@@ -41,6 +50,14 @@ export {
   type CarveOptions,
   carveRoomOutline,
 } from './free-space-carving'
+export {
+  buildOrthomap,
+  downscaleOrthomap,
+  type Orthomap,
+  type OrthomapLayer,
+  type OrthomapOptions,
+  type OrthomapSource,
+} from './orthomap'
 export {
   analysePlanes,
   captureDirectionToLevel,
