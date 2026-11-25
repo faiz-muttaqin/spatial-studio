@@ -5,6 +5,7 @@ import {
   AGENT_TOOL_CONTRACTS,
   HOSTED_SERVICE_TOOL_CONTRACTS,
   PROJECT_FILE_TOOL_CONTRACTS,
+  SCAN_TOOL_CONTRACTS,
 } from './index'
 
 // Tool contracts are imported wherever an agent's tools are declared, including the hosted chat's
@@ -52,6 +53,7 @@ test('a shared tool description names no surface', () => {
     ...AGENT_TOOL_CONTRACTS,
     ...HOSTED_SERVICE_TOOL_CONTRACTS,
     ...PROJECT_FILE_TOOL_CONTRACTS,
+    ...SCAN_TOOL_CONTRACTS,
   ])
     expect({ name, surface: description.match(surface)?.[0] }).toEqual({ name, surface: undefined })
 })

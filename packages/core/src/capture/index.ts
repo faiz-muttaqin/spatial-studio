@@ -1,4 +1,26 @@
 export {
+  analysePlanes,
+  captureDirectionToLevel,
+  captureToLevel,
+  type HorizontalPlaneSummary,
+  IDENTITY_SCAN_TRANSFORM,
+  isIdentityTransform,
+  MIN_WALL_LENGTH,
+  type PlaneAnalysis,
+  planePointToWorld,
+  type ScanTransform,
+  type WallSegment,
+} from './plane-analysis'
+export {
+  type EdgeBasis,
+  type EdgeConfidence,
+  proposeRoom,
+  proposeRoomFromPlanes,
+  type RoomProposal,
+  type RoomProposalEdge,
+  type RoomProposalInput,
+} from './room-proposal'
+export {
   ArkitDeviceMotionTrajectorySchema,
   ArkitPointCloudPayloadSchema,
   ArkitSurfaceMeshPayloadSchema,
