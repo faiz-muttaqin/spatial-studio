@@ -117,7 +117,6 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
     private var capabilitiesProbedAtMs = 0L
     private var cameraConfigJson: JsonObject = JsonObject(emptyMap())
     private var sensorOrientationDeg: Int? = null
-    @Volatile private var pendingLightMode: Config.LightEstimationMode? = null
     private var locationDeclined = false
     private var locationDialogShown = false
     private var locationConfirmed = false
@@ -132,6 +131,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
     private var torchProbe: Boolean? = null
     private var torchOn = false
     private var torchConfigureFailed = false
+    private var torchLightDegraded = false
     private val headingPose = FloatArray(16)
     private var installRequested = false
     private var permissionRequested = false
@@ -211,8 +211,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             if (updatingToggles) return@setOnCheckedChangeListener
             sensorRecorder?.setSensorsEnabled(checked)
             recorder?.setLightEnabled(checked, lightMode)
-            // ARCore stops estimating light too; applied on the GL thread before the next frame.
-            pendingLightMode = if (checked) lightMode else Config.LightEstimationMode.DISABLED
+            // Recording only: the ARCore configuration stays fixed once the scan runs (a reconfigure disturbs tracking).
             if (!checked) sensorsText.setText(R.string.scan_sensors_off)
         }
         locationToggle.setOnCheckedChangeListener { _, checked ->
@@ -385,6 +384,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         if (scan.options.torch) {
             torchProbe?.let(scanRecorder::torchProbed)
             if (torchConfigureFailed) scanRecorder.torchConfigureFailed()
+            if (torchLightDegraded) scanRecorder.warnings.add("light-estimation-degraded-for-torch")
             scanRecorder.setTorch(torchOn)
             if (!torchOn) runOnUiThread { Toast.makeText(this, R.string.scan_torch_unsupported, Toast.LENGTH_LONG).show() }
         }
@@ -461,37 +461,52 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                 else -> Config.DepthMode.DISABLED
             }
         }
-        if (scan.options.torch) {
-            // Probed before it is applied: an unsupported torch falls back to off with a message.
-            config.flashMode = Config.FlashMode.TORCH
-            torchProbe = session.isSupported(config)
-            if (torchProbe == true) {
-                torchOn = true
-            } else {
-                config.flashMode = Config.FlashMode.OFF
-            }
-        }
+        // Settle the light estimation mode first (HDR may be unsupported), so the torch probe below runs against
+        // the configuration that will actually be used.
         try {
             session.configure(config)
         } catch (e: UnsupportedConfigurationException) {
-            if (torchOn) {
-                // The torch is the likelier cause: retry without it first.
-                torchOn = false
-                torchConfigureFailed = true
-                config.flashMode = Config.FlashMode.OFF
-                try {
-                    session.configure(config)
-                    lightMode = config.lightEstimationMode
-                    return
-                } catch (again: UnsupportedConfigurationException) {
-                    // Fall through to the light estimation fallback below.
-                }
-            }
             if (config.lightEstimationMode == Config.LightEstimationMode.DISABLED) throw e
             config.lightEstimationMode = Config.LightEstimationMode.AMBIENT_INTENSITY
             session.configure(config)
         }
+        if (scan.options.torch) {
+            torchOn = applyTorch(session, config)
+        }
         lightMode = config.lightEstimationMode
+    }
+
+    /**
+     * Probes and applies the torch against the settled configuration. When the probe fails with the current
+     * light estimation mode, it is retried with ambient intensity (the mode is restored if that fails too).
+     * Never called after the scan starts: a mid-scan reconfigure disturbs tracking and the frame clock.
+     */
+    @Suppress("DEPRECATION") // isSupported is the probe the reference uses; the replacement is not in ARCore 1.57.
+    private fun applyTorch(session: Session, config: Config): Boolean {
+        val originalLight = config.lightEstimationMode
+        config.flashMode = Config.FlashMode.TORCH
+        var supported = session.isSupported(config)
+        var degradedLight = false
+        if (!supported && originalLight != Config.LightEstimationMode.AMBIENT_INTENSITY && originalLight != Config.LightEstimationMode.DISABLED) {
+            config.lightEstimationMode = Config.LightEstimationMode.AMBIENT_INTENSITY
+            supported = session.isSupported(config)
+            degradedLight = supported
+            if (!supported) config.lightEstimationMode = originalLight
+        }
+        torchProbe = supported
+        if (supported) {
+            try {
+                session.configure(config)
+                if (degradedLight) torchLightDegraded = true
+                return true
+            } catch (e: UnsupportedConfigurationException) {
+                torchConfigureFailed = true
+            }
+        }
+        config.flashMode = Config.FlashMode.OFF
+        config.lightEstimationMode = originalLight
+        session.configure(config)
+        return false
     }
 
     private fun setToggles(sensors: SensorRecorder) {
@@ -532,11 +547,6 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         if (displayGeometryDirty && viewportWidth > 0) {
             session.setDisplayGeometry(displayRotation(), viewportWidth, viewportHeight)
             displayGeometryDirty = false
-        }
-        pendingLightMode?.let { mode ->
-            pendingLightMode = null
-            runCatching { session.configure(session.config.apply { lightEstimationMode = mode }) }
-                .onFailure { Log.w(TAG, "Could not change light estimation", it) }
         }
         val frame = try {
             session.update()

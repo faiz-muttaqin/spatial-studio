@@ -370,6 +370,8 @@ class SensorTrustTest {
         assertTrue(result.fromSegment)
         assertEquals(20.0, result.worldYawDeg, 1.0)
         assertTrue(result.confidence > 0.3)
+        assertEquals(0L, result.segmentStartNs)
+        assertTrue(result.segmentEndNs!! > 70_000_000_000L)
         // Agreeing segments use everything and are not flagged.
         val agree = NorthEstimator.estimate(run(0.0, 60, 20.0) + run(65.0, 60, 21.0))!!
         assertFalse(agree.fromSegment)
@@ -377,27 +379,68 @@ class SensorTrustTest {
 
     @Test
     fun segmentsTooShortToEstimateFallBackToTheOverallResult() {
-        val result = NorthEstimator.estimate(run(0.0, 40, 20.0) + run(45.0, 3, 80.0) + run(50.0, 3, 140.0))!!
-        assertTrue(result.sampleCount >= NorthEstimator.MIN_SAMPLES)
+        // Two 3 s segments (15 samples each) beside a 40 s one: all three count as segments, they disagree, and the
+        // well supported one is reported with its time span.
+        val samples = run(0.0, 40, 20.0) + run(45.0, 3, 80.0) + run(50.0, 3, 140.0)
+        val result = NorthEstimator.estimate(samples)!!
+        assertFalse(result.segmentsAgree)
+        assertTrue(result.fromSegment)
+        assertEquals(20.0, result.worldYawDeg, 1.0)
+        assertEquals(samples.first().timestampNs, result.segmentStartNs)
+        assertEquals(run(0.0, 40, 20.0).last().timestampNs, result.segmentEndNs)
+    }
+
+    private class Feed(val c: ClockCalibrator) {
+        var frame = 1_000_000_000L
+        fun feed(n: Int, delayNs: Long) = repeat(n) { frame += 33_000_000L; c.add(frame, frame + delayNs) }
     }
 
     @Test
-    fun aRollingClockCalibratorDropsOutOnABaseShiftAndRecovers() {
-        val c = ClockCalibrator(rolling = true)
-        var frame = 1_000_000_000L
-        fun feed(n: Int, delayNs: Long) = repeat(n) { frame += 33_000_000L; c.add(frame, frame + delayNs) }
-        feed(30, 40_000_000L)
-        assertEquals(ClockCalibrator.State.COMPARABLE, c.state)
-        // A reconfigure shifts the frame timestamps' base: readings now look seconds old.
-        feed(1, 3_000_000_000L)
-        assertEquals(ClockCalibrator.State.MISMATCH, c.state)
-        assertEquals(1, c.resets)
-        // Back on the boot clock: a full clean window is needed before heading pairing resumes.
-        feed(29, 40_000_000L)
-        assertEquals(ClockCalibrator.State.MISMATCH, c.state)
-        feed(1, 40_000_000L)
-        assertEquals(ClockCalibrator.State.COMPARABLE, c.state)
-        assertTrue(c.everComparable)
+    fun aSingleLateReadingDoesNotResetTheRollingClock() {
+        val f = Feed(ClockCalibrator(rolling = true))
+        f.feed(30, 40_000_000L)
+        assertEquals(ClockCalibrator.State.COMPARABLE, f.c.state)
+        // A GC pause: one reading 600 ms late, then normal again.
+        f.feed(1, 640_000_000L)
+        f.feed(10, 40_000_000L)
+        assertEquals(ClockCalibrator.State.COMPARABLE, f.c.state)
+        assertEquals(0, f.c.resets)
+        // Four late readings in a row are still not a shift; the fifth consecutive one is.
+        f.feed(4, 640_000_000L)
+        f.feed(1, 40_000_000L)
+        assertEquals(ClockCalibrator.State.COMPARABLE, f.c.state)
+        assertEquals(0, f.c.resets)
+    }
+
+    @Test
+    fun aSustainedBaseShiftIsAdoptedWithItsOffset() {
+        val f = Feed(ClockCalibrator(rolling = true))
+        f.feed(30, 40_000_000L)
+        // A reconfigure shifts the frame timestamps' base by 3 s and it stays shifted.
+        f.feed(5, 3_040_000_000L)
+        assertEquals(ClockCalibrator.State.MISMATCH, f.c.state)
+        assertEquals(1, f.c.resets)
+        // Until 30 steady readings arrive at the new delay, headings are not paired.
+        f.feed(28, 3_040_000_000L)
+        assertEquals(ClockCalibrator.State.MISMATCH, f.c.state)
+        f.feed(3, 3_040_000_000L)
+        assertEquals(ClockCalibrator.State.COMPARABLE, f.c.state)
+        assertEquals(3_000_000_000L, f.c.offsetNs)
+        assertEquals(1, f.c.resets)
+        // Staying on the new base is steady.
+        f.feed(50, 3_040_000_000L)
+        assertEquals(ClockCalibrator.State.COMPARABLE, f.c.state)
+        assertTrue(f.c.everComparable)
+    }
+
+    @Test
+    fun aJitteryShiftWaitsForASteadyWindow() {
+        val f = Feed(ClockCalibrator(rolling = true))
+        f.feed(30, 40_000_000L)
+        f.feed(5, 3_040_000_000L)
+        // Alternating delays 300 ms apart never form a steady window.
+        repeat(40) { f.feed(1, if (it % 2 == 0) 3_040_000_000L else 3_340_000_000L) }
+        assertEquals(ClockCalibrator.State.MISMATCH, f.c.state)
     }
 
     @Test
