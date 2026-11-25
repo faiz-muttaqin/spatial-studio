@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { PointCloudPayloadSchema } from './schema'
+import { TrueNorthSchema } from './sensor-streams'
 
 /**
  * Payloads of the scan-bundle streams in `docs/spatial-studio/CAPTURE_CONTRACT.md`.
@@ -259,6 +260,8 @@ export const ScanBundleMetadataSchema = z
     warnings: z.array(z.string()),
     /** Present when the bundle has poses. */
     camera: CapturePoseConventionSchema.optional(),
+    /** Present when enough compass samples exist (contract v1.1). */
+    trueNorth: TrueNorthSchema.optional(),
   })
   .loose()
 

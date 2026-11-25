@@ -10,7 +10,12 @@ import java.io.File
 object TestBundles {
     const val SESSION_ID = "0f8fad5b-d9cb-469f-a165-70867728950e"
 
-    fun write(dir: File, sessionId: String = SESSION_ID): BundleInput {
+    fun write(
+        dir: File,
+        sessionId: String = SESSION_ID,
+        sensors: SensorCapture? = null,
+        lightEstimates: List<LightRecord> = emptyList(),
+    ): BundleInput {
         File(dir, "keyframes").mkdirs()
         File(dir, "depth").mkdirs()
         File(dir, "keyframes/kf-0001.jpg").writeBytes(byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 1, 2, 3))
@@ -66,6 +71,8 @@ object TestBundles {
             startTimestampNs = 1_000_000_000L,
             sensorOrientationDeg = 90,
             arcore = buildJsonObject { put("depthKind", "raw") },
+            sensors = sensors,
+            lightEstimates = lightEstimates,
         )
     }
 }

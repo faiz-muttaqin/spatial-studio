@@ -60,6 +60,7 @@ export function NativeScan({
   const [earlier, setEarlier] = useState<ScanListEntry[]>([])
   const [busy, setBusy] = useState<'start' | 'upload' | 'discard' | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
+  const [location, setLocation] = useState(false)
 
   useEffect(
     () =>
@@ -100,7 +101,7 @@ export function NativeScan({
       setEvents({})
       const projectId = onBeforeStart()
       try {
-        const result = await client.startScan({ projectId, options: { depth } })
+        const result = await client.startScan({ projectId, options: { depth, location } })
         setSessionId(result.sessionId)
         onStarted(result.sessionId)
       } catch (error) {
@@ -142,6 +143,28 @@ export function NativeScan({
             'The companion app records pose, planes, depth and keyframes with ARCore, then uploads them to this site.',
         })}
       </p>
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          checked={location}
+          className="mt-1"
+          disabled={disabled || busy !== null || sessionId !== null}
+          onChange={(event) => setLocation(event.target.checked)}
+          type="checkbox"
+        />
+        <span>
+          {i18n._({
+            id: 'app.scan.native.location',
+            message: 'Record approximate location',
+          })}
+          <span className="block text-muted-foreground text-xs">
+            {i18n._({
+              id: 'app.scan.native.locationHint',
+              message:
+                'Off by default. The location is saved with the scan and used to correct the compass to true north when the scan is processed. The phone asks for permission first.',
+            })}
+          </span>
+        </span>
+      </label>
       <button
         className={cn(PRIMARY_PILL, 'h-11 w-full')}
         disabled={disabled || busy !== null || sessionId !== null}

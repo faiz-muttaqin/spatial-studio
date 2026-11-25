@@ -4,11 +4,11 @@
 
 | Phase | State | Next / blocker |
 |---|---|---|
-| P1 | Gate passed except deploy freshness | #1 merged; MCP read/write on the deployment verified 2026-11-25 (below). Deployed build still `96de268` while `main` moved on: owner to check the VM poller. Remaining: license inventory |
-| P2 | P2.1 merged (#3) | `/scan` live once deployed; next: phone run on the deployment, then P2.2 WebXR capture session |
-| P2N | v1 merged (#4) | Install the CI APK on the owner's phone and scan a room; P2N.2 sensors and P2N.3 telemetry spike per [SENSING_RESEARCH.md](SENSING_RESEARCH.md) |
-| P3 | P3a in PR | `CaptureRuntime` mounted and scan evidence panel (branch `fix/friendly-allen-309407`); next: P3b scan-to-room proposal |
-| P4 | P4a next | MCP tools that read scan bundles and propose a room for user verification |
+| P1 | Gate passed | #1 merged; MCP read/write verified on the deployment; the VM auto-deploys `main` (seen updating on 2026-11-25). Remaining: license inventory |
+| P2 | P2.1 merged (#3), live | Next: P2.2 WebXR capture session |
+| P2N | v1 merged (#4); P2N.2 merged (#5) | Real-device scans 2026-11-25 in [DEVICE_TESTS.md](DEVICE_TESTS.md); confirm the plane and true-north fixes on the device; P2N.3 telemetry spike per [SENSING_RESEARCH.md](SENSING_RESEARCH.md) |
+| P3 | P3a merged (#7) | Next: P3b scan-to-room review in the editor; glass and mirror boundaries per [GLASS_AND_MIRRORS.md](GLASS_AND_MIRRORS.md) |
+| P4 | P4a merged (#6) | Scan tools on `/mcp` after deploy; next: P4b skills for rebuilding a room from a scan |
 | P5/P6 | Deferred | Optional after MVP |
 
 Next actionable work: see the latest dated entry below. For each session record date / phase / branch / PR / base SHA / files / commands with actual results / device evidence / blockers / next task.
@@ -73,6 +73,20 @@ Branch `p1/fork-publishing-guards` from `96de268`. Guard release, registry publi
 - Added [SENSING_RESEARCH.md](SENSING_RESEARCH.md) (owner request): draft capture phase, orientation, true north, location and sun, light, barometer, radio-signal research, live telemetry transport options, privacy. Radio-signal sensing moved from excluded to optional research.
 - Next, in parallel on separate branches: P4a MCP scan tools with a room proposal; mount capture layers and a scan evidence panel in the editor; P2N.2 Android sensor capture (contract v1.1 first).
 
+### 2026-11-25: P2N.2 sensor streams (branch `fix/priceless-driscoll-c2760f`)
+
+- Contract v1.1 in [CAPTURE_CONTRACT.md](CAPTURE_CONTRACT.md): `device-orientation`, `heading`, `geolocation` (opt-in), `light-estimate`, `barometer`, manifest `metadata.trueNorth`, and `scan.start` options `sensors` (default true) and `location` (default false). Zod schemas in `packages/core/src/capture/sensor-streams.ts`. The Android app records them with platform APIs only; approximate-location permission is requested only when `location` is true. Web `/scan` has a location toggle (off by default); new strings are AI drafts awaiting review in fr, es, ja and zh-CN.
+- Results: `./gradlew :app:testDebugUnitTest :app:assembleDebug :app:lintDebug` passes (118 unit tests, 0 failures; 31 new: quaternion, yaw extraction, circular median and confidence, declination use, bounded series, light maths, bundle writer). `bun test src/capture` in `packages/core` 47 pass; core `check-types` clean; `bun test lib/scan` in `apps/editor` 51 pass; `bun run check` and `bun run i18n:check` pass. A bundle written by the Kotlin writer from synthetic data parses with the new Zod schemas (script run once, not in CI). `bun run test` in `apps/editor` has failures unrelated to this change because `@pascal-app/mcp`, `nodes` and `viewer` are not built in this worktree.
+- Device evidence: debug APK installed and launched on a Samsung SM-S937B (no crash). `dumpsys sensorservice` lists rotation vector and pressure sensors. Google Play Services for AR is not installed on that phone, so no ARCore scan ran: sensor recording, HUD toggles, the location permission flow, true-north accuracy and ARCore light estimates are **untested on a device**. The `mainLightDirection` sign convention and clock alignment of sensor and camera timestamps are unverified.
+- Next: install ARCore on the phone, scan a room facing a wall of known bearing and record the heading error (research target 10 degrees or better); then P3b can offer `trueNorth` as a `northRotation` suggestion.
+
+### 2026-11-25: P2N.2 review round (same branch and PR)
+
+- Privacy: heading samples are recorded magnetic-only; the declination is added at finalisation from retained fixes, so switching location off removes it from samples and `trueNorth`. Enable checks run under the same lock as `clear()`. The scan screen shows one native confirmation per scan before the permission prompt.
+- Clocks: sensor and ARCore frame timestamps are each compared with `elapsedRealtimeNanos()` at arrival; `timestampSource: "realtime"` and heading samples are written only when both are verified, else the warning `sensor-clock-not-comparable`.
+- True north: confidence now includes the bearing range covered, 2 s windows for autocorrelated samples, a 0.6 cap below high magnetometer accuracy, and `segmentsAgree` (cap 0.3, warning `true-north-segments-disagree`) for world-frame jumps after tracking loss. Contract notes that P3b adds the scan's alignment rotation to `worldYawDeg`. Web hint reworded (no sun claim); fr, es, ja and zh-CN drafts updated.
+- Real-device findings from the first v1 scan: point cloud filtered at acquisition (within 8 m of the camera, confidence at least 0.5, recorded in stream metadata); the first progress event no longer waits (HUD showed "Starting camera…" because of a timestamp overflow, now "Move the phone slowly to start tracking"); plane counts are logged. `latestPlanes` and `planeCount` were already `@Volatile`. The missing planes in that scan are not explained: see the device result below. Upload of 720 artifacts took about 11 minutes because of the 90 requests per minute pacing; left as is.
+
 ### 2026-11-25: P3a capture layers and scan evidence panel (branch `fix/friendly-allen-309407`)
 
 - Base `678c672`. `Editor` takes an optional `captureSourceResolver`; it mounts the viewer's `CaptureRuntime` in the scene content (the viewer stays editor-agnostic) and shares the resolver with panels through context. `apps/editor` passes `createCaptureSourceResolver()` (`apps/editor/lib/capture`): one cached `createHttpCaptureSource` per session, `credentials: 'same-origin'`, manifest URLs and artifact URIs resolved against the manifest URL, anything off this origin refused. Without the prop nothing changes, so old scenes and embeds load as before; the `scan` schema is untouched.
@@ -99,3 +113,10 @@ Branch `p1/fork-publishing-guards` from `96de268`. Guard release, registry publi
   - Typed width, length and height are real metres (node scale is not applied to them); a plane outline that disagrees with the typed size is an unknown; a zero or negative node scale places nothing. Stream coordinate frame transforms are applied to planes, keyframe poses, point cloud and path, the way the viewer resolves them; an undefined frame is flagged.
   - `read_scan`: capture-provided text is capped and labelled, point cloud and walked path are summarised by percentile with the share of points far from the path (no raw points); artifact size is checked before reading (`DiskArtifactStore.size`); `list_scans` opens at most 4 manifests at a time.
   - Checks: `bun run check` exit 0 (169 warnings, unchanged); core `check-types` and `tsc --build` for core and mcp exit 0; `bun test` core 7724 pass, 0 fail; mcp 1589 pass, 0 fail; `bun run skills:validate` exit 0. Run against a copy of the first real phone bundle (no plane set): the tools read it and the proposal returns `none` with unknowns. The bundle itself is not in the repo.
+
+### 2026-11-25: P2N.2 second real scan: planes and true north (same PR)
+
+- Evidence from the owner's second scan (bundle held by the main session): planes empty, no `heading` stream, no `trueNorth`, 4,766 orientation samples with `timestampSource: "realtime"`, 2 location fixes.
+- Planes: root cause found by code reading, not yet confirmed on a device. The once-per-second plane snapshot compared `timestamp - Long.MIN_VALUE`, which overflows, so it never ran and `latestPlanes` stayed empty in every scan (the same overflow made the first HUD progress event wait). Both now use an `IntervalGate` with unit tests; the plane count is logged each second.
+- True north: each frame was paired with the newest orientation reading, which is newer than the camera image by the pipeline delay (about 100 ms or more), so the 100 ms age check rejected frames. The nearest reading in a short history is now used with a 40 ms limit. When no north is produced the bundle carries `true-north-diagnostics` with the reason and frame counts (paired, pair-age, camera-steep, world-steep, no-orientation, clock states). Unit tests cover the pairing, but it is not confirmed on a device.
+- Location: it can only be recorded when the page's `scan.start` sets `location: true` or the user ticks the HUD toggle (then the system prompt); no other path enables it. Two fixes in that scan therefore mean the toggle was ticked, or the page sent the option.

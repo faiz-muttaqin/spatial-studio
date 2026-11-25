@@ -1544,6 +1544,26 @@ msgstr "La aplicación complementaria informó de un error: {code}"
 msgid "app.scan.native.hint"
 msgstr "La aplicación complementaria registra la pose, los planos, la profundidad y los fotogramas clave con ARCore y después los sube a este sitio."
 
+# Source-Hash: 3177d0e4a4ca7c04
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Record approximate location"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.location"
+msgstr "Registrar la ubicación aproximada"
+
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Off by default. The location is saved with the scan and used to correct the compass to true north when the scan is processed. The phone asks for permission first."
+# Source-Hash: 321543d4576859a0
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.locationHint"
+msgstr "Desactivado por defecto. La ubicación se guarda con el escaneo y sirve para corregir la brújula al norte verdadero cuando se procesa el escaneo. El teléfono pide permiso primero."
+
 # Source-Hash: e4e15da3db73b81d
 # Review: required
 # AI-Provider: claude-code

@@ -55,4 +55,12 @@ class VoxelDownsamplerTest {
         assertTrue(xs.min() < 0.1f)
         assertTrue(xs.max() > 0.9f)
     }
+
+    @Test
+    fun dropsPointsFartherThanTheLimitFromTheCamera() {
+        val voxels = VoxelDownsampler(initialVoxelM = 0.1)
+        // Camera at (10, 0, 0): the first point is 3 m away, the second 9 m, the third exactly at 8 m.
+        voxels.addPackedWithin(floatArrayOf(13f, 0f, 0f, 0.9f, 1f, 0f, 0f, 0.9f, 10f, 0f, 8f, 0.9f), 3, 10f, 0f, 0f, 8f)
+        assertEquals(2, voxels.size)
+    }
 }

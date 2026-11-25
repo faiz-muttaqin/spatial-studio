@@ -162,6 +162,24 @@ describe('native bridge client', () => {
     expect(seen).toHaveLength(3)
   })
 
+  test('scan.start passes the sensor and location opt-ins unchanged', async () => {
+    const bridge = new FakeBridge()
+    const client = createNativeBridgeClient(bridge, { newId: sequentialIds() })
+    let params: unknown
+    bridge.onRequest = (request) => {
+      params = request.params
+      bridge.reply(request.id, { sessionId: 'scan-1' })
+    }
+    await client.startScan({
+      projectId: 'p1',
+      options: { depth: true, location: true, sensors: false },
+    })
+    expect(params).toEqual({
+      projectId: 'p1',
+      options: { depth: true, location: true, sensors: false },
+    })
+  })
+
   test('progress of the uploading session keeps a long upload alive past the idle timeout', async () => {
     const bridge = new FakeBridge()
     const client = createNativeBridgeClient(bridge, { newId: sequentialIds() })
