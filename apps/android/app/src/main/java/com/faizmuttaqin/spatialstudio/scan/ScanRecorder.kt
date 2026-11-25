@@ -79,8 +79,7 @@ class ScanRecorder(
     private val pending = AtomicInteger()
     private val planeIds = HashMap<Plane, String>()
     private var lastPointCloudTimestamp = -1L
-    private var lastPlaneSnapshotNs = Long.MIN_VALUE
-    private var lastLoggedPlanes = -1
+    private val planeGate = IntervalGate(1_000_000_000L)
     private val pose = FloatArray(16)
     private var stopped = false
 
@@ -124,15 +123,11 @@ class ScanRecorder(
             }
         }
 
-        if (timestamp - lastPlaneSnapshotNs >= 1_000_000_000L) {
-            lastPlaneSnapshotNs = timestamp
+        if (planeGate.ready(timestamp)) {
             val planes = snapshotPlanes(session)
             latestPlanes = planes
             planeCount = planes.count { it.trackingState == "tracking" && it.subsumedBy == null }
-            if (planes.size != lastLoggedPlanes) {
-                lastLoggedPlanes = planes.size
-                Log.i(TAG, "planes: ${planes.size} known, $planeCount tracking")
-            }
+            Log.i(TAG, "planes: ${planes.size} known, $planeCount tracking")
         }
 
         if (selector.limitReached) {

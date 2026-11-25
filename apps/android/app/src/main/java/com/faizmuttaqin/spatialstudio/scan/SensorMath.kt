@@ -120,8 +120,17 @@ object HeadingMath {
         return Angles.wrap360(Math.toDegrees(atan2(fx, -fz)))
     }
 
+    /** Why [sample] would return null for these inputs, or "ok". Used to explain an empty heading stream. */
+    fun diagnose(frameTimestampNs: Long, pose: FloatArray, orientation: OrientationReading?, maxAgeNs: Long): String = when {
+        orientation == null -> "no-orientation"
+        abs(frameTimestampNs - orientation.timestampNs) > maxAgeNs -> "pair-age"
+        cameraAzimuthDeg(orientation.q) == null -> "camera-steep"
+        worldBearingDeg(pose) == null -> "world-steep"
+        else -> "ok"
+    }
+
     /**
-     * Pairs the latest orientation with a frame. [maxAgeNs] is null when the sensor and camera
+     * Pairs an orientation with a frame. [maxAgeNs] is null when the sensor and camera
      * clocks are not known to match, in which case the age is not checked.
      */
     fun sample(
@@ -199,6 +208,17 @@ object NorthEstimator {
     private const val MIN_SEGMENT_SAMPLES = 10
     private const val SEGMENT_DISAGREE_DEG = 15.0
     private const val MAD_TO_SIGMA = 1.4826
+
+    /** Why [estimate] has no result: a short reason for the bundle's warnings. */
+    fun unavailableReason(samples: List<HeadingData>): String {
+        if (samples.isEmpty()) return "no-heading-samples"
+        val usable = samples.count(::isUsable)
+        return when {
+            usable >= MIN_SAMPLES -> "estimator"
+            usable < samples.size / 2 -> "magnetometer-accuracy-low:usable=$usable/${samples.size}"
+            else -> "too-few-samples:usable=$usable/$MIN_SAMPLES"
+        }
+    }
 
     fun isUsable(sample: HeadingData): Boolean =
         sample.magnetometerAccuracy >= MIN_MAGNETOMETER_ACCURACY &&
@@ -365,4 +385,50 @@ class BoundedSeries<T>(private val max: Int, private val minIntervalUnits: Long)
         lastUnits = Long.MIN_VALUE
         truncated = false
     }
+}
+
+/** Passes at most once per [intervalNs]; the first call always passes (no subtraction from a sentinel, which overflows). */
+class IntervalGate(private val intervalNs: Long) {
+    private var last = 0L
+    private var started = false
+
+    fun ready(timestampNs: Long): Boolean {
+        if (started && timestampNs - last < intervalNs) return false
+        started = true
+        last = timestampNs
+        return true
+    }
+}
+
+/** The most recent orientation readings, so a frame can be paired with the reading nearest its capture time. */
+class OrientationHistory(private val capacity: Int = 128) {
+    private val readings = ArrayDeque<OrientationReading>()
+
+    @Synchronized
+    fun add(reading: OrientationReading) {
+        if (readings.size >= capacity) readings.removeFirst()
+        readings.addLast(reading)
+    }
+
+    @Synchronized
+    fun nearest(timestampNs: Long): OrientationReading? = readings.minByOrNull { abs(it.timestampNs - timestampNs) }
+
+    @Synchronized
+    fun clear() = readings.clear()
+}
+
+/** Counts of frames dropped before they became heading samples, by reason. */
+class HeadingDiagnostics {
+    private val counts = java.util.TreeMap<String, Int>()
+
+    @Synchronized
+    fun count(reason: String) {
+        counts[reason] = (counts[reason] ?: 0) + 1
+    }
+
+    @Synchronized
+    fun summary(): String = counts.entries.joinToString(" ") { "${it.key}=${it.value}" }
+
+    @Synchronized
+    fun clear() = counts.clear()
 }

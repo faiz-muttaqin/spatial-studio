@@ -39,6 +39,8 @@ class SensorCapture(
     /** `realtime` when sensor and camera timestamps share a clock, else `unknown`. */
     val timestampSource: String,
     val warnings: List<String>,
+    /** Heading frame counts by outcome and the clock states, for explaining an empty or weak heading stream. */
+    val diagnostics: String = "",
 )
 
 /**
@@ -64,7 +66,8 @@ class SensorRecorder(
     @Volatile private var locationOn = location
     @Volatile private var running = false
 
-    @Volatile private var latestOrientation: OrientationReading? = null
+    private val history = OrientationHistory()
+    private val diagnostics = HeadingDiagnostics()
     @Volatile private var magnetometerAccuracy = 0
     private val frameClock = ClockCalibrator()
     private val sensorClock = ClockCalibrator()
@@ -117,7 +120,8 @@ class SensorRecorder(
             orientation.clear()
             heading.clear()
             pressure.clear()
-            latestOrientation = null
+            history.clear()
+            diagnostics.clear()
             live = null
         }
         if (running) applyRegistrations()
@@ -147,7 +151,13 @@ class SensorRecorder(
         frameClock.add(frameTimestampNs, elapsedNs)
         if (frameClock.state != ClockCalibrator.State.COMPARABLE || sensorClock.state != ClockCalibrator.State.COMPARABLE) return
         if (!heading.accepts(frameTimestampNs)) return
-        val reading = latestOrientation ?: return
+        // The reading nearest the frame's capture time, not the newest: the camera image is older than the latest sensor event.
+        val reading = history.nearest(frameTimestampNs)
+        diagnostics.count("frames")
+        if (reading == null) {
+            diagnostics.count("no-orientation")
+            return
+        }
         // Magnetic only: the declination comes from retained fixes at finalisation, so switching location off removes it.
         val sample = HeadingMath.sample(
             frameTimestampNs = frameTimestampNs,
@@ -156,7 +166,12 @@ class SensorRecorder(
             magnetometerAccuracy = magnetometerAccuracy,
             declinationDeg = null,
             maxAgeNs = MAX_PAIR_AGE_NS,
-        ) ?: return
+        )
+        if (sample == null) {
+            diagnostics.count(HeadingMath.diagnose(frameTimestampNs, pose, reading, MAX_PAIR_AGE_NS))
+            return
+        }
+        diagnostics.count("paired")
         live = sample
         heading.offerIf(frameTimestampNs, sample) { sensorsOn }
     }
@@ -182,6 +197,7 @@ class SensorRecorder(
             pressure = pressure.snapshot(),
             timestampSource = if (clocksVerified) "realtime" else "unknown",
             warnings = warnings,
+            diagnostics = "clocks=frame:${frameClock.state},sensor:${sensorClock.state} ${diagnostics.summary()}".trim(),
         )
     }
 
@@ -207,7 +223,7 @@ class SensorRecorder(
         val accuracyDeg = accuracyRad?.takeIf { it.isFinite() && it >= 0f }?.let { Math.toDegrees(it.toDouble()) }
         if (!sensorsOn) return
         sensorClock.add(event.timestamp, SystemClock.elapsedRealtimeNanos())
-        latestOrientation = OrientationReading(event.timestamp, q, accuracyDeg)
+        history.add(OrientationReading(event.timestamp, q, accuracyDeg))
         orientation.offerIf(event.timestamp, DeviceOrientationData(event.timestamp, q, accuracyDeg)) { sensorsOn }
     }
 
@@ -320,7 +336,8 @@ class SensorRecorder(
         private const val PRESSURE_PERIOD_US = 500_000
         private const val LOCATION_INTERVAL_MS = 10_000L
         private const val MAX_LAST_KNOWN_AGE_MS = 5 * 60 * 1000L
-        private const val MAX_PAIR_AGE_NS = 100_000_000L
+        // Sensors run at 50 Hz, so the nearest reading is within about 10 ms; allow a little jitter.
+        private const val MAX_PAIR_AGE_NS = 40_000_000L
         private const val MIN_HPA = 300.0
         private const val MAX_HPA = 1100.0
     }

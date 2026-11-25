@@ -100,7 +100,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
     private var viewportWidth = 0
     private var viewportHeight = 0
     @Volatile private var displayGeometryDirty = false
-    private var lastProgressNs = Long.MIN_VALUE
+    private val progressGate = IntervalGate(PROGRESS_INTERVAL_NS)
     private val view = FloatArray(16)
     private val projection = FloatArray(16)
     private val finalizer = Executors.newSingleThreadExecutor()
@@ -474,8 +474,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             camera.getProjectionMatrix(projection, 0, 0.1f, 100f)
             overlay.draw(recorder.overlayPoints, recorder.overlayCount, view, projection)
         }
-        if (lastProgressNs == Long.MIN_VALUE || frame.timestamp - lastProgressNs >= PROGRESS_INTERVAL_NS) {
-            lastProgressNs = frame.timestamp
+        if (progressGate.ready(frame.timestamp)) {
             reportProgress(recorder, camera.trackingState, camera.trackingFailureReason)
         }
     }
@@ -589,12 +588,15 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             // Declination is applied here from the retained fixes, never while recording: no fixes, no declination.
             val declination = rawCapture?.let { Declination.fromFixes(it.fixes, AndroidDeclination) }
             val sensorCapture = rawCapture?.let {
-                SensorCapture(it.orientation, Declination.apply(it.heading, declination), it.fixes, it.pressure, it.timestampSource, it.warnings)
+                SensorCapture(it.orientation, Declination.apply(it.heading, declination), it.fixes, it.pressure, it.timestampSource, it.warnings, it.diagnostics)
             }
             if (sensors != null) {
                 if (sensors.sensorsEnabled && !sensors.hasRotationVector) recorder.warnings.add("rotation-vector-unavailable")
                 if (sensors.sensorsEnabled && NorthEstimator.estimate(sensorCapture?.heading.orEmpty()) == null) {
                     recorder.warnings.add("true-north-unavailable")
+                    // The bundle explains itself: why the estimator had nothing, and how heading frames fared.
+                    val reason = NorthEstimator.unavailableReason(sensorCapture?.heading.orEmpty())
+                    recorder.warnings.add("true-north-diagnostics: $reason; ${sensorCapture?.diagnostics.orEmpty()}")
                 }
                 if (sensors.sensorsEnabled && NorthEstimator.estimate(sensorCapture?.heading.orEmpty())?.segmentsAgree == false) {
                     recorder.warnings.add("true-north-segments-disagree")

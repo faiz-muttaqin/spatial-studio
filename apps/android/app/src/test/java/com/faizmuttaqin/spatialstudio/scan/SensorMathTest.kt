@@ -373,4 +373,73 @@ class SensorTrustTest {
         assertEquals(listOf(1), series.snapshot())
         assertTrue(series.accepts(3))
     }
+
+    private fun reading(ts: Long) = OrientationReading(ts, Quaternion.axisAngle(0.0, 0.0, 1.0, 0.0) * Quaternion.axisAngle(1.0, 0.0, 0.0, Math.toRadians(90.0)), null)
+
+    private fun upright(): FloatArray = FloatArray(16).also { it[0] = 1f; it[5] = 1f; it[10] = 1f; it[15] = 1f }
+
+    @Test
+    fun intervalGateLetsTheFirstRealTimestampThroughAndThenSpacesCalls() {
+        // A boot-time timestamp of hours: subtracting a Long.MIN_VALUE sentinel would overflow and block the gate for good.
+        val gate = IntervalGate(1_000_000_000L)
+        val start = 7_200_000_000_000L
+        assertTrue(gate.ready(start))
+        assertFalse(gate.ready(start + 900_000_000L))
+        assertTrue(gate.ready(start + 1_000_000_000L))
+        assertFalse(gate.ready(start + 1_500_000_000L))
+        assertTrue(gate.ready(start + 2_100_000_000L))
+    }
+
+    @Test
+    fun aFrameIsPairedWithTheReadingNearestItsCaptureTimeNotTheNewest() {
+        val history = OrientationHistory()
+        val frame = 10_000_000_000L
+        // Readings every 20 ms, the newest 130 ms after the frame (camera pipeline delay).
+        for (i in -20..6) history.add(reading(frame + i * 20_000_000L))
+        val nearest = history.nearest(frame)!!
+        assertEquals(frame, nearest.timestampNs)
+        val newest = reading(frame + 130_000_000L)
+        // The old pairing (newest reading) would have been dropped by the age check; the nearest one passes.
+        assertNull(HeadingMath.sample(frame, upright(), newest, 3, null, 40_000_000L))
+        assertNotNull(HeadingMath.sample(frame, upright(), nearest, 3, null, 40_000_000L))
+    }
+
+    @Test
+    fun historyIsBounded() {
+        val history = OrientationHistory(capacity = 4)
+        for (i in 0 until 10) history.add(reading(i * 1_000L))
+        assertEquals(6_000L, history.nearest(0L)!!.timestampNs)
+        assertNull(OrientationHistory().nearest(1L))
+    }
+
+    @Test
+    fun diagnoseNamesTheRejection() {
+        val frame = 5_000_000_000L
+        val q = reading(frame)
+        assertEquals("no-orientation", HeadingMath.diagnose(frame, upright(), null, 40_000_000L))
+        assertEquals("pair-age", HeadingMath.diagnose(frame + 100_000_000L, upright(), q, 40_000_000L))
+        assertEquals("ok", HeadingMath.diagnose(frame, upright(), q, 40_000_000L))
+        val flat = OrientationReading(frame, Quaternion(0.0, 0.0, 0.0, 1.0), null)
+        assertEquals("camera-steep", HeadingMath.diagnose(frame, upright(), flat, 40_000_000L))
+        val looksDown = upright().also { it[9] = 1f; it[10] = 0f }
+        assertEquals("world-steep", HeadingMath.diagnose(frame, looksDown, q, 40_000_000L))
+    }
+
+    @Test
+    fun unavailableReasonsExplainWhyThereIsNoNorth() {
+        assertEquals("no-heading-samples", NorthEstimator.unavailableReason(emptyList()))
+        val lowAccuracy = run(0.0, 10, 0.0, accuracy = 1)
+        assertTrue(NorthEstimator.unavailableReason(lowAccuracy).startsWith("magnetometer-accuracy-low"))
+        val few = run(0.0, 2, 0.0)
+        assertTrue(NorthEstimator.unavailableReason(few).startsWith("too-few-samples"))
+    }
+
+    @Test
+    fun diagnosticsSummaryIsStable() {
+        val d = HeadingDiagnostics()
+        d.count("paired"); d.count("pair-age"); d.count("pair-age")
+        assertEquals("pair-age=2 paired=1", d.summary())
+        d.clear()
+        assertEquals("", d.summary())
+    }
 }
