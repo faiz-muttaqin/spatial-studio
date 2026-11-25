@@ -1,4 +1,5 @@
 import { DiskArtifactStore, resolveDefaultDatabasePath } from '@pascal-app/mcp/storage'
+import { artifactMediaType } from '@/lib/artifact-media-type'
 import {
   guardSceneApiRequest,
   sceneApiJson,
@@ -22,12 +23,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ sha2
     return sceneApiJson(request, { error: 'invalid_hash' }, { status: 400 })
   const bytes = await new DiskArtifactStore(resolveDefaultDatabasePath()).read(sha256)
   if (!bytes) return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
-  const glb = new TextDecoder().decode(bytes.subarray(0, 4)) === 'glTF'
   return withSceneApiHeaders(
     request,
     new Response(bytes as BodyInit, {
       headers: {
-        'Content-Type': glb ? 'model/gltf-binary' : 'text/plain; charset=utf-8',
+        'Content-Type': artifactMediaType(bytes),
         'Cache-Control': 'private, max-age=31536000, immutable',
       },
     }),
