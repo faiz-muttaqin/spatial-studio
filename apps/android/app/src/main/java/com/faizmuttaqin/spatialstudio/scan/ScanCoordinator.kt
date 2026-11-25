@@ -46,7 +46,8 @@ object ScanCoordinator {
      */
     const val UPLOAD_STALE_MS = 90_000L
 
-    class ActiveScan(val sessionId: String, val projectId: String?, val options: ScanOptions)
+    /** [liveOrigin]: the trusted origin of the page that started the scan; the live preview panel loads from it. */
+    class ActiveScan(val sessionId: String, val projectId: String?, val options: ScanOptions, val liveOrigin: String? = null)
 
     fun interface Listener {
         fun onScanEvent(event: String, data: JsonObject)

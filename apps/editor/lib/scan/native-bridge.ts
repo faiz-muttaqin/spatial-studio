@@ -116,6 +116,8 @@ export type ScanStartOptions = {
   sensors?: boolean
   /** Contract v1.1: approximate location for geolocation and compass declination. Off unless set. */
   location?: boolean
+  /** P2N.3: show the live preview panel on the scan screen. Off unless set. The recording does not depend on it. */
+  livePreview?: boolean
 }
 
 const ReplySchema = z.union([

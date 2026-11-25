@@ -1374,6 +1374,62 @@ msgstr "アップロードに失敗しました。何も追加されていない
 msgid "app.scan.intro"
 msgstr "このスマートフォンで写真と寸法を記録します。部屋を再構築するための参照レイヤーとしてプロジェクトに保存されます。"
 
+# English: "Floor covered {percent}%"
+# Source-Hash: 2d7d77c9c235dd59
+# Review: required
+#: apps/editor/app/scan/live/live-view.tsx
+#, fuzzy
+msgid "app.scan.live.coverage"
+msgstr "床の取得率 {percent}%"
+
+# English: "The preview could not connect"
+# Source-Hash: cb5e84c098e62d2c
+# Review: required
+#: apps/editor/app/scan/live/live-view.tsx
+#, fuzzy
+msgid "app.scan.live.failed"
+msgstr "プレビューに接続できませんでした"
+
+# English: "The live preview is shown inside the companion app while scanning."
+# Source-Hash: 66768389d06c4aab
+# Review: required
+#: apps/editor/app/scan/live/live-view.tsx
+#, fuzzy
+msgid "app.scan.live.noApp"
+msgstr "ライブプレビューは、スキャン中にコンパニオンアプリ内で表示されます。"
+
+# English: "Live preview"
+# Source-Hash: dd3cd056185905ac
+# Review: required
+#: apps/editor/app/scan/live/live-view.tsx
+#, fuzzy
+msgid "app.scan.live.open"
+msgstr "ライブプレビュー"
+
+# English: "Paused"
+# Source-Hash: b0c0000eeb008e92
+# Review: required
+#: apps/editor/app/scan/live/live-view.tsx
+#, fuzzy
+msgid "app.scan.live.paused"
+msgstr "一時停止中"
+
+# English: "{frames} frames, {kb} KB"
+# Source-Hash: f9a1c6d607daa91d
+# Review: required
+#: apps/editor/app/scan/live/live-view.tsx
+#, fuzzy
+msgid "app.scan.live.stats"
+msgstr "{frames} フレーム、{kb} KB"
+
+# English: "Connecting to the scan"
+# Source-Hash: eaa1aac63a5ce4d0
+# Review: required
+#: apps/editor/app/scan/live/live-view.tsx
+#, fuzzy
+msgid "app.scan.live.waiting"
+msgstr "スキャンに接続しています"
+
 # Source-Hash: ccee46b3fa1542a3
 # Review: required
 # AI-Provider: claude-code
@@ -1551,6 +1607,22 @@ msgstr "コンパニオンアプリがエラーを報告しました: {code}"
 #, fuzzy
 msgid "app.scan.native.hint"
 msgstr "コンパニオンアプリは ARCore で姿勢、平面、深度、キーフレームを記録し、このサイトにアップロードします。"
+
+# English: "Show a live map while scanning"
+# Source-Hash: 4c03e9893226a97d
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.livePreview"
+msgstr "スキャン中にライブマップを表示する"
+
+# English: "Off by default. A small preview of coverage and the room outline appears on the scan screen. It is only a preview; the saved scan is the same either way."
+# Source-Hash: 9afb1cceb0c6a8b8
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.livePreviewHint"
+msgstr "既定ではオフです。スキャン画面に、カバー範囲と部屋の輪郭の小さなプレビューが表示されます。プレビューのみで、保存されるスキャンはどちらの場合も同じです。"
 
 # Source-Hash: 3177d0e4a4ca7c04
 # Review: required

@@ -66,6 +66,7 @@ export function NativeScan({
   const [busy, setBusy] = useState<'start' | 'upload' | 'discard' | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
   const [location, setLocation] = useState(false)
+  const [livePreview, setLivePreview] = useState(false)
 
   useEffect(
     () =>
@@ -121,7 +122,10 @@ export function NativeScan({
       setEvents({})
       const projectId = onBeforeStart()
       try {
-        const result = await client.startScan({ projectId, options: { depth, location } })
+        const result = await client.startScan({
+          projectId,
+          options: { depth, location, livePreview },
+        })
         setSessionId(result.sessionId)
         onStarted(result.sessionId)
       } catch (error) {
@@ -203,6 +207,28 @@ export function NativeScan({
               id: 'app.scan.native.locationHint',
               message:
                 'Off by default. The location is saved with the scan and used to correct the compass to true north when the scan is processed. The phone asks for permission first.',
+            })}
+          </span>
+        </span>
+      </label>
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          checked={livePreview}
+          className="mt-1"
+          disabled={disabled || busy !== null || sessionId !== null}
+          onChange={(event) => setLivePreview(event.target.checked)}
+          type="checkbox"
+        />
+        <span>
+          {i18n._({
+            id: 'app.scan.native.livePreview',
+            message: 'Show a live map while scanning',
+          })}
+          <span className="block text-muted-foreground text-xs">
+            {i18n._({
+              id: 'app.scan.native.livePreviewHint',
+              message:
+                'Off by default. A small preview of coverage and the room outline appears on the scan screen. It is only a preview; the saved scan is the same either way.',
             })}
           </span>
         </span>

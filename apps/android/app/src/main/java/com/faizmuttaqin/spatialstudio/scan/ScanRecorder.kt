@@ -7,6 +7,9 @@ import android.graphics.Rect
 import android.graphics.YuvImage
 import android.media.Image
 import android.util.Log
+import com.faizmuttaqin.spatialstudio.live.LiveFrameType
+import com.faizmuttaqin.spatialstudio.live.LiveFrames
+import com.faizmuttaqin.spatialstudio.live.LiveStream
 import com.google.ar.core.Camera
 import com.google.ar.core.CameraIntrinsics
 import com.google.ar.core.Config
@@ -62,6 +65,9 @@ class ScanRecorder(
     private val resumeRequested = AtomicBoolean(false)
     @Volatile var fastKeyframeSkips = 0
         private set
+
+    /** Set while the live preview is open (P2N.3). Read on the GL thread; frames are dropped when it is null or slow. */
+    @Volatile var live: LiveStream? = null
 
     /** What the HUD shows about coverage and motion; replaced about four times a second. */
     @Volatile var guidance = Guidance()
@@ -229,6 +235,7 @@ class ScanRecorder(
         }
         if (coverageDepthGate.ready(timestamp)) sampleCoverageDepth(frame, camera)
         publishGuidance(timestamp, pose)
+        feedLive(frame, camera, timestamp)
 
         if (selector.limitReached) {
             warnings.add(WARNING_KEYFRAME_LIMIT)
@@ -249,6 +256,64 @@ class ScanRecorder(
         if (decision == KeyframeGate.Decision.CAPTURE) {
             dueSinceNs = null
             captureKeyframe(frame, camera, timestamp)
+        }
+    }
+
+    /**
+     * Preview feed (pose, depth, coverage, planes) at the stream's own rates. Never touches the recording and
+     * never throws: a failed frame is a dropped preview frame.
+     */
+    private fun feedLive(frame: Frame, camera: Camera, timestamp: Long) {
+        val stream = live ?: return
+        try {
+            if (stream.wants(LiveFrameType.POSE, timestamp)) {
+                stream.submit(LiveFrameType.POSE, timestamp, LiveFrames.pose(stream.nextSeq(), timestamp, pose, LiveFrames.TrackingCode.TRACKING))
+            }
+            if (stream.wants(LiveFrameType.DEPTH, timestamp)) liveDepth(stream, frame, camera, timestamp)
+            if (stream.wants(LiveFrameType.COVERAGE, timestamp)) {
+                val (keys, _) = coverage.cells(LiveFrames.MAX_COVERAGE_CELLS)
+                val cells = LongArray(keys.size) { keys[it] }
+                val percent = guidance.floorPercent ?: -1
+                stream.submit(
+                    LiveFrameType.COVERAGE,
+                    timestamp,
+                    LiveFrames.coverage(stream.nextSeq(), timestamp, coverage.cellMetres, coverage.floorY ?: LiveFrames.NO_FLOOR, percent, cells, cells.size),
+                )
+            }
+            if (stream.wants(LiveFrameType.PLANES, timestamp)) {
+                val planes = latestPlanes
+                    .filter { it.trackingState == "tracking" && it.subsumedBy == null && it.centerPose.size == 16 }
+                    .map { LiveFrames.PlaneInput(LiveFrames.PlaneOrientation.of(it.orientation), it.centerPose, it.extentX, it.extentZ) }
+                stream.submit(LiveFrameType.PLANES, timestamp, LiveFrames.planes(stream.nextSeq(), timestamp, planes))
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Live preview frame dropped", e)
+        }
+    }
+
+    private fun liveDepth(stream: LiveStream, frame: Frame, camera: Camera, timestamp: Long) {
+        val kind = depthKind ?: return
+        try {
+            val packed = if (kind == DEPTH_RAW) {
+                frame.acquireRawDepthImage16Bits().use { depth ->
+                    frame.acquireRawDepthConfidenceImage().use { confidence -> packDepth(depth, confidence, kind, camera) }
+                }
+            } else {
+                frame.acquireDepthImage16Bits().use { depth -> packDepth(depth, null, kind, camera) }
+            } ?: return
+            if (packed.width * packed.height > LiveFrames.MAX_DEPTH_PIXELS) return
+            val k = packed.intrinsics
+            stream.submit(
+                LiveFrameType.DEPTH,
+                timestamp,
+                LiveFrames.depth(
+                    stream.nextSeq(), timestamp, packed.width, packed.height,
+                    floatArrayOf(k.fx.toFloat(), k.fy.toFloat(), k.cx.toFloat(), k.cy.toFloat()),
+                    pose, packed.depth, packed.confidence,
+                ),
+            )
+        } catch (e: NotYetAvailableException) {
+            // No depth yet: the next due frame tries again.
         }
     }
 

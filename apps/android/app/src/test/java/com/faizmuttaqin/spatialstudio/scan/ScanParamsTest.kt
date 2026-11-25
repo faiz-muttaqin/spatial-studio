@@ -73,4 +73,12 @@ class ScanParamsTest {
         invalid { ScanParams.sessionId(params("{}")) }
         assertEquals("0f8fad5b-d9cb-469f-a165-70867728950e", ScanParams.sessionId(params("""{"sessionId":"0f8fad5b-d9cb-469f-a165-70867728950e"}""")))
     }
+
+    @Test
+    fun livePreviewIsOffByDefaultAndMustBeABoolean() {
+        assertFalse(ScanParams.start(params("{}")).options.livePreview)
+        assertTrue(ScanParams.start(params("""{"options":{"livePreview":true}}""")).options.livePreview)
+        invalid { ScanParams.start(params("""{"options":{"livePreview":"yes"}}""")) }
+        invalid { ScanParams.start(params("""{"options":{"livePreview":1}}""")) }
+    }
 }

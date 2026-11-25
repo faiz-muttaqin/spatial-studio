@@ -18,6 +18,8 @@ data class ScanOptions(
     val sensors: Boolean = true,
     /** Approximate location for `geolocation` and the compass declination. Off unless the page opts in. */
     val location: Boolean = false,
+    /** Shows the live preview panel on the scan screen (P2N.3). Off unless the page opts in. */
+    val livePreview: Boolean = false,
 ) {
     companion object {
         const val DEFAULT_SPACING_M = 0.25
@@ -81,7 +83,9 @@ object ScanParams {
         }
         val sensors = o["sensors"]?.let { (it as? JsonPrimitive)?.takeIf { p -> !p.isString }?.booleanOrNull ?: invalid("options.sensors must be a boolean") }
         val location = o["location"]?.let { (it as? JsonPrimitive)?.takeIf { p -> !p.isString }?.booleanOrNull ?: invalid("options.location must be a boolean") }
+        val livePreview = o["livePreview"]?.let { (it as? JsonPrimitive)?.takeIf { p -> !p.isString }?.booleanOrNull ?: invalid("options.livePreview must be a boolean") }
         return ScanOptions(
+            livePreview = livePreview ?: defaults.livePreview,
             sensors = sensors ?: defaults.sensors,
             location = location ?: defaults.location,
             depth = depth ?: defaults.depth,

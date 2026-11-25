@@ -24,6 +24,7 @@ import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
@@ -35,6 +36,9 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.faizmuttaqin.spatialstudio.BuildConfig
 import com.faizmuttaqin.spatialstudio.R
+import com.faizmuttaqin.spatialstudio.AppConfig
+import com.faizmuttaqin.spatialstudio.live.LivePanel
+import com.faizmuttaqin.spatialstudio.live.LiveStream
 import com.faizmuttaqin.spatialstudio.bridge.BridgeErrorCode
 import com.faizmuttaqin.spatialstudio.bridge.NativeBridge
 import com.faizmuttaqin.spatialstudio.capabilities.CapabilityProbe
@@ -98,6 +102,9 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
     private lateinit var markUndo: Button
     private lateinit var markConfirm: Button
     private lateinit var markCeiling: CheckBox
+    private lateinit var liveContainer: FrameLayout
+    private var livePanel: LivePanel? = null
+    private val liveStream = LiveStream()
 
     // Assisted boundary marking (v1.2). Marks live here; the GL thread resolves taps against ARCore.
     private val marks = BoundaryMarkBook()
@@ -207,6 +214,8 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         markConfirm = ActivityCompat.requireViewById(this, R.id.scan_mark_confirm)
         markCeiling = ActivityCompat.requireViewById(this, R.id.scan_mark_ceiling)
         setUpMarking()
+        liveContainer = ActivityCompat.requireViewById(this, R.id.scan_live)
+        setUpLivePreview()
         sensorsToggle.setOnCheckedChangeListener { _, checked ->
             if (updatingToggles) return@setOnCheckedChangeListener
             sensorRecorder?.setSensorsEnabled(checked)
@@ -284,6 +293,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             markToggle.isEnabled = true
         }
         sensorRecorder?.start()
+        livePanel?.onResume()
         // ARCore keeps its configuration across pause and resume; applyTorch only reconfigures on a mismatch.
         if (torchWanted) torchChange.set(true)
         ScanCoordinator.state(scan.sessionId, "scanning")
@@ -294,6 +304,8 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         if (!::scan.isInitialized) return
         // Stop rendering first, then release the camera. No capture continues in the background.
         surface.onPause()
+        // The preview port or socket never outlives the screen being in front.
+        livePanel?.onPause()
         sensorRecorder?.stop()
         session?.pause()
         if (phase == Phase.SCANNING && !isFinishing) ScanCoordinator.state(scan.sessionId, "paused")
@@ -305,6 +317,8 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             discardPartial("cancelled", null)
         }
         sensorRecorder?.stop()
+        livePanel?.destroy()
+        livePanel = null
         session?.close()
         session = null
         finalizer.shutdown()
@@ -390,6 +404,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         }
         val scanRecorder = ScanRecorder(dir, scan.options, depthKind)
         scanRecorder.lightMode = lightMode
+        scanRecorder.live = liveStream
         recorder = scanRecorder
         val sensors = SensorRecorder(
             this,
@@ -651,6 +666,16 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         }
     }
 
+    /** The preview panel exists only when the page opted in (options.livePreview) and named a trusted origin. */
+    private fun setUpLivePreview() {
+        if (!scan.options.livePreview) return
+        val origin = AppConfig.allowlist.match(scan.liveOrigin) ?: return
+        livePanel = LivePanel(liveContainer, AppConfig.allowlist, origin, liveStream).also {
+            liveContainer.visibility = View.VISIBLE
+            it.show(this)
+        }
+    }
+
     private fun updateSensorsText(sensors: SensorRecorder) {
         if (!sensors.sensorsEnabled) {
             sensorsText.setText(R.string.scan_sensors_off)
@@ -895,6 +920,8 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
     private fun finishScan() {
         if (phase != Phase.SCANNING) return
         phase = Phase.FINALIZING
+        livePanel?.destroy()
+        livePanel = null
         finishButton.isEnabled = false
         cancelButton.isEnabled = false
         statusText.setText(R.string.scan_saving)
@@ -1053,6 +1080,8 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
 
     private fun discardPartial(state: String, error: JsonObject?) {
         phase = Phase.DONE
+        livePanel?.destroy()
+        livePanel = null
         torchWanted = false
         torchToggle.isEnabled = false
         val sessionId = scan.sessionId

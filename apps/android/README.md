@@ -73,6 +73,12 @@ If saving a finished scan fails (for example the disk is full), the scan is kept
 - Scans live in app-private storage (`files/scans/<sessionId>`) until uploaded or discarded. Backup and device transfer are disabled. The scan screen stops the camera when paused; there is no background capture. Cancelling or leaving the scan screen discards the partial scan.
 - Uploads go only to the trusted origin that sent `scan.upload`, with that origin's cookie and a matching `Origin` header. Redirects are not followed, cookies are never logged, and the page cannot choose the target URL.
 
+## Live preview (P2N.3 spike)
+
+With `options.livePreview` on `scan.start` (off by default) the scan screen shows a small WebView loading `/scan/live` from the origin that started the scan. The recorder streams binary preview frames (depth, pose, coverage, planes; format in `live/LiveFrames.kt`) over a `WebMessagePort`, and the page's worker runs the TypeScript capture code on them. The panel's only native handle is `SpatialStudioLive` (`live.open`, `live.close`). The stream closes on pause, finish, cancel and destroy, drops frames when the page is behind, and is never read back: the recorded bundle is the source of truth. A loopback WebSocket (`127.0.0.1`, random port and token, exact Origin) exists as a fallback for a WebView without binary messages; it is blocked in release builds by the cleartext policy unless an exception is added. Measurements and the decision are in `docs/spatial-studio/SENSING_RESEARCH.md`.
+
+Debug builds also have `LiveBenchActivity` for the benchmark (`adb shell am start -n com.faizmuttaqin.spatialstudio.debug/com.faizmuttaqin.spatialstudio.live.LiveBenchActivity --es url <trusted page> --es transport port|ws|panel --ei seconds 20`, results under the log tag `LiveBench`).
+
 ## Layout
 
 | Path | What |
@@ -82,6 +88,7 @@ If saving a finished scan fails (for example the disk is full), the scan is kept
 | `capabilities/` | `capabilities.get`: ARCore, Camera2, sensors, device and WebView versions |
 | `scan/` | Scan screen, ARCore recorder, keyframe and trajectory logic, voxel downsampling, bundle and manifest writer, local store |
 | `scan/gl/` | Camera background and feature-point overlay (GLES 2) |
+| `live/` | Live preview stream: frame format, rates, port and loopback transports, panel |
 | `upload/` | Content-addressed uploader with retry and rate-limit handling |
 
 Pure logic has JVM unit tests under `app/src/test`. Set `SCAN_BUNDLE_FIXTURE_DIR` when running `ScanBundleWriterTest` to keep a synthetic bundle for checking against the TypeScript capture schemas.
