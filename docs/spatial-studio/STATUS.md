@@ -1,5 +1,15 @@
 # Development status and handoff
 
+2026-11-25 auto deploy without approval. Removed the `approved-sha` check from `/usr/local/lib/spatial-studio/update` and `build-image` on the VM, at the owner's request while the project is in development. Every commit on `main` is now built and deployed in Docker, with the existing health and authentication smoke test and automatic rollback. Verified by deploying `b5dc543113029bbc6fbd24bc34afd4ddc35b5aff` without any approval step: editor healthy, public `/api/health` returned `200`, and `/mcp` returned `401` without a token. See [the VM runbook](DEPLOYMENT.md#spatial-studio-vm).
+
+2026-11-25 Streamable HTTP MCP. Enabled `spatial-studio-mcp.service` on `127.0.0.1:4311`. Verified bearer authentication, origin filtering, initialization, tool discovery, and `list_scenes` against the live volume. After the Nginx route went live, verified public TLS, `401` without a token, and authenticated initialization, `tools/list`, and `list_scenes` through `https://spatial-studio.faizmuttaqin.com/mcp`. See [remote MCP through Nginx](DEPLOYMENT.md#remote-mcp-through-nginx).
+
+2026-11-25 VM MCP. Built the stdio MCP image from the editor's deployed SHA. Verified MCP initialization, tool discovery, and `list_scenes` against the editor's volume. On a disposable database, `save_scene` and `list_scenes` confirmed the write and read path. See [MCP through stdio](DEPLOYMENT.md#mcp-through-stdio).
+
+2026-11-25 local data snapshot. Enabled `spatial-studio-backup.timer` for 15-minute snapshots. Ran the service while the editor was live and extracted `pascal.db` into a temporary directory. SQLite `quick_check` passed. A fixture confirmed WAL transaction capture and inclusion of artifacts, thumbnails, and sharing settings. See [local data snapshot](DEPLOYMENT.md#local-data-snapshot).
+
+2026-11-25 VM deployment. Built fork commit `96de268ebb86fe354aa434196b4227b46decf5e5` from the frozen Bun lockfile and deployed the Docker image on `127.0.0.1:4310`. Verified `/api/health`, the login gate, the secure login cookie, and creating, opening, reading, and removing a test scene through `https://spatial-studio.faizmuttaqin.com`. A local container restart verified that the scene survived in `spatial-studio-data`. The five-minute systemd timer is enabled. A check with an unapproved SHA exited before the build, and checking the deployed SHA retained the same container. See [the VM runbook](DEPLOYMENT.md#spatial-studio-vm).
+
 2026-11-25: owner created public fork faiz-muttaqin/spatial-studio. Connector verified push/admin access; main matched upstream reference d7d0b436f2bda4bfb38fa3d083c1d1816ec7481c. Documentation initial commit targets main, as explicitly permitted. Root upstream instructions retained with downstream pointer. Source inspection and VM/mobile plan recorded. No runtime changes, no build, no actual camera/MCP test, no deployment and no CI pass claimed. Review this commit via Git history; no fabricated self-referential SHA.
 
 | Phase | State | Next / blocker |
