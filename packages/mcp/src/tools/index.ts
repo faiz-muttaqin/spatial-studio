@@ -23,6 +23,7 @@ import { registerMeasure } from './measure'
 import { registerPhotoToSceneTool } from './photo-to-scene'
 import { registerRedo } from './redo'
 import { registerRoomTools } from './room-tools'
+import { type CaptureArtifactHost, registerScanTools } from './scan-tools'
 import { registerSceneLifecycleTools } from './scene-lifecycle'
 import { registerSetZone } from './set-zone'
 import { type PlanReadingHosts, registerSharedTools } from './shared-tools'
@@ -48,6 +49,8 @@ export type ToolHosts = PlanReadingHosts & {
   /** Reads author_scene's payloadFile; without it the tool refuses one `files_unavailable`. */
   readFile?: ProjectFileReader
   sceneViews?: SceneViewHost
+  /** Reads stored capture artifacts; without it the scan tools are not offered. */
+  captureArtifacts?: CaptureArtifactHost
 }
 
 export function registerTools(
@@ -59,6 +62,7 @@ export function registerTools(
     objectMakers,
     readFile,
     sceneViews,
+    captureArtifacts,
     assetViews,
     betweenSteps,
   }: ToolHosts = {},
@@ -80,6 +84,7 @@ export function registerTools(
   registerGetSource(server, operations, geometryScripts)
   registerMeasure(server, operations)
   registerViewScene(server, operations, sceneViews)
+  if (captureArtifacts) registerScanTools(server, operations, captureArtifacts)
   registerConstructionTools(server, operations)
   registerRoomTools(server, operations, geometryScripts)
   registerApplyPatch(server, operations)

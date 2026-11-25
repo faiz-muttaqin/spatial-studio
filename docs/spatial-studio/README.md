@@ -13,6 +13,8 @@ P1–P4 are the MVP. P5–P6 are optional. Costing/RAB, procurement, marketplace
 - [MOBILE.md](MOBILE.md): browser and optional native bridge.
 - [CAPTURE_CONTRACT.md](CAPTURE_CONTRACT.md): scan bundle, providers and Android bridge protocol v1.
 - [SENSING_RESEARCH.md](SENSING_RESEARCH.md): draft capture phase, orientation, heading, location, sun and radio-signal research.
+- [GLASS_AND_MIRRORS.md](GLASS_AND_MIRRORS.md): glass, mirrors and the physical room boundary without LiDAR.
+- [DEVICE_TESTS.md](DEVICE_TESTS.md): real-device evidence log.
 - [DEPLOYMENT.md](DEPLOYMENT.md): VM, HTTPS, CI/release safeguards.
 - [ROADMAP.md](ROADMAP.md): phases, tests and acceptance criteria.
 - [STATUS.md](STATUS.md): handoff and next task.
