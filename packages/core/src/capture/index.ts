@@ -105,6 +105,28 @@ export {
   type RoomProposalInput,
 } from './room-proposal'
 export {
+  clusterDetections,
+  fitOrientedBox,
+  type LiftedBox,
+  type LiftedDetection,
+  type LiftedOpening,
+  type LiftFrame,
+  liftDetections,
+  type PlanFrame,
+  pickKeyframesForWalls,
+  type SemanticDetection,
+  type SemanticFurniture,
+  type SemanticKind,
+  type SemanticOpening,
+  type SemanticStatus,
+  type SemanticsOptions,
+  type SemanticsResult,
+  type SemanticWall,
+  type UnliftReason,
+  type WallKeyframeChoice,
+  type WallKeyframePlan,
+} from './scan-semantics'
+export {
   ArkitDeviceMotionTrajectorySchema,
   ArkitPointCloudPayloadSchema,
   ArkitSurfaceMeshPayloadSchema,

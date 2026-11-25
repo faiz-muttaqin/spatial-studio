@@ -55,7 +55,7 @@ function viewLabel(view: EditorViewDescriptor, i18n: PascalI18n): string {
   if (view.id === VIEW_3D) return i18n._({ id: 'editor.views.view3d', message: '3D' })
   if (view.id === VIEW_2D) return i18n._({ id: 'editor.views.view2d', message: '2D' })
   if (view.id === PLUGINS_VIEW_ID) return i18n._({ id: 'editor.views.plugins', message: 'Plugins' })
-  return view.label
+  return view.labelMessage ? i18n._(view.labelMessage) : view.label
 }
 
 export function ViewTabs({ pane, className }: { pane: ViewPaneIndex; className?: string }) {
