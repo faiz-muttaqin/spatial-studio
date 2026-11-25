@@ -19,12 +19,15 @@ export function CapturePointCloudLayer({
   artifactUrl,
   inline,
   maxPoints = 250_000,
+  opacity = 1,
   packets = [],
   pointSize = POINT_DISC_SIZE,
 }: {
   artifactUrl?: string
   inline?: unknown
   maxPoints?: number
+  /** 0 to 1. */
+  opacity?: number
   packets?: readonly CaptureStreamPacket[]
   /** Each point's diameter, in metres. */
   pointSize?: number
@@ -35,31 +38,46 @@ export function CapturePointCloudLayer({
     [inline, maxPoints],
   )
   if (liveData.positions.length > 0) {
-    return <PointCloudDataLayer data={liveData} pointSize={pointSize} />
+    return <PointCloudDataLayer data={liveData} opacity={opacity} pointSize={pointSize} />
   }
   if (inlineData.positions.length > 0) {
-    return <PointCloudDataLayer data={inlineData} pointSize={pointSize} />
+    return <PointCloudDataLayer data={inlineData} opacity={opacity} pointSize={pointSize} />
   }
   return artifactUrl ? (
-    <PlyPointCloud maxPoints={maxPoints} pointSize={pointSize} url={artifactUrl} />
+    <PlyPointCloud
+      maxPoints={maxPoints}
+      opacity={opacity}
+      pointSize={pointSize}
+      url={artifactUrl}
+    />
   ) : null
 }
 
 function PlyPointCloud({
   maxPoints,
+  opacity,
   pointSize,
   url,
 }: {
   maxPoints: number
+  opacity: number
   pointSize: number
   url: string
 }) {
   const source = useLoader(PLYLoader, rewriteLoopbackAssetUrl(url))
   const data = useMemo(() => buildGeometryPointCloudData(source, maxPoints), [maxPoints, source])
-  return <PointCloudDataLayer data={data} pointSize={pointSize} />
+  return <PointCloudDataLayer data={data} opacity={opacity} pointSize={pointSize} />
 }
 
-function PointCloudDataLayer({ data, pointSize }: { data: PointCloudData; pointSize: number }) {
+function PointCloudDataLayer({
+  data,
+  opacity,
+  pointSize,
+}: {
+  data: PointCloudData
+  opacity: number
+  pointSize: number
+}) {
   if (data.positions.length === 0) return null
   return (
     <PointDiscCloud
@@ -68,6 +86,7 @@ function PointCloudDataLayer({ data, pointSize }: { data: PointCloudData; pointS
       // scene's exposure, grade and bloom, which turned light points into a warm glowing haze.
       layer={OVERLAY_LAYER}
       name={SCAN_POINT_CLOUD_NAME}
+      opacity={opacity}
       positions={data.positions}
       size={pointSize}
     />

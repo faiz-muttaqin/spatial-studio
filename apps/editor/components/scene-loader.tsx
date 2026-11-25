@@ -18,6 +18,7 @@ import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { PoolSectionBanner } from '@/components/pool-section-banner'
+import { createCaptureSourceResolver } from '@/lib/capture/source-resolver'
 import { countGraphNodes, isEmptyGraphOverwrite } from '@/lib/empty-graph-guard'
 import { useLocalArtifactStore } from '@/lib/local-artifact-store'
 import {
@@ -181,6 +182,7 @@ export function SceneLoader(props: SceneLoaderProps) {
 }
 
 function SceneEditor({ initialScene, meta: initialMeta }: SceneLoaderProps) {
+  const captureSourceResolver = useMemo(() => createCaptureSourceResolver(), [])
   const i18n = usePascalI18n()
   const catalogVersion = i18n.getVersion()
   // biome-ignore lint/correctness/useExhaustiveDependencies: labels re-translate on a locale switch or a late registerMessages
@@ -411,6 +413,7 @@ function SceneEditor({ initialScene, meta: initialMeta }: SceneLoaderProps) {
       )}
       <KitchenCommands />
       <Editor
+        captureSourceResolver={captureSourceResolver}
         disablePostFx={lightPreview}
         immersive={vr?.session ? vr.immersive : undefined}
         layoutVersion="v2"
