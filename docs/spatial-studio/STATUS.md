@@ -6,7 +6,7 @@
 |---|---|---|
 | P1 | Gate passed except deploy freshness | #1 merged; MCP read/write on the deployment verified 2026-11-25 (below). Deployed build still `96de268` while `main` moved on: owner to check the VM poller. Remaining: license inventory |
 | P2 | P2.1 merged (#3) | `/scan` live once deployed; next: phone run on the deployment, then P2.2 WebXR capture session |
-| P2N | v1 merged (#4) | Install the CI APK on the owner's phone and scan a room; P2N.2 sensors and P2N.3 telemetry spike per [SENSING_RESEARCH.md](SENSING_RESEARCH.md) |
+| P2N | v1 merged (#4); P2N.2 in review | Install ARCore and the APK on the owner's phone and scan a room; P2N.3 telemetry spike per [SENSING_RESEARCH.md](SENSING_RESEARCH.md) |
 | P3 | Next | Mount `CaptureRuntime` so capture scans draw in the editor; scan evidence review; P3b scan-to-room proposal |
 | P4 | P4a next | MCP tools that read scan bundles and propose a room for user verification |
 | P5/P6 | Deferred | Optional after MVP |
