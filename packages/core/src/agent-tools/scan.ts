@@ -60,11 +60,42 @@ export const proposeRoomFromScanTool = {
   annotations: read,
 } as const
 
+export const viewScanMapTool = {
+  name: 'view_scan_map',
+  title: 'View scan map',
+  description:
+    "Return a top-down colour map of a scan as a PNG image (at most about 1024 px on the longest side), built from the scan's raw depth and photo keyframes fused into a coloured point cloud, so walls, floor colour and furniture can be checked by eye before building. Text gives the scale in metres per pixel, the level-coordinate position of the image's top-left corner (+x to the right, +z down the image, like a plan seen from above) and, when it can be computed, the outline from propose_room_from_scan drawn in magenta and listed as [x, z] corners. Layer 'top' shows what is seen from above with the ceiling cut away; 'floor' shows only the floor. Work is bounded in time and bytes: long scans use an even sample of keyframes and the text says what was left out. Needs depth and photo keyframes with poses; the map is an estimate, not a measurement. Refusal codes: scan_unavailable, scan_not_found, scan_has_no_capture, scan_manifest_missing, scan_manifest_invalid, no_depth, no_map.",
+  input: {
+    scanId,
+    layer: z
+      .enum(['top', 'floor'])
+      .optional()
+      .describe(
+        "'top' (default) shows everything below the ceiling; 'floor' shows the floor only.",
+      ),
+    minConfidence: z
+      .number()
+      .int()
+      .min(0)
+      .max(255)
+      .optional()
+      .describe(
+        'Lowest depth confidence kept, 0 to 255. Default 128. Many phones report low confidence on most pixels, so a sparse map may improve at 40 to 64 with more noise.',
+      ),
+    outline: z
+      .boolean()
+      .optional()
+      .describe('Draw the proposed room outline over the map. Default true.'),
+  },
+  annotations: read,
+} as const
+
 /** Offered by a host that can read capture artifacts; it passes them to `createPascalMcpServer`. */
 export const SCAN_TOOL_CONTRACTS = [
   listScansTool,
   readScanTool,
   viewScanPhotosTool,
   proposeRoomFromScanTool,
+  viewScanMapTool,
 ] as const
 export type ScanToolName = (typeof SCAN_TOOL_CONTRACTS)[number]['name']
