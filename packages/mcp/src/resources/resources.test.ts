@@ -295,6 +295,8 @@ describe('pascal://agent-guide', () => {
     'view_scan_photos',
     'propose_room_from_scan',
     'view_scan_map',
+    'plan_scan_semantics',
+    'lift_scan_semantics',
     'search_project_chats',
     'read_project_chat',
     'get_project_assets',
