@@ -8,6 +8,23 @@ export {
   CAPTURE_MAX_BOUNDARY_MARKS,
 } from './boundary-marks'
 export {
+  BRUSH_IMAGE_DIR,
+  BRUSH_POINTS_FILE,
+  BRUSH_TRANSFORMS_FILE,
+  type BrushCloudInput,
+  type BrushDataset,
+  type BrushDatasetInput,
+  type BrushFrame,
+  type BrushImage,
+  type BrushSkippedFrame,
+  type BrushTransforms,
+  buildBrushDataset,
+  buildPointsPly,
+  matrixFromRows,
+  matrixRows,
+  projectToKeyframe,
+} from './brush-dataset'
+export {
   type CloudSummary,
   type PathSummary,
   pathPositions,
