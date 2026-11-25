@@ -154,7 +154,7 @@ type BridgeRequest = { v: 1; id: string; method: string; params?: Record<string,
 type BridgeReply =
   | { v: 1; id: string; ok: true; result: unknown }
   | { v: 1; id: string; ok: false; error: { code: string; message: string } }
-type BridgeEvent = { v: 1; event: 'scan.state' | 'scan.progress' | 'upload.progress'; data: unknown }
+type BridgeEvent = { v: 1; event: 'scan.state' | 'scan.progress' | 'upload.progress' | 'upload.done'; data: unknown }
 ```
 
 Event `data` is an object that carries the `sessionId` it belongs to. The page extends a pending `scan.upload` timeout only on `upload.progress` events for that upload's session.
@@ -168,8 +168,8 @@ Error codes: `forbidden`, `invalid_request`, `unknown_method`, `unsupported`, `p
 | `bridge.hello` | none | `{ bridgeVersion: 1, appVersion, platform: "android", methods: string[] }` |
 | `capabilities.get` | none | `{ arcore: { availability, depth: boolean, rawDepth: boolean }, cameras: [{ id, facing, focalLengths, intrinsics, depthOutput, logicalMultiCamera, physicalIds }], sensors: { accelerometer, gyroscope, rotationVector, magnetometer, barometer, ... }, device: { manufacturer, model, sdkInt, webViewVersion } }` |
 | `scan.start` | `{ projectId?, options?: { depth?: boolean, keyframeSpacingM?: number, maxKeyframes?: number, location?: boolean, sensors?: boolean } }` | `{ sessionId }`, then `scan.state` and `scan.progress` events while the native scan screen runs |
-| `scan.list` | none | `[{ sessionId, createdAt, state, keyframes, bytes, uploaded }]` |
-| `scan.upload` | `{ sessionId }` | `{ sessionId, manifestUrl, manifestSha256 }` after every artifact and the manifest are stored; `upload.progress` events meanwhile |
+| `scan.list` | none | `[{ sessionId, createdAt, state, keyframes, bytes, uploaded, uploading?, projectId?, manifestUrl? }]`; `manifestUrl` is present once `uploaded` is true |
+| `scan.upload` | `{ sessionId }` | `{ sessionId, manifestUrl, manifestSha256 }` after every artifact and the manifest are stored; `upload.progress` events meanwhile. A repeated request for a session that is already uploading joins that upload and gets the same result (v1.3: it was `busy`); `busy` is only for a different session. A session whose manifest is already stored is answered at once without network work. On success the app also emits `upload.done` with the same object to the page that most recently sent a request, so a reloaded page can attach. |
 | `scan.discard` | `{ sessionId }` | `{ sessionId }` |
 
 ### Upload and security rules
