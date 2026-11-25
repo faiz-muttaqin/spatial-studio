@@ -61,7 +61,7 @@ const MAX_KEYFRAMES = 60
 /** Raw image bytes one view_scan_photos call may return across all its frames. */
 export const MAX_PHOTO_BYTES = 3 * 1024 * 1024
 
-type ScanBundle = {
+export type ScanBundle = {
   node: ScanNode
   manifest: CaptureSessionDescriptor
   /** Problems reading a stream: the bundle still opens without it. */
@@ -83,7 +83,7 @@ type ScanBundle = {
 
 const SHA256_AT_END = /([0-9a-f]{64})(?:[?#].*)?$/
 
-function shaFromReference(reference: { uri?: string; sha256?: string }): string | null {
+export function shaFromReference(reference: { uri?: string; sha256?: string }): string | null {
   if (reference.sha256 && /^[0-9a-f]{64}$/.test(reference.sha256)) return reference.sha256
   return reference.uri?.match(SHA256_AT_END)?.[1] ?? null
 }
@@ -129,7 +129,7 @@ async function readJson(host: CaptureArtifactHost, sha256: string): Promise<unkn
   return bytes ? JSON.parse(new TextDecoder().decode(bytes)) : null
 }
 
-function findScan(operations: SceneOperations, scanId: string): ScanNode {
+export function findScan(operations: SceneOperations, scanId: string): ScanNode {
   const node = (operations.getNodes() as Record<string, { type?: string } | undefined>)[scanId]
   if (node?.type !== 'scan') {
     refuse('scan_not_found', `No scan node ${scanId} in this scene. Call list_scans for the ids.`)
@@ -229,7 +229,7 @@ type Want = {
   motion?: boolean
 }
 
-async function loadBundle(
+export async function loadBundle(
   host: CaptureArtifactHost,
   node: ScanNode,
   want: Want = { rgb: true, depth: true, planes: true, measurements: true, cloud: true },
@@ -306,7 +306,7 @@ async function loadBundle(
   }
 }
 
-function round(value: number, places = 3): number {
+export function round(value: number, places = 3): number {
   const factor = 10 ** places
   return Math.round(value * factor) / factor
 }
@@ -321,7 +321,7 @@ function evenSample<T>(items: readonly T[], count: number): T[] {
   )
 }
 
-function textResult(payload: unknown) {
+export function textResult(payload: unknown) {
   return { content: [{ type: 'text' as const, text: JSON.stringify(payload) }] }
 }
 
@@ -637,7 +637,7 @@ const MAX_DEPTH_FRAMES = 120
  * paired with the pose of its rgb keyframe. A frame with a missing or wrongly sized artifact, or no
  * pose to place it, is left out and counted in `problems`.
  */
-async function readDepthFrames(
+export async function readDepthFrames(
   host: CaptureArtifactHost,
   bundle: ScanBundle,
   problems: string[],
@@ -727,7 +727,7 @@ async function proposeRoomFromScan(
   }
 }
 
-function register<Shape extends z.ZodRawShape>(
+export function register<Shape extends z.ZodRawShape>(
   server: McpServer,
   contract: AgentToolContract & { input: Shape },
   handler: (input: z.infer<z.ZodObject<Shape>>) => Promise<unknown>,
