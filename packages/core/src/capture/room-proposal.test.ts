@@ -302,7 +302,7 @@ describe('proposeRoom from manual measurements', () => {
       measurements,
     })
     expect(proposal.method).toBe('manual-measurements')
-    expect(proposal.unknowns.join(' ')).toContain('Planes gave no outline')
+    expect(proposal.unknowns.join(' ')).toContain('No outline from planes')
   })
 
   test('with neither it says what to ask for', () => {
@@ -348,5 +348,239 @@ describe('analysePlanes', () => {
     expect(analysis.height).toBe(2.5)
     expect(analysis.skipped.map((item) => item.planeId).toSorted()).toEqual(['merged', 'tiny'])
     expect(analysis.walls).toHaveLength(0)
+  })
+})
+
+/** A horizontal-ish furniture front: a short wall plane with its own bottom and top. */
+function panel(
+  id: string,
+  a: [number, number],
+  b: [number, number],
+  bottom: number,
+  top: number,
+): CapturePlane {
+  const base = wall(id, a, b, top - bottom)
+  const pose = [...base.centerPose]
+  pose[13] = (bottom + top) / 2
+  return { ...base, centerPose: pose }
+}
+
+const floorUp = (y: number, half: [number, number], centre: [number, number] = [2, 2.5]) =>
+  horizontal('floor', 'horizontal-up', y, half, centre)
+
+const rect45 = () =>
+  room([
+    [0, 0],
+    [4, 0],
+    [4, 5],
+    [0, 5],
+  ])
+const roomFlats = [
+  horizontal('floor', 'horizontal-up', 0, [2, 2.5], [2, 2.5]),
+  horizontal('ceiling', 'horizontal-down', 2.8, [2, 2.5], [2, 2.5]),
+]
+
+describe('clutter, duplicate and ghost planes', () => {
+  const expectCleanRectangle = (planes: CapturePlane[]) => {
+    const proposal = proposeRoom({ planes, measurements: null })
+    expect(proposal.polygon).toHaveLength(4)
+    expect(sorted(proposal.polygon!)).toEqual([
+      [0, 0],
+      [0, 5],
+      [4, 0],
+      [4, 5],
+    ])
+    expect(proposal.unknowns.join(' ')).not.toContain('not seen')
+    return proposal
+  }
+
+  test('a second plane 0.2 m inside a wall does not add corners', () => {
+    const proposal = expectCleanRectangle([
+      ...rect45(),
+      wall('dup', [0.3, 0.2], [3.7, 0.2]),
+      ...roomFlats,
+    ])
+    expect(proposal.planesIgnored.map((item) => item.planeId)).toEqual(['dup'])
+    expect(proposal.planesIgnored[0]!.reason).toContain('parallel to a longer wall')
+  })
+
+  test('a cabinet front and a sofa back are too short to be walls', () => {
+    const proposal = expectCleanRectangle([
+      ...rect45(),
+      panel('cabinet', [1, 0.4], [2.6, 0.4], 0, 0.9),
+      panel('sofa', [0.5, 3], [3, 3], 0, 0.8),
+      ...roomFlats,
+    ])
+    expect(proposal.planesIgnored.map((item) => item.planeId).toSorted()).toEqual([
+      'cabinet',
+      'sofa',
+    ])
+    expect(proposal.planesIgnored[0]!.reason).toContain('furniture')
+  })
+
+  test('a mirror that floats above the floor is ignored', () => {
+    const proposal = expectCleanRectangle([
+      ...rect45(),
+      panel('mirror', [1, 2], [3, 2], 1.0, 2.2),
+      ...roomFlats,
+    ])
+    expect(proposal.planesIgnored.find((item) => item.planeId === 'mirror')?.reason).toContain(
+      'mirror',
+    )
+  })
+
+  test('a ghost plane behind a wall competes with it and loses', () => {
+    expectCleanRectangle([...rect45(), wall('ghost', [0.2, -0.45], [3.8, -0.45]), ...roomFlats])
+  })
+
+  test('a wall seen twice with a small offset merges instead of competing', () => {
+    const proposal = proposeRoom({
+      planes: [...rect45(), wall('pass2', [0.1, 0.08], [3.9, 0.08]), ...roomFlats],
+      measurements: null,
+    })
+    expect(proposal.polygon).toHaveLength(4)
+    expect(proposal.planesIgnored).toEqual([])
+    expect(proposal.edges.some((edge) => edge.evidencePlaneIds.includes('pass2'))).toBe(true)
+  })
+
+  test('ranks by wall length covered, not by line count', () => {
+    // Two short interior stubs would make more lines, but the long outer walls cover more.
+    const proposal = expectCleanRectangle([
+      ...rect45(),
+      wall('stub1', [1, 1], [1, 1.9]),
+      wall('stub2', [2, 1], [2, 1.9]),
+      ...roomFlats,
+    ])
+    expect(proposal.planesUsed.toSorted()).toEqual(['w0', 'w1', 'w2', 'w3'])
+  })
+})
+
+describe('floor and ceiling choice', () => {
+  const walls = () =>
+    room([
+      [0, 0],
+      [4, 0],
+      [4, 5],
+      [0, 5],
+    ]).map((plane) => plane)
+
+  test('a tabletop larger than the visible floor is not the floor', () => {
+    const planes = [
+      ...walls(),
+      floorUp(0.75, [2, 2.5]),
+      { ...horizontal('floor', 'horizontal-up', 0, [0.8, 1.2], [1, 1]), id: 'real-floor' },
+      horizontal('ceiling', 'horizontal-down', 2.8, [2, 2.5], [2, 2.5]),
+    ]
+    const proposal = proposeRoom({ planes, measurements: null })
+    expect(proposal.height).toEqual({ value: 2.8, basis: 'plane-estimate' })
+    expect(proposal.floorY).toBe(0)
+  })
+
+  test('with only a tabletop the floor is unknown and says why', () => {
+    const planes = [
+      ...walls(),
+      horizontal('table', 'horizontal-up', 0.75, [2, 2.5], [2, 2.5]),
+      horizontal('ceiling', 'horizontal-down', 2.8, [2, 2.5], [2, 2.5]),
+    ]
+    const proposal = proposeRoom({ planes, measurements: null })
+    expect(proposal.floorY).toBeNull()
+    expect(proposal.height).toBeNull()
+    expect(proposal.unknowns.join(' ')).toContain('No upward plane sits at the foot of the walls')
+  })
+
+  test('a cabinet underside is not a ceiling', () => {
+    const planes = [
+      ...walls(),
+      floorUp(0, [2, 2.5]),
+      horizontal('underside', 'horizontal-down', 2.05, [1, 1], [1, 1]),
+      horizontal('ceiling', 'horizontal-down', 2.8, [2, 2.5], [2, 2.5]),
+    ]
+    // The underside is in the plausible range but far from where the walls end; the ceiling wins.
+    const proposal = proposeRoom({ planes, measurements: null })
+    expect(proposal.height).toEqual({ value: 2.8, basis: 'plane-estimate' })
+  })
+
+  test('heights outside 2 to 6 m are refused with an accurate message', () => {
+    const low = proposeRoom({
+      planes: [...walls(), floorUp(0, [2, 2.5]), horizontal('c', 'horizontal-down', 1.6, [2, 2.5])],
+      measurements: null,
+    })
+    expect(low.height).toBeNull()
+    expect(low.unknowns.join(' ')).toContain('outside 2 to 6 m above the floor')
+    expect(low.unknowns.join(' ')).not.toContain('No downward plane')
+    const none = proposeRoom({ planes: [...walls(), floorUp(0, [2, 2.5])], measurements: null })
+    expect(none.unknowns.join(' ')).toContain('No downward plane was seen')
+    expect(none.unknowns.filter((text) => text.includes('ceiling height is known'))).toHaveLength(1)
+  })
+
+  test('a small floor plane is flagged', () => {
+    const proposal = proposeRoom({
+      planes: [
+        ...walls(),
+        horizontal('floor', 'horizontal-up', 0, [0.5, 0.5], [1, 1]),
+        horizontal('c', 'horizontal-down', 2.8, [2, 2.5]),
+      ],
+      measurements: null,
+    })
+    expect(proposal.unknowns.join(' ')).toContain('covers only')
+  })
+})
+
+describe('typed measurements are real metres', () => {
+  const typed: ManualMeasurements = {
+    units: 'm',
+    room: { width: 4, length: 5, height: 2.8 },
+    openings: [],
+    notes: '',
+    source: 'manual',
+  }
+
+  test('the node scale does not stretch a typed rectangle', () => {
+    const proposal = proposeRoom({
+      planes: null,
+      measurements: typed,
+      transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: 2 },
+    })
+    expect(sorted(proposal.polygon!)).toEqual([
+      [0, 0],
+      [0, 5],
+      [4, 0],
+      [4, 5],
+    ])
+  })
+
+  test('a plane outline that disagrees with the typed size is surfaced', () => {
+    const planes = [
+      ...room([
+        [0, 0],
+        [3, 0],
+        [3, 3],
+        [0, 3],
+      ]),
+      ...roomFlats,
+    ]
+    const proposal = proposeRoom({ planes, measurements: typed })
+    expect(proposal.unknowns.join(' ')).toContain('One of them is wrong')
+    const agreeing = proposeRoom({ planes: [...rect45(), ...roomFlats], measurements: typed })
+    expect(agreeing.unknowns.join(' ')).not.toContain('One of them is wrong')
+  })
+
+  test('a typed height fills a missing ceiling with one accurate unknown', () => {
+    const proposal = proposeRoom({ planes: rect45(), measurements: typed })
+    expect(proposal.height).toEqual({ value: 2.8, basis: 'manual-measurement' })
+    expect(proposal.unknowns.join(' ')).toContain('typed-in measurement; no plane confirmed it')
+    expect(proposal.unknowns.join(' ')).not.toContain('ceiling height is known')
+  })
+
+  test('a zero or negative node scale places nothing and says so', () => {
+    for (const scale of [0, -1, Number.NaN]) {
+      const proposal = proposeRoom({
+        planes: rect45(),
+        measurements: typed,
+        transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale },
+      })
+      expect(proposal.polygon).toBeNull()
+      expect(proposal.unknowns[0]).toContain('scale')
+    }
   })
 })

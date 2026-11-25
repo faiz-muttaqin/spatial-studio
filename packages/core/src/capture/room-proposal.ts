@@ -4,6 +4,7 @@ import {
   IDENTITY_SCAN_TRANSFORM,
   type PlaneAnalysis,
   type ScanTransform,
+  selectRoomWalls,
   type Vec2,
   type WallSegment,
 } from './plane-analysis'
@@ -35,7 +36,7 @@ export type RoomProposalEdge = {
 
 export type RoomProposal = {
   method: 'planes' | 'manual-measurements' | 'none'
-  /** Corners in level coordinates, `[x, z]` in metres, counter-clockwise seen from above (+Y). Null when no outline could be made. */
+  /** Corners in level coordinates, `[x, z]` in metres, ordered so the shoelace area in (x, z) is positive, which is clockwise seen from above (+Y). Null when no outline could be made. */
   polygon: Vec2[] | null
   height: { value: number; basis: 'plane-estimate' | 'manual-measurement' } | null
   edges: RoomProposalEdge[]
@@ -88,6 +89,11 @@ export function proposeRoomFromPlanes(
  */
 export function proposeRoom(input: RoomProposalInput): RoomProposal {
   const transform = input.transform ?? IDENTITY_SCAN_TRANSFORM
+  if (!(Number.isFinite(transform.scale) && transform.scale > 0)) {
+    return emptyProposal([
+      `The scan node's scale is ${transform.scale}; it must be above zero before anything can be placed. Fix the node, then ask again.`,
+    ])
+  }
   const analysis = input.planes ? analysePlanes(input.planes, transform) : null
   const fromPlanes = analysis ? fromAnalysis(analysis) : null
   const manual = input.measurements
@@ -98,40 +104,33 @@ export function proposeRoom(input: RoomProposalInput): RoomProposal {
     proposal = fromPlanes
   } else {
     const rectangle = manual ? manualRectangle(manual, transform) : null
+    const why = fromPlanes ? fromPlanes.unknowns : ['The scan has no plane set.']
     if (rectangle) {
       proposal = {
         ...rectangle,
-        unknowns: [
-          ...(analysis
-            ? [`Planes gave no outline: ${fromPlanes?.unknowns.join(' ') ?? 'no planes'}`]
-            : ['The scan has no plane set.']),
-          ...rectangle.unknowns,
-        ],
+        unknowns: [...why.map((text) => `No outline from planes: ${text}`), ...rectangle.unknowns],
         planesIgnored: fromPlanes?.planesIgnored ?? [],
       }
     } else {
       proposal = {
-        method: 'none',
-        polygon: null,
-        height: null,
-        edges: [],
-        unknowns: [
-          ...(fromPlanes?.unknowns ?? ['The scan has no plane set.']),
+        ...emptyProposal([
+          ...why,
           'No usable manual width and length either.',
           'Ask the person for the room width, length and height, or rescan.',
-        ],
+        ]),
         floorY: fromPlanes?.floorY ?? null,
-        planesUsed: [],
         planesIgnored: fromPlanes?.planesIgnored ?? [],
-        needsVerification: true,
       }
     }
   }
 
-  // The height planes gave wins; a manual one fills the gap and is checked against it.
+  if (analysis) unknowns.push(...analysis.notes)
+
+  // Typed values are real metres. The planes' height wins; a typed one fills the gap and is checked.
   const manualHeight = manual?.room.height ?? null
   if (proposal.height === null && manualHeight !== null) {
     proposal = { ...proposal, height: { value: manualHeight, basis: 'manual-measurement' } }
+    unknowns.push('The height is a typed-in measurement; no plane confirmed it.')
   } else if (
     proposal.height?.basis === 'plane-estimate' &&
     manualHeight !== null &&
@@ -141,10 +140,56 @@ export function proposeRoom(input: RoomProposalInput): RoomProposal {
       `Planes give a height of ${proposal.height.value} m but the manual measurement says ${manualHeight} m. Check on site.`,
     )
   }
-  if (proposal.height === null && !proposal.unknowns.some((text) => text.includes('ceiling'))) {
-    unknowns.push('No ceiling height: no ceiling plane and no manual height.')
+  if (proposal.height === null) unknowns.push('No ceiling height is known: ask the person for it.')
+
+  if (proposal.method === 'planes' && proposal.polygon && manual) {
+    const mismatch = dimensionMismatch(proposal.polygon, manual)
+    if (mismatch) unknowns.push(mismatch)
   }
   return { ...proposal, unknowns: [...proposal.unknowns, ...unknowns] }
+}
+
+function emptyProposal(unknowns: string[]): RoomProposal {
+  return {
+    method: 'none',
+    polygon: null,
+    height: null,
+    edges: [],
+    unknowns,
+    floorY: null,
+    planesUsed: [],
+    planesIgnored: [],
+    needsVerification: true,
+  }
+}
+
+/** The outline's size along its longest edge and across it, against the typed width and length. */
+function dimensionMismatch(polygon: readonly Vec2[], manual: ManualMeasurements): string | null {
+  const { width, length } = manual.room
+  if (width === null || length === null) return null
+  let best: { dx: number; dz: number; size: number } | null = null
+  polygon.forEach(([x1, z1], index) => {
+    const [x2, z2] = polygon[(index + 1) % polygon.length]!
+    const size = Math.hypot(x2 - x1, z2 - z1)
+    if (!best || size > best.size) best = { dx: (x2 - x1) / size, dz: (z2 - z1) / size, size }
+  })
+  if (!best) return null
+  const { dx, dz } = best as { dx: number; dz: number }
+  const along = polygon.map(([x, z]) => x * dx + z * dz)
+  const across = polygon.map(([x, z]) => -x * dz + z * dx)
+  const extents = [
+    Math.max(...along) - Math.min(...along),
+    Math.max(...across) - Math.min(...across),
+  ].sort((left, right) => right - left)
+  const typed = [width, length].sort((left, right) => right - left)
+  const off = extents.some(
+    (value, index) =>
+      Math.abs(value - typed[index]!) > 0.2 &&
+      Math.abs(value - typed[index]!) / typed[index]! > 0.1,
+  )
+  return off
+    ? `The plane outline is about ${round(extents[0]!, 2)} x ${round(extents[1]!, 2)} m but the typed room is ${typed[0]} x ${typed[1]} m. One of them is wrong; check on site.`
+    : null
 }
 
 function manualRectangle(
@@ -153,6 +198,8 @@ function manualRectangle(
 ): RoomProposal | null {
   const { width, length } = measurements.room
   if (width === null || length === null) return null
+  // Typed values are real metres, so only the node's origin and rotation place them, not its scale.
+  const placement = { ...transform, scale: 1 }
   const corners = (
     [
       [0, 0],
@@ -161,7 +208,7 @@ function manualRectangle(
       [0, length],
     ] as const
   ).map(([x, z]): Vec2 => {
-    const point = captureToLevel(transform, [x, 0, z])
+    const point = captureToLevel(placement, [x, 0, z])
     return [round(point[0]), round(point[2])]
   })
   const { points: polygon } = counterClockwise(corners)
@@ -187,7 +234,7 @@ function manualRectangle(
     }),
     unknowns: [
       'Only width and length were measured by hand, so the outline is a rectangle.',
-      'Placement and rotation are assumed: the rectangle starts at the capture origin. Move it to the real room before building on it.',
+      'Placement and rotation are assumed: the rectangle starts at the scan node origin and follows its rotation. Move it to the real room before building on it.',
     ],
     floorY: null,
     planesUsed: [],
@@ -201,11 +248,12 @@ function fromAnalysis(analysis: PlaneAnalysis): RoomProposal {
   const planesIgnored = [...analysis.skipped]
   const height =
     analysis.height === null ? null : { value: analysis.height, basis: 'plane-estimate' as const }
-  if (!analysis.floor) unknowns.push('No floor plane was seen, so floor level is unknown.')
-  if (!analysis.ceiling)
-    unknowns.push('No ceiling plane was seen, so the ceiling height is unknown.')
 
-  const lines = mergeWalls(analysis.walls)
+  const selected = selectRoomWalls(analysis)
+  planesIgnored.push(...selected.rejected)
+  const competing = dropCompetingLines(mergeWalls(selected.walls))
+  const lines = competing.lines
+  for (const dropped of competing.dropped) planesIgnored.push(...dropped)
   const base = {
     height,
     floorY: analysis.floor?.y ?? null,
@@ -219,8 +267,7 @@ function fromAnalysis(analysis: PlaneAnalysis): RoomProposal {
       polygon: null,
       edges: [],
       unknowns: [
-        ...unknowns,
-        `Only ${lines.length} wall line${lines.length === 1 ? '' : 's'} found; at least three are needed to outline a room.`,
+        `Only ${lines.length} usable wall line${lines.length === 1 ? '' : 's'} found; at least three are needed to outline a room.`,
       ],
       planesUsed: [],
     }
@@ -233,10 +280,7 @@ function fromAnalysis(analysis: PlaneAnalysis): RoomProposal {
       method: 'planes',
       polygon: null,
       edges: [],
-      unknowns: [
-        ...unknowns,
-        'The wall lines do not meet at corners, so no outline could be built.',
-      ],
+      unknowns: ['The wall lines do not meet at corners, so no outline could be built.'],
       planesUsed: [],
     }
   }
@@ -263,6 +307,55 @@ function fromAnalysis(analysis: PlaneAnalysis): RoomProposal {
     unknowns,
     planesUsed: [...new Set(walk.order.flatMap((index) => lines[index]!.planeIds))],
   }
+}
+
+/** Parallel lines this close, overlapping along their run, compete for one wall. */
+const COMPETE_OFFSET = 0.6
+const COMPETE_OVERLAP = 0.3
+
+/**
+ * Where two parallel lines sit within `COMPETE_OFFSET` and overlap, they are one wall seen twice
+ * (a furniture back, a mirror ghost, a second pass), not two walls: the longer line stays.
+ */
+function dropCompetingLines(lines: Line[]): {
+  lines: Line[]
+  dropped: Array<Array<{ planeId: string; reason: string }>>
+} {
+  const order = lines.map((_, index) => index).sort((i, j) => lines[j]!.length - lines[i]!.length)
+  const kept: number[] = []
+  const dropped: Array<Array<{ planeId: string; reason: string }>> = []
+  for (const index of order) {
+    const line = lines[index]!
+    const rival = kept.find((other) => competes(lines[other]!, line))
+    if (rival === undefined) {
+      kept.push(index)
+      continue
+    }
+    const gap = Math.abs(
+      (line.q[0] - lines[rival]!.q[0]) * -lines[rival]!.d[1] +
+        (line.q[1] - lines[rival]!.q[1]) * lines[rival]!.d[0],
+    )
+    dropped.push(
+      line.planeIds.map((planeId) => ({
+        planeId,
+        reason: `runs parallel to a longer wall ${round(gap, 2)} m away: furniture or a ghost plane`,
+      })),
+    )
+  }
+  return { lines: kept.sort((i, j) => i - j).map((index) => lines[index]!), dropped }
+}
+
+function competes(a: Line, b: Line): boolean {
+  const sine = Math.abs(a.d[0] * b.d[1] - a.d[1] * b.d[0])
+  const cosine = Math.abs(a.d[0] * b.d[0] + a.d[1] * b.d[1])
+  if (Math.atan2(sine, cosine) > MERGE_ANGLE) return false
+  const offset = Math.abs((b.q[0] - a.q[0]) * -a.d[1] + (b.q[1] - a.q[1]) * a.d[0])
+  if (offset > COMPETE_OFFSET) return false
+  const sign = a.d[0] * b.d[0] + a.d[1] * b.d[1] < 0 ? -1 : 1
+  const bStart = (b.q[0] - a.q[0]) * a.d[0] + (b.q[1] - a.q[1]) * a.d[1]
+  const lo = bStart + (sign > 0 ? b.tMin : -b.tMax)
+  const hi = bStart + (sign > 0 ? b.tMax : -b.tMin)
+  return Math.min(a.tMax, hi) - Math.max(a.tMin, lo) >= COMPETE_OVERLAP
 }
 
 function mergeWalls(walls: readonly WallSegment[]): Line[] {
@@ -346,19 +439,22 @@ function bestWalk(lines: readonly Line[]): Walk | null {
     for (const sign of [1, -1] as const) {
       const walk = walkFrom(lines, start, sign)
       if (!walk || walk.order.length < 3) continue
-      if (
-        !best ||
-        walk.order.length > best.order.length ||
-        (walk.order.length === best.order.length && Number(walk.closed) > Number(best.closed)) ||
-        (walk.order.length === best.order.length &&
-          walk.closed === best.closed &&
-          walk.totalGap < best.totalGap - 1e-9)
-      ) {
+      if (!best || betterWalk(walk, best, lines)) {
         best = walk
       }
     }
   }
   return best
+}
+
+/** Closed loops first, then the most wall length covered (not line count), then the tightest corners. */
+function betterWalk(walk: Walk, best: Walk, lines: readonly Line[]): boolean {
+  if (walk.closed !== best.closed) return walk.closed
+  const covered = (candidate: Walk) =>
+    candidate.order.reduce((sum, index) => sum + lines[index]!.length, 0)
+  const difference = covered(walk) - covered(best)
+  if (Math.abs(difference) > 1e-6) return difference > 0
+  return walk.totalGap < best.totalGap - 1e-9
 }
 
 function walkFrom(lines: readonly Line[], start: number, startSign: 1 | -1): Walk | null {

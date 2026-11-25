@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { link, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { link, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 
 /** Immutable artifacts beside the SQLite scene database. */
@@ -31,6 +31,16 @@ export class DiskArtifactStore {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
     } finally {
       await rm(temporary, { force: true })
+    }
+  }
+
+  /** The stored size in bytes, or null when the artifact is not here. */
+  async size(sha256: string): Promise<number | null> {
+    try {
+      return (await stat(this.path(sha256))).size
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+      throw error
     }
   }
 

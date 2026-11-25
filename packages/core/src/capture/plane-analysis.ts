@@ -56,14 +56,28 @@ export type PlaneAnalysis = {
   horizontalUp: number
   horizontalDown: number
   vertical: number
+  /** Floor level the tall walls stand on (median of their bottoms), when any wall was seen. */
+  wallFloorY: number | null
+  /** Level the tall walls reach (median of their tops). */
+  wallTopY: number | null
+  /** Why the floor, ceiling or height is missing or doubtful, worded for the person. */
+  notes: string[]
 }
 
 /** Vertical planes shorter than this are clutter, not walls. */
 export const MIN_WALL_LENGTH = 0.4
 /** Floor candidates below this fraction of the largest upward plane are tabletops or steps. */
 const FLOOR_AREA_FRACTION = 0.25
-/** A ceiling this close to the floor is a table underside, not a ceiling. */
-const MIN_CEILING_HEIGHT = 1.8
+/** Plausible floor-to-ceiling range in metres; anything outside is a table underside or a ghost. */
+export const MIN_CEILING_HEIGHT = 2
+export const MAX_CEILING_HEIGHT = 6
+/** Vertical planes shorter than this are furniture (cabinet, sofa back), not room walls. */
+export const MIN_WALL_HEIGHT = 1.2
+/** A wall whose bottom floats this far above the floor is a mirror, shelf or ghost. */
+const MAX_WALL_BOTTOM_ABOVE_FLOOR = 0.5
+/** A floor plane must sit this close to where the walls stand. */
+const FLOOR_WALL_TOLERANCE = 0.25
+const SMALL_FLOOR_AREA = 2
 const MAX_TILT = 0.2
 
 /** The 3D point of a plane-local `[x, z]` polygon point, through the plane's column-major pose. */
@@ -178,15 +192,70 @@ export function analysePlanes(
     ;(plane.orientation === 'horizontal-up' ? floors : ceilings).push(summary)
   }
 
-  const largestFloor = Math.max(0, ...floors.map((floor) => floor.area))
-  const floor =
-    floors
-      .filter((candidate) => candidate.area >= largestFloor * FLOOR_AREA_FRACTION)
-      .sort((left, right) => left.y - right.y)[0] ?? null
-  const ceiling =
-    ceilings
-      .filter((candidate) => floor === null || candidate.y - floor.y >= MIN_CEILING_HEIGHT)
-      .sort((left, right) => right.area - left.area)[0] ?? null
+  const notes: string[] = []
+  const tall = walls.filter((wall) => wall.top - wall.bottom >= MIN_WALL_HEIGHT)
+  const lowest = Math.min(...tall.map((wall) => wall.bottom))
+  const wallFloorY = tall.length
+    ? round(median(tall.filter((wall) => wall.bottom - lowest <= 0.3).map((wall) => wall.bottom)))
+    : null
+  const wallTopY = tall.length ? round(median(tall.map((wall) => wall.top))) : null
+
+  const largestFloor = Math.max(0, ...floors.map((candidate) => candidate.area))
+  const sizable = floors.filter((candidate) => candidate.area >= largestFloor * FLOOR_AREA_FRACTION)
+  let floor: HorizontalPlaneSummary | null = null
+  if (wallFloorY !== null) {
+    // The walls say where the floor is, so a floor plane smaller than a tabletop still counts.
+    floor =
+      floors
+        .filter((candidate) => Math.abs(candidate.y - wallFloorY) <= FLOOR_WALL_TOLERANCE)
+        .sort((left, right) => right.area - left.area)[0] ?? null
+    if (!floor) {
+      notes.push(
+        floors.length
+          ? `No upward plane sits at the foot of the walls (walls stand at y ${wallFloorY} m; upward planes at ${floors.map((candidate) => candidate.y).join(', ')} m), so the floor level is unknown.`
+          : 'No upward plane was seen, so the floor level is unknown.',
+      )
+    }
+  } else {
+    floor = sizable.sort((left, right) => left.y - right.y)[0] ?? null
+    notes.push(
+      floor
+        ? 'The floor plane was not checked against wall bottoms because no wall plane was usable; it may be a table or a step.'
+        : 'No upward plane was seen, so the floor level is unknown.',
+    )
+  }
+  if (floor && floor.area < SMALL_FLOOR_AREA) {
+    notes.push(`The floor plane covers only ${floor.area} m2; its level may be wrong.`)
+  }
+
+  const reference = floor?.y ?? null
+  let ceiling: HorizontalPlaneSummary | null = null
+  if (reference === null) {
+    notes.push('No confirmed floor level, so no ceiling height could be measured.')
+  } else {
+    const inRange = ceilings.filter((candidate) => {
+      const height = candidate.y - reference
+      return height >= MIN_CEILING_HEIGHT && height <= MAX_CEILING_HEIGHT
+    })
+    const nearTops =
+      wallTopY === null
+        ? []
+        : inRange.filter((candidate) => Math.abs(candidate.y - wallTopY) <= 0.4)
+    ceiling =
+      (nearTops.length ? nearTops : inRange).sort((left, right) => right.area - left.area)[0] ??
+      null
+    if (!ceiling) {
+      notes.push(
+        ceilings.length
+          ? `Downward planes at ${ceilings.map((candidate) => candidate.y).join(', ')} m are outside ${MIN_CEILING_HEIGHT} to ${MAX_CEILING_HEIGHT} m above the floor, so the ceiling was not seen.`
+          : 'No downward plane was seen, so the ceiling was not seen.',
+      )
+    } else if (wallTopY !== null && Math.abs(ceiling.y - wallTopY) > 0.5) {
+      notes.push(
+        `The ceiling plane (y ${ceiling.y} m) is not where the wall planes end (y ${wallTopY} m); check the height.`,
+      )
+    }
+  }
 
   return {
     floor,
@@ -197,7 +266,44 @@ export function analysePlanes(
     horizontalUp,
     horizontalDown,
     vertical,
+    wallFloorY,
+    wallTopY,
+    notes,
   }
+}
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((left, right) => left - right)
+  const middle = Math.floor(sorted.length / 2)
+  return sorted.length % 2 ? sorted[middle]! : (sorted[middle - 1]! + sorted[middle]!) / 2
+}
+
+/**
+ * The vertical planes that can be room walls: tall enough and standing on the floor. Furniture
+ * fronts, mirror ghosts and floating panels come back in `rejected` with the reason.
+ */
+export function selectRoomWalls(analysis: PlaneAnalysis): {
+  walls: WallSegment[]
+  rejected: Array<{ planeId: string; reason: string }>
+} {
+  const reference = analysis.floor?.y ?? analysis.wallFloorY
+  const walls: WallSegment[] = []
+  const rejected: Array<{ planeId: string; reason: string }> = []
+  for (const wall of analysis.walls) {
+    const height = wall.top - wall.bottom
+    if (height < MIN_WALL_HEIGHT) {
+      rejected.push({
+        planeId: wall.planeId,
+        reason: `a ${round(height, 2)} m tall vertical plane: furniture, not a room wall`,
+      })
+    } else if (reference !== null && wall.bottom - reference > MAX_WALL_BOTTOM_ABOVE_FLOOR) {
+      rejected.push({
+        planeId: wall.planeId,
+        reason: `a vertical plane ${round(wall.bottom - reference, 2)} m above the floor: a mirror, shelf or ghost`,
+      })
+    } else walls.push(wall)
+  }
+  return { walls, rejected }
 }
 
 function wallSegment(

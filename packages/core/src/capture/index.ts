@@ -1,14 +1,31 @@
 export {
+  type CloudSummary,
+  type PathSummary,
+  pathPositions,
+  summarisePath,
+  summarisePointCloud,
+  transformPositions,
+} from './cloud-summary'
+export {
+  isIdentityMatrix4,
+  multiplyMatrix4,
+  resolveFrameTransform,
+} from './frames'
+export {
   analysePlanes,
   captureDirectionToLevel,
   captureToLevel,
   type HorizontalPlaneSummary,
   IDENTITY_SCAN_TRANSFORM,
   isIdentityTransform,
+  MAX_CEILING_HEIGHT,
+  MIN_CEILING_HEIGHT,
+  MIN_WALL_HEIGHT,
   MIN_WALL_LENGTH,
   type PlaneAnalysis,
   planePointToWorld,
   type ScanTransform,
+  selectRoomWalls,
   type WallSegment,
 } from './plane-analysis'
 export {
