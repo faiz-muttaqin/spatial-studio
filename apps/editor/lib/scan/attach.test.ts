@@ -8,6 +8,8 @@ import {
   attachScanToGraph,
   attachScanToProject,
   createProjectWithScan,
+  listProjects,
+  newSceneId,
 } from './attach'
 
 const manifestUrl = `/api/artifacts/${'d'.repeat(64)}`
@@ -154,6 +156,16 @@ describe('attachScanToProject', () => {
     expect((error as AttachError).code).toBe('conflict')
   })
 
+  test('does not attach a session twice (a retry after a lost PUT response)', async () => {
+    const once = await attachScanToGraph(populatedGraph(), attachment)
+    const { calls, fetchImpl } = sceneServer([
+      () => Response.json({ version: 8, graph: once.graph }),
+    ])
+    const result = await attachScanToProject('scene-1', attachment, { fetchImpl })
+    expect(result).toEqual({ sceneId: 'scene-1', scanId: once.scanId, version: 8 })
+    expect(calls).toHaveLength(1)
+  })
+
   test('reports a missing project', async () => {
     const { fetchImpl } = sceneServer([
       () => Response.json({ error: 'not_found' }, { status: 404 }),
@@ -166,15 +178,74 @@ describe('attachScanToProject', () => {
 })
 
 describe('createProjectWithScan', () => {
-  test('creates the project and its scan in one POST', async () => {
+  test('creates the project and its scan in one POST under the chosen id', async () => {
     const { calls, fetchImpl } = sceneServer([
-      () => Response.json({ id: 'scene-new', version: 1 }, { status: 201 }),
+      () => Response.json({ error: 'not_found' }, { status: 404 }),
+      () => Response.json({ id: 'scan-new', version: 1 }, { status: 201 }),
     ])
-    const result = await createProjectWithScan('Flat survey', attachment, fetchImpl)
-    expect(result.sceneId).toBe('scene-new')
-    expect(calls[0]!.method).toBe('POST')
-    const body = calls[0]!.body as { name: string; graph: SceneGraph }
-    expect(body.name).toBe('Flat survey')
+    const result = await createProjectWithScan('Flat survey', attachment, {
+      sceneId: 'scan-new',
+      fetchImpl,
+    })
+    expect(result.sceneId).toBe('scan-new')
+    expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual([
+      'GET /api/scenes/scan-new',
+      'POST /api/scenes',
+    ])
+    const body = calls[1]!.body as { id: string; name: string; graph: SceneGraph }
+    expect(body).toMatchObject({ id: 'scan-new', name: 'Flat survey' })
     expect(apiGraphSchema.safeParse(body.graph).success).toBe(true)
+  })
+
+  test('a retry after a lost response finds the project and writes nothing', async () => {
+    const created = await attachScanToGraph({ nodes: {}, rootNodeIds: [] }, attachment)
+    const { calls, fetchImpl } = sceneServer([
+      () => Response.json({ id: 'scan-new', version: 1, graph: created.graph }),
+    ])
+    const result = await createProjectWithScan('Flat survey', attachment, {
+      sceneId: 'scan-new',
+      fetchImpl,
+    })
+    expect(result.scanId).toBe(created.scanId)
+    expect(calls).toHaveLength(1)
+  })
+
+  test('refuses an id already used by a project without this scan', async () => {
+    const { fetchImpl } = sceneServer([
+      () => Response.json({ id: 'scan-new', version: 4, graph: populatedGraph() }),
+    ])
+    const error = await createProjectWithScan('Flat survey', attachment, {
+      sceneId: 'scan-new',
+      fetchImpl,
+    }).catch((cause: unknown) => cause)
+    expect((error as AttachError).code).toBe('conflict')
+  })
+})
+
+describe('project list and ids', () => {
+  test('lists up to the API page size and says when it was cut', async () => {
+    const scene = { id: 'a', name: 'A', updatedAt: '2026-11-25T00:00:00Z', nodeCount: 3, graph: {} }
+    const few = sceneServer([() => Response.json({ scenes: [scene] })])
+    expect(await listProjects(few.fetchImpl)).toEqual({
+      projects: [{ id: 'a', name: 'A', updatedAt: '2026-11-25T00:00:00Z', nodeCount: 3 }],
+      truncated: false,
+    })
+    expect(few.calls[0]!.url).toBe('/api/scenes?limit=500')
+    const full = sceneServer([() => Response.json({ scenes: Array(500).fill(scene) })])
+    expect((await listProjects(full.fetchImpl)).truncated).toBe(true)
+  })
+
+  test('a failed list is an error, not an empty list', async () => {
+    const { fetchImpl } = sceneServer([
+      () => Response.json({ error: 'unauthorized' }, { status: 401 }),
+    ])
+    const error = await listProjects(fetchImpl).catch((cause: unknown) => cause)
+    expect((error as AttachError).status).toBe(401)
+  })
+
+  test('scene ids match the store slug shape', () => {
+    const ids = new Set(Array.from({ length: 50 }, () => newSceneId()))
+    expect(ids.size).toBe(50)
+    for (const id of ids) expect(id).toMatch(/^[a-z0-9]{12}$/)
   })
 })

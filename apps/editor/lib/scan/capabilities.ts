@@ -30,7 +30,7 @@ export type ProbeScope = {
     permissions?: { query?: (descriptor: { name: string }) => Promise<{ state: string }> }
     userAgentData?: {
       platform?: string
-      getHighEntropyValues?: (hints: string[]) => Promise<Record<string, unknown>>
+      brands?: ReadonlyArray<{ brand: string; version: string }>
     }
   }
   DeviceOrientationEvent?: PermissionGatedEvent
@@ -52,7 +52,7 @@ export async function probeBrowserCapabilities(
 
   return {
     secureContext: scope.isSecureContext === true,
-    userAgent: (navigator.userAgent ?? '').slice(0, 512),
+    browser: browserFamily(navigator),
     camera: {
       mediaDevices: typeof mediaDevices?.getUserMedia === 'function',
       videoInputs: await countVideoInputs(mediaDevices),
@@ -120,21 +120,51 @@ async function sensorPermission(
   return typeof event?.requestPermission === 'function' ? 'prompt' : 'not-required'
 }
 
-/** Manifest `device` from client hints where the browser offers them. Manufacturer stays unknown. */
-export async function describeBrowserDevice(
-  scope: ProbeScope = globalThis as ProbeScope,
-): Promise<ScanBundleMetadata['device']> {
-  const hints = scope.navigator?.userAgentData
-  let model: string | null = null
-  let os: string | null = hints?.platform || null
-  try {
-    const values = (await hints?.getHighEntropyValues?.(['model', 'platformVersion'])) ?? {}
-    if (typeof values.model === 'string' && values.model) model = values.model
-    if (os && typeof values.platformVersion === 'string' && values.platformVersion) {
-      os = `${os} ${values.platformVersion}`
-    }
-  } catch {
-    // Client hints are optional.
+const BRAND_NOISE = /not.?a.?brand|chromium/i
+
+/**
+ * Browser family and major version, e.g. `Chrome 140`. Manifests can be shared,
+ * so the full user agent (device model, build) is never stored.
+ */
+export function browserFamily(navigator: NonNullable<ProbeScope['navigator']>): string | null {
+  const brands = navigator.userAgentData?.brands ?? []
+  const brand =
+    brands.find((entry) => !BRAND_NOISE.test(entry.brand)) ??
+    brands.find((entry) => /chromium/i.test(entry.brand))
+  if (brand) return `${brand.brand} ${brand.version.split('.')[0]}`.slice(0, 64)
+
+  const userAgent = navigator.userAgent ?? ''
+  const patterns: Array<[string, RegExp]> = [
+    ['Edge', /Edg(?:A|iOS)?\/(\d+)/],
+    ['Samsung Internet', /SamsungBrowser\/(\d+)/],
+    ['Firefox', /(?:Firefox|FxiOS)\/(\d+)/],
+    ['Chrome', /(?:Chrome|CriOS)\/(\d+)/],
+    ['Safari', /Version\/(\d+)[\d.]* (?:Mobile\/\S+ )?Safari\//],
+  ]
+  for (const [name, pattern] of patterns) {
+    const match = pattern.exec(userAgent)
+    if (match) return `${name} ${match[1]}`
   }
-  return { manufacturer: null, model, os }
+  return null
+}
+
+const OS_FAMILIES: Array<[string, RegExp]> = [
+  ['Android', /Android/],
+  ['iOS', /iPhone|iPad|iPod/],
+  ['Windows', /Windows/],
+  ['macOS', /Mac OS X|Macintosh/],
+  ['Linux', /Linux/],
+]
+
+/**
+ * Manifest `device` for a browser provider: the OS family only. Model and
+ * manufacturer stay null, since shared scenes can expose the manifest.
+ */
+export function describeBrowserDevice(
+  scope: ProbeScope = globalThis as ProbeScope,
+): ScanBundleMetadata['device'] {
+  const platform = scope.navigator?.userAgentData?.platform
+  const userAgent = scope.navigator?.userAgent ?? ''
+  const os = platform || OS_FAMILIES.find(([, pattern]) => pattern.test(userAgent))?.[0] || null
+  return { manufacturer: null, model: null, os }
 }

@@ -3,6 +3,7 @@ import {
   BridgeError,
   createNativeBridgeClient,
   findNativeBridge,
+  isUploadProgressFor,
   type NativeBridgeTransport,
 } from './native-bridge'
 
@@ -131,10 +132,14 @@ describe('native bridge client', () => {
         expect(request.params).toEqual({ projectId: 'p1', options: { depth: true } })
         bridge.reply(request.id, { sessionId: 'scan-1' })
         bridge.emit({ v: 1, event: 'scan.state', data: { sessionId: 'scan-1', state: 'scanning' } })
-        bridge.emit({ v: 1, event: 'scan.progress', data: { keyframes: 12 } })
+        bridge.emit({ v: 1, event: 'scan.progress', data: { sessionId: 'scan-1', keyframes: 12 } })
       }
       if (request.method === 'scan.upload') {
-        bridge.emit({ v: 1, event: 'upload.progress', data: { uploaded: 1, total: 2 } })
+        bridge.emit({
+          v: 1,
+          event: 'upload.progress',
+          data: { sessionId: 'scan-1', uploaded: 1, total: 2 },
+        })
         bridge.reply(request.id, {
           sessionId: 'scan-1',
           manifestUrl: `/api/artifacts/${manifestSha}`,
@@ -151,26 +156,47 @@ describe('native bridge client', () => {
 
     expect(upload.manifestUrl).toBe(`/api/artifacts/${manifestSha}`)
     expect(seen).toEqual(['scan.state', 'scan.progress', 'upload.progress'])
-    expect(progressOnly).toEqual([{ uploaded: 1, total: 2 }])
+    expect(progressOnly).toEqual([{ sessionId: 'scan-1', uploaded: 1, total: 2 }])
     unsubscribe()
     bridge.emit({ v: 1, event: 'scan.state', data: {} })
     expect(seen).toHaveLength(3)
   })
 
-  test('upload progress events keep a long upload alive past the idle timeout', async () => {
+  test('progress of the uploading session keeps a long upload alive past the idle timeout', async () => {
     const bridge = new FakeBridge()
     const client = createNativeBridgeClient(bridge, { newId: sequentialIds() })
     const result = client.request(
       'scan.upload',
       { sessionId: 's' },
-      { timeoutMs: 30, keepAliveOn: 'upload.progress' },
+      { timeoutMs: 30, keepAlive: isUploadProgressFor('s') },
     )
     for (let step = 0; step < 4; step += 1) {
       await new Promise((resolve) => setTimeout(resolve, 15))
-      bridge.emit({ v: 1, event: 'upload.progress', data: { step } })
+      bridge.emit({ v: 1, event: 'upload.progress', data: { sessionId: 's', step } })
     }
     bridge.reply('req-1', { ok: 'done' })
     expect(await result).toEqual({ ok: 'done' })
+  })
+
+  test("another session's progress, or progress without a session, does not extend it", async () => {
+    const bridge = new FakeBridge()
+    const client = createNativeBridgeClient(bridge, { newId: sequentialIds() })
+    const result = client
+      .request(
+        'scan.upload',
+        { sessionId: 's' },
+        { timeoutMs: 30, keepAlive: isUploadProgressFor('s') },
+      )
+      .catch((cause: unknown) => cause)
+    for (let step = 0; step < 4; step += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 15))
+      bridge.emit({
+        v: 1,
+        event: 'upload.progress',
+        data: step % 2 ? { sessionId: 'other' } : { step },
+      })
+    }
+    expect(((await result) as BridgeError).code).toBe('timeout')
   })
 
   test('ignores malformed, foreign-version and unknown-id messages', async () => {

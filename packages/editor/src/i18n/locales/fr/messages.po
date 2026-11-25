@@ -1144,6 +1144,26 @@ msgstr "Appentis"
 msgid "app.lib.buildTabState.wall"
 msgstr "Mur"
 
+# Source-Hash: 51d4b567c394bc97
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Retry attaching"
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.attach.retry"
+msgstr "Réessayer le rattachement"
+
+# Source-Hash: ca7e25a7dce565cf
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Start over"
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.attach.startOver"
+msgstr "Recommencer"
+
 # Source-Hash: c77728d1508ddd3d
 # Review: required
 # AI-Provider: claude-code
@@ -1154,6 +1174,26 @@ msgstr "Mur"
 msgid "app.scan.destination.existing"
 msgstr "Projet existant"
 
+# Source-Hash: a25b1ead0bcfaa94
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Filter projects"
+#: apps/editor/app/scan/destination-picker.tsx
+#, fuzzy
+msgid "app.scan.destination.filter"
+msgstr "Filtrer les projets"
+
+# Source-Hash: acada0b25dd0129e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Could not load your projects."
+#: apps/editor/app/scan/destination-picker.tsx
+#, fuzzy
+msgid "app.scan.destination.loadFailed"
+msgstr "Impossible de charger vos projets."
+
 # Source-Hash: 3bf656c4d6f1a25e
 # Review: required
 # AI-Provider: claude-code
@@ -1163,6 +1203,16 @@ msgstr "Projet existant"
 #, fuzzy
 msgid "app.scan.destination.loading"
 msgstr "Chargement des projets…"
+
+# Source-Hash: 31ac2b6fe31275a0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "The destination is fixed until this scan is attached or discarded."
+#: apps/editor/app/scan/destination-picker.tsx
+#, fuzzy
+msgid "app.scan.destination.locked"
+msgstr "La destination reste fixée jusqu’à ce que ce relevé soit rattaché ou supprimé."
 
 # Source-Hash: 9f2cbc9214c8f7b0
 # Review: required
@@ -1194,6 +1244,16 @@ msgstr "Nommé d’après la date du relevé si vide"
 msgid "app.scan.destination.new"
 msgstr "Nouveau projet"
 
+# Source-Hash: c751b1b45085d85b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "No project matches."
+#: apps/editor/app/scan/destination-picker.tsx
+#, fuzzy
+msgid "app.scan.destination.noMatch"
+msgstr "Aucun projet ne correspond."
+
 # Source-Hash: 6c6b7df3070f112f
 # Review: required
 # AI-Provider: claude-code
@@ -1203,6 +1263,26 @@ msgstr "Nouveau projet"
 #, fuzzy
 msgid "app.scan.destination.project"
 msgstr "Projet"
+
+# Source-Hash: 514c63428de25cfb
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Try again"
+#: apps/editor/app/scan/destination-picker.tsx
+#, fuzzy
+msgid "app.scan.destination.retry"
+msgstr "Réessayer"
+
+# Source-Hash: 592c898c621d321d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Showing the {count} most recently updated projects."
+#: apps/editor/app/scan/destination-picker.tsx
+#, fuzzy
+msgid "app.scan.destination.truncated"
+msgstr "Affichage des {count} projets modifiés le plus récemment."
 
 # Source-Hash: 68db9bacb1c8105e
 # Review: required
@@ -1243,6 +1323,16 @@ msgstr "Ouvrir le projet"
 #, fuzzy
 msgid "app.scan.error.attach"
 msgstr "Les fichiers sont enregistrés, mais le relevé 3D n’a pas pu être ajouté au projet."
+
+# Source-Hash: d588157782f280cc
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "This capture is outside the scan limits (at most {max} photos). Remove some photos and try again."
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.error.invalidBundle"
+msgstr "Cette capture dépasse les limites d’un relevé (au plus {max} photos). Retirez des photos et réessayez."
 
 # Source-Hash: cc327dc2dc06e4ec
 # Review: required
@@ -1404,6 +1494,16 @@ msgstr "Largeur (m)"
 msgid "app.scan.measure.windowTitle"
 msgstr "Fenêtre {number}"
 
+# Source-Hash: f89744026cb4ffb5
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Discard scan"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.discard"
+msgstr "Supprimer le relevé"
+
 # Source-Hash: 726043edb189abab
 # Review: required
 # AI-Provider: claude-code
@@ -1553,6 +1653,16 @@ msgstr "{count} photos sur {max}"
 #, fuzzy
 msgid "app.scan.photos.hint"
 msgstr "Photographiez chaque mur, angle, porte et fenêtre. Les photos sont redimensionnées à 1920 px et leurs données de localisation sont supprimées avant l’envoi."
+
+# Source-Hash: f584c839454187bb
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "{count, plural, one {# photo was not added} other {# photos were not added}}: a scan holds at most {max}."
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.photos.overLimit"
+msgstr "{count, plural, one {# photo n’a pas été ajoutée} many {# photos n’ont pas été ajoutées} other {# photos n’ont pas été ajoutées}} : un relevé contient au plus {max} photos."
 
 # Source-Hash: 48f20d8ae648477a
 # Review: required

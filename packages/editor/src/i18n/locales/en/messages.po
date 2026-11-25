@@ -459,13 +459,33 @@ msgstr "Shed"
 msgid "app.lib.buildTabState.wall"
 msgstr "Wall"
 
+#: apps/editor/app/scan/scan-app.tsx
+msgid "app.scan.attach.retry"
+msgstr "Retry attaching"
+
+#: apps/editor/app/scan/scan-app.tsx
+msgid "app.scan.attach.startOver"
+msgstr "Start over"
+
 #: apps/editor/app/scan/destination-picker.tsx
 msgid "app.scan.destination.existing"
 msgstr "Existing project"
 
 #: apps/editor/app/scan/destination-picker.tsx
+msgid "app.scan.destination.filter"
+msgstr "Filter projects"
+
+#: apps/editor/app/scan/destination-picker.tsx
+msgid "app.scan.destination.loadFailed"
+msgstr "Could not load your projects."
+
+#: apps/editor/app/scan/destination-picker.tsx
 msgid "app.scan.destination.loading"
 msgstr "Loading projects…"
+
+#: apps/editor/app/scan/destination-picker.tsx
+msgid "app.scan.destination.locked"
+msgstr "The destination is fixed until this scan is attached or discarded."
 
 #: apps/editor/app/scan/destination-picker.tsx
 msgid "app.scan.destination.name"
@@ -480,8 +500,20 @@ msgid "app.scan.destination.new"
 msgstr "New project"
 
 #: apps/editor/app/scan/destination-picker.tsx
+msgid "app.scan.destination.noMatch"
+msgstr "No project matches."
+
+#: apps/editor/app/scan/destination-picker.tsx
 msgid "app.scan.destination.project"
 msgstr "Project"
+
+#: apps/editor/app/scan/destination-picker.tsx
+msgid "app.scan.destination.retry"
+msgstr "Try again"
+
+#: apps/editor/app/scan/destination-picker.tsx
+msgid "app.scan.destination.truncated"
+msgstr "Showing the {count} most recently updated projects."
 
 #: apps/editor/app/scan/scan-app.tsx
 msgid "app.scan.done.again"
@@ -498,6 +530,10 @@ msgstr "Open project"
 #: apps/editor/app/scan/scan-app.tsx
 msgid "app.scan.error.attach"
 msgstr "The files are stored, but the scan could not be added to the project."
+
+#: apps/editor/app/scan/scan-app.tsx
+msgid "app.scan.error.invalidBundle"
+msgstr "This capture is outside the scan limits (at most {max} photos). Remove some photos and try again."
 
 #: apps/editor/app/scan/scan-app.tsx
 msgid "app.scan.error.measurements"
@@ -564,6 +600,10 @@ msgid "app.scan.measure.windowTitle"
 msgstr "Window {number}"
 
 #: apps/editor/app/scan/native-scan.tsx
+msgid "app.scan.native.discard"
+msgstr "Discard scan"
+
+#: apps/editor/app/scan/native-scan.tsx
 msgid "app.scan.native.earlier"
 msgstr "Scans not uploaded yet"
 
@@ -622,6 +662,10 @@ msgstr "{count} of {max} photos"
 #: apps/editor/app/scan/photo-capture.tsx
 msgid "app.scan.photos.hint"
 msgstr "Photograph each wall, corner, door and window. Photos are resized to 1920 px and their location data is removed before upload."
+
+#: apps/editor/app/scan/scan-app.tsx
+msgid "app.scan.photos.overLimit"
+msgstr "{count, plural, one {# photo was not added} other {# photos were not added}}: a scan holds at most {max}."
 
 #: apps/editor/app/scan/photo-capture.tsx
 msgid "app.scan.photos.processing"

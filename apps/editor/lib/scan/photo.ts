@@ -1,5 +1,21 @@
 import { CAPTURE_MAX_IMAGE_LONG_EDGE } from '@pascal-app/core/capture'
 
+/** How old a file's modification time may be and still count as its capture time. */
+const RECENT_CAPTURE_MS = 24 * 60 * 60 * 1000
+const CLOCK_SKEW_MS = 5 * 60 * 1000
+
+/**
+ * A photo's capture time: the file's modification time when it is from the
+ * last day (a fresh camera shot), otherwise now. An older library photo
+ * would leak when it was taken and say nothing about this capture.
+ */
+export function captureTimestamp(lastModified: number, now: number): number {
+  const age = now - lastModified
+  return Number.isFinite(lastModified) && age >= -CLOCK_SKEW_MS && age <= RECENT_CAPTURE_MS
+    ? lastModified
+    : now
+}
+
 export function fitLongEdge(
   width: number,
   height: number,

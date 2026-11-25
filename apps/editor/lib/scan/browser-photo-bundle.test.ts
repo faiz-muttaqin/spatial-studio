@@ -10,7 +10,7 @@ import { buildBrowserPhotoBundle } from './browser-photo-bundle'
 
 const browserCapabilities = {
   secureContext: true,
-  userAgent: 'test',
+  browser: 'Chrome 140',
   camera: { mediaDevices: true, videoInputs: 1 },
   webxr: { api: false, immersiveAr: 'unsupported' as const, features: {} },
   orientation: { api: true, permission: 'not-required' as const },
@@ -26,7 +26,7 @@ async function bundle(room = { width: 3.6, length: 4.2, height: 2.7 }) {
       projectId: 'scene-1',
       appVersion: '0.1.0',
       createdAt: new Date('2026-11-25T08:00:00.000Z'),
-      device: { manufacturer: null, model: 'Synthetic', os: 'Android 16' },
+      device: { manufacturer: null, model: null, os: 'Android' },
       photos: [
         { id: 'frame-001', timestamp: 1_764_057_600_000, width: 1920, height: 1440, image: photo },
       ],

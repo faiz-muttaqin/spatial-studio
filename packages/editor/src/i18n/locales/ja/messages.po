@@ -1144,6 +1144,26 @@ msgstr "片流れ"
 msgid "app.lib.buildTabState.wall"
 msgstr "壁"
 
+# Source-Hash: 51d4b567c394bc97
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Retry attaching"
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.attach.retry"
+msgstr "追加を再試行"
+
+# Source-Hash: ca7e25a7dce565cf
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Start over"
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.attach.startOver"
+msgstr "最初からやり直す"
+
 # Source-Hash: c77728d1508ddd3d
 # Review: required
 # AI-Provider: claude-code
@@ -1154,6 +1174,26 @@ msgstr "壁"
 msgid "app.scan.destination.existing"
 msgstr "既存のプロジェクト"
 
+# Source-Hash: a25b1ead0bcfaa94
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Filter projects"
+#: apps/editor/app/scan/destination-picker.tsx
+#, fuzzy
+msgid "app.scan.destination.filter"
+msgstr "プロジェクトを絞り込む"
+
+# Source-Hash: acada0b25dd0129e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Could not load your projects."
+#: apps/editor/app/scan/destination-picker.tsx
+#, fuzzy
+msgid "app.scan.destination.loadFailed"
+msgstr "プロジェクトを読み込めませんでした。"
+
 # Source-Hash: 3bf656c4d6f1a25e
 # Review: required
 # AI-Provider: claude-code
@@ -1163,6 +1203,16 @@ msgstr "既存のプロジェクト"
 #, fuzzy
 msgid "app.scan.destination.loading"
 msgstr "プロジェクトを読み込み中…"
+
+# Source-Hash: 31ac2b6fe31275a0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "The destination is fixed until this scan is attached or discarded."
+#: apps/editor/app/scan/destination-picker.tsx
+#, fuzzy
+msgid "app.scan.destination.locked"
+msgstr "このスキャンが追加または破棄されるまで、保存先は固定されます。"
 
 # Source-Hash: 9f2cbc9214c8f7b0
 # Review: required
@@ -1194,6 +1244,16 @@ msgstr "空欄の場合はスキャン日時で命名されます"
 msgid "app.scan.destination.new"
 msgstr "新規プロジェクト"
 
+# Source-Hash: c751b1b45085d85b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "No project matches."
+#: apps/editor/app/scan/destination-picker.tsx
+#, fuzzy
+msgid "app.scan.destination.noMatch"
+msgstr "一致するプロジェクトはありません。"
+
 # Source-Hash: 6c6b7df3070f112f
 # Review: required
 # AI-Provider: claude-code
@@ -1203,6 +1263,26 @@ msgstr "新規プロジェクト"
 #, fuzzy
 msgid "app.scan.destination.project"
 msgstr "プロジェクト"
+
+# Source-Hash: 514c63428de25cfb
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Try again"
+#: apps/editor/app/scan/destination-picker.tsx
+#, fuzzy
+msgid "app.scan.destination.retry"
+msgstr "再試行"
+
+# Source-Hash: 592c898c621d321d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Showing the {count} most recently updated projects."
+#: apps/editor/app/scan/destination-picker.tsx
+#, fuzzy
+msgid "app.scan.destination.truncated"
+msgstr "最近更新された {count} 件のプロジェクトを表示しています。"
 
 # Source-Hash: 68db9bacb1c8105e
 # Review: required
@@ -1243,6 +1323,16 @@ msgstr "プロジェクトを開く"
 #, fuzzy
 msgid "app.scan.error.attach"
 msgstr "ファイルは保存されましたが、3Dスキャンをプロジェクトに追加できませんでした。"
+
+# Source-Hash: d588157782f280cc
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "This capture is outside the scan limits (at most {max} photos). Remove some photos and try again."
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.error.invalidBundle"
+msgstr "このキャプチャはスキャンの上限（写真 {max} 枚まで）を超えています。写真を減らしてもう一度お試しください。"
 
 # Source-Hash: cc327dc2dc06e4ec
 # Review: required
@@ -1404,6 +1494,16 @@ msgstr "幅 (m)"
 msgid "app.scan.measure.windowTitle"
 msgstr "窓 {number}"
 
+# Source-Hash: f89744026cb4ffb5
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Discard scan"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.discard"
+msgstr "スキャンを破棄"
+
 # Source-Hash: 726043edb189abab
 # Review: required
 # AI-Provider: claude-code
@@ -1553,6 +1653,16 @@ msgstr "{count} / {max} 枚"
 #, fuzzy
 msgid "app.scan.photos.hint"
 msgstr "各壁、隅、ドア、窓を撮影してください。写真は 1920 px に縮小され、アップロード前に位置情報が削除されます。"
+
+# Source-Hash: f584c839454187bb
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "{count, plural, one {# photo was not added} other {# photos were not added}}: a scan holds at most {max}."
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.photos.overLimit"
+msgstr "{count, plural, other {# 枚の写真を追加できませんでした}}: 1 回のスキャンは最大 {max} 枚です。"
 
 # Source-Hash: 48f20d8ae648477a
 # Review: required

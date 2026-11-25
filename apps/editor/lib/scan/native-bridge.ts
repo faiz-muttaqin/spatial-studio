@@ -117,24 +117,31 @@ const EventSchema = z.object({
 })
 
 const DEFAULT_TIMEOUT_MS = 10_000
-/** Upload replies only after every artifact is stored; progress events keep it alive. */
+/** Upload replies only after every artifact is stored; its own progress events keep it alive. */
 const UPLOAD_IDLE_TIMEOUT_MS = 120_000
 /** `scan.start` may wait for a camera permission or ARCore install prompt. */
 const START_TIMEOUT_MS = 120_000
 
 type RequestOptions = {
   timeoutMs?: number
-  /** Restart the timeout whenever this event arrives. */
-  keepAliveOn?: BridgeEventName
+  /** Restart the timeout whenever an event this accepts arrives. */
+  keepAlive?: (event: BridgeEvent) => boolean
   signal?: AbortSignal
 }
 
 type Pending = {
   resolve(value: unknown): void
   reject(error: BridgeError): void
-  keepAliveOn?: BridgeEventName
+  keepAlive?: (event: BridgeEvent) => boolean
   restartTimer(): void
   clear(): void
+}
+
+/** `upload.progress` of one session; another session's progress must not keep this upload alive. */
+export function isUploadProgressFor(sessionId: string): (event: BridgeEvent) => boolean {
+  return (event) =>
+    event.event === 'upload.progress' &&
+    (event.data as { sessionId?: unknown } | null)?.sessionId === sessionId
 }
 
 export type NativeBridgeClient = {
@@ -171,7 +178,7 @@ export function createNativeBridgeClient(
     if (!parsed) return
     if ('event' in parsed) {
       for (const entry of pending.values()) {
-        if (entry.keepAliveOn === parsed.event) entry.restartTimer()
+        if (entry.keepAlive?.(parsed)) entry.restartTimer()
       }
       for (const { event, listener } of [...listeners]) {
         if (event === '*' || event === parsed.event) listener(parsed)
@@ -215,7 +222,7 @@ export function createNativeBridgeClient(
       const entry: Pending = {
         resolve,
         reject,
-        keepAliveOn: requestOptions.keepAliveOn,
+        keepAlive: requestOptions.keepAlive,
         restartTimer() {
           if (timer !== undefined) clearTimeout(timer)
           timer = setTimeout(() => {
@@ -277,7 +284,7 @@ export function createNativeBridgeClient(
         request(
           'scan.upload',
           { sessionId },
-          { timeoutMs: UPLOAD_IDLE_TIMEOUT_MS, keepAliveOn: 'upload.progress' },
+          { timeoutMs: UPLOAD_IDLE_TIMEOUT_MS, keepAlive: isUploadProgressFor(sessionId) },
         ),
       ),
     discardScan: (sessionId) =>

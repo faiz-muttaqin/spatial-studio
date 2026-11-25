@@ -120,40 +120,84 @@ function findGroundLevel(nodes: Record<string, GraphNode>, rootNodeIds: string[]
 
 export type ProjectSummary = { id: string; name: string; updatedAt: string; nodeCount: number }
 
-export async function listProjects(fetchImpl: typeof fetch = fetch): Promise<ProjectSummary[]> {
-  const response = await fetchImpl('/api/scenes?limit=50')
+/** The scene API's largest page; its list is ordered most recently updated first. */
+const PROJECT_LIST_LIMIT = 500
+
+export async function listProjects(
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ projects: ProjectSummary[]; truncated: boolean }> {
+  const response = await fetchImpl(`/api/scenes?limit=${PROJECT_LIST_LIMIT}`)
   if (!response.ok) throw requestFailed(response.status)
   const body = (await response.json()) as { scenes: ProjectSummary[] }
-  return body.scenes.map(({ id, name, updatedAt, nodeCount }) => ({
-    id,
-    name,
-    updatedAt,
-    nodeCount,
-  }))
+  return {
+    projects: body.scenes.map(({ id, name, updatedAt, nodeCount }) => ({
+      id,
+      name,
+      updatedAt,
+      nodeCount,
+    })),
+    truncated: body.scenes.length >= PROJECT_LIST_LIMIT,
+  }
 }
 
-/** Creates a project that already holds the scan, in one write. */
+/**
+ * A scene id chosen before the first write (the store's slug shape), so a
+ * retried create can tell whether the earlier attempt already landed.
+ */
+export function newSceneId(): string {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789'
+  const bytes = crypto.getRandomValues(new Uint8Array(12))
+  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('')
+}
+
+/** The scan node a capture session was already attached as, if any. */
+export function findScanForSession(graph: SceneGraph, sessionId: string): string | null {
+  for (const node of Object.values(graph.nodes) as Array<{
+    id: string
+    type?: string
+    captureSession?: { sessionId?: string } | null
+  }>) {
+    if (node.type === 'scan' && node.captureSession?.sessionId === sessionId) return node.id
+  }
+  return null
+}
+
+/**
+ * Creates a project that already holds the scan, in one write, under an id
+ * picked by the caller. Repeating the call is safe: if the project exists and
+ * holds this session's scan, the earlier attempt landed and nothing is written.
+ */
 export async function createProjectWithScan(
   projectName: string,
   attachment: ScanAttachment,
-  fetchImpl: typeof fetch = fetch,
+  options: { sceneId: string; fetchImpl?: typeof fetch },
 ): Promise<{ sceneId: string; scanId: string }> {
+  const fetchImpl = options.fetchImpl ?? fetch
+  const { sceneId } = options
+  const existing = await fetchImpl(`/api/scenes/${encodeURIComponent(sceneId)}`)
+  if (existing.ok) {
+    const scene = (await existing.json()) as { graph: SceneGraph }
+    const scanId = findScanForSession(scene.graph, attachment.sessionId)
+    if (scanId) return { sceneId, scanId }
+    throw new AttachError('conflict', `Project ${sceneId} exists without this scan.`, 409)
+  }
+  if (existing.status !== 404) throw requestFailed(existing.status)
+
   const { graph, scanId } = await attachScanToGraph({ nodes: {}, rootNodeIds: [] }, attachment)
   const response = await fetchImpl('/api/scenes', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: projectName, graph }),
+    body: JSON.stringify({ id: sceneId, name: projectName, graph }),
   })
   if (!response.ok) throw requestFailed(response.status)
-  const meta = (await response.json()) as { id: string }
-  return { sceneId: meta.id, scanId }
+  return { sceneId, scanId }
 }
 
 /**
  * Adds the scan to a saved project through the scene API's revision check:
  * read the graph and its version, write with `If-Match`. A concurrent save
  * (409) re-reads and re-applies the addition, so nothing the other writer
- * saved is overwritten.
+ * saved is overwritten. A session that is already attached is not added twice.
  */
 export async function attachScanToProject(
   sceneId: string,
@@ -168,6 +212,8 @@ export async function attachScanToProject(
     const current = await fetchImpl(sceneUrl)
     if (!current.ok) throw requestFailed(current.status)
     const scene = (await current.json()) as { version: number; graph: SceneGraph }
+    const attached = findScanForSession(scene.graph, attachment.sessionId)
+    if (attached) return { sceneId, scanId: attached, version: scene.version }
     const { graph, scanId } = await attachScanToGraph(scene.graph, attachment)
 
     const response = await fetchImpl(sceneUrl, {

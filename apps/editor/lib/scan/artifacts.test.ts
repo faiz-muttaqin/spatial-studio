@@ -52,10 +52,13 @@ describe('artifacts', () => {
     const b = await prepareArtifact('b', 'application/json')
     const { calls, fetchImpl } = fakeFetch(() => Response.json({ ok: true }))
     const progress: number[] = []
+    const stored: string[] = []
     await uploadArtifacts([a, b, a], {
       fetchImpl,
       onProgress: (value) => progress.push(value.done),
+      onStored: (sha256) => stored.push(sha256),
     })
+    expect(stored.sort()).toEqual([a.sha256, b.sha256].sort())
     expect(calls.map((call) => [call.method, call.url, call.contentType]).sort()).toEqual(
       [
         ['PUT', `/api/artifacts/${a.sha256}`, 'image/jpeg'],

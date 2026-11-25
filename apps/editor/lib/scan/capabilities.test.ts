@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { BrowserCapabilitiesSchema } from '@pascal-app/core/capture'
-import { describeBrowserDevice, probeBrowserCapabilities } from './capabilities'
-import { fitLongEdge } from './photo'
+import { browserFamily, describeBrowserDevice, probeBrowserCapabilities } from './capabilities'
+import { captureTimestamp, fitLongEdge } from './photo'
 import { captureName } from './session'
 
 describe('probeBrowserCapabilities', () => {
@@ -74,23 +74,46 @@ describe('probeBrowserCapabilities', () => {
   })
 })
 
-describe('describeBrowserDevice', () => {
-  test('uses client hints when offered and never claims a manufacturer', async () => {
+describe('describeBrowserDevice and browserFamily', () => {
+  const pixelUa =
+    'Mozilla/5.0 (Linux; Android 16; Pixel Test) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.7000.10 Mobile Safari/537.36'
+  const iphoneUa =
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Mobile/15E148 Safari/604.1'
+
+  test('keeps the OS family only, never a model', () => {
     expect(
-      await describeBrowserDevice({
-        navigator: {
-          userAgentData: {
-            platform: 'Android',
-            getHighEntropyValues: async () => ({ model: 'Pixel Test', platformVersion: '16.0.0' }),
-          },
-        },
+      describeBrowserDevice({
+        navigator: { userAgent: pixelUa, userAgentData: { platform: 'Android' } },
       }),
-    ).toEqual({ manufacturer: null, model: 'Pixel Test', os: 'Android 16.0.0' })
-    expect(await describeBrowserDevice({ navigator: {} })).toEqual({
+    ).toEqual({ manufacturer: null, model: null, os: 'Android' })
+    expect(describeBrowserDevice({ navigator: { userAgent: iphoneUa } })).toEqual({
       manufacturer: null,
       model: null,
-      os: null,
+      os: 'iOS',
     })
+    expect(describeBrowserDevice({ navigator: {} }).os).toBeNull()
+  })
+
+  test('reports browser family and major version, without the device model', () => {
+    const chrome = browserFamily({
+      userAgent: pixelUa,
+      userAgentData: {
+        brands: [
+          { brand: 'Not A(Brand', version: '99' },
+          { brand: 'Chromium', version: '140' },
+          { brand: 'Google Chrome', version: '140' },
+        ],
+      },
+    })
+    expect(chrome).toBe('Google Chrome 140')
+    expect(browserFamily({ userAgent: pixelUa })).toBe('Chrome 140')
+    expect(browserFamily({ userAgent: iphoneUa })).toBe('Safari 19')
+    expect(
+      browserFamily({
+        userAgent: 'Mozilla/5.0 (Android 16; Mobile; rv:150.0) Gecko/150.0 Firefox/150.0',
+      }),
+    ).toBe('Firefox 150')
+    expect(browserFamily({ userAgent: 'curl/8' })).toBeNull()
   })
 })
 
@@ -99,6 +122,15 @@ describe('photo and session helpers', () => {
     expect(fitLongEdge(4032, 3024)).toEqual({ width: 1920, height: 1440 })
     expect(fitLongEdge(3000, 4000)).toEqual({ width: 1440, height: 1920 })
     expect(fitLongEdge(1280, 960)).toEqual({ width: 1280, height: 960 })
+  })
+
+  test('uses a file time only when it is from the last day', () => {
+    const now = Date.UTC(2026, 10, 25, 12)
+    const hour = 60 * 60 * 1000
+    expect(captureTimestamp(now - hour, now)).toBe(now - hour)
+    expect(captureTimestamp(now - 400 * 24 * hour, now)).toBe(now)
+    expect(captureTimestamp(now + 2 * hour, now)).toBe(now)
+    expect(captureTimestamp(Number.NaN, now)).toBe(now)
   })
 
   test('names captures by local date and time', () => {

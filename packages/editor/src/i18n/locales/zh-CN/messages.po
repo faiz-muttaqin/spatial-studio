@@ -1144,6 +1144,26 @@ msgstr "单坡"
 msgid "app.lib.buildTabState.wall"
 msgstr "墙体"
 
+# Source-Hash: 51d4b567c394bc97
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Retry attaching"
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.attach.retry"
+msgstr "重试添加"
+
+# Source-Hash: ca7e25a7dce565cf
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Start over"
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.attach.startOver"
+msgstr "重新开始"
+
 # Source-Hash: c77728d1508ddd3d
 # Review: required
 # AI-Provider: claude-code
@@ -1154,6 +1174,26 @@ msgstr "墙体"
 msgid "app.scan.destination.existing"
 msgstr "现有项目"
 
+# Source-Hash: a25b1ead0bcfaa94
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Filter projects"
+#: apps/editor/app/scan/destination-picker.tsx
+#, fuzzy
+msgid "app.scan.destination.filter"
+msgstr "筛选项目"
+
+# Source-Hash: acada0b25dd0129e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Could not load your projects."
+#: apps/editor/app/scan/destination-picker.tsx
+#, fuzzy
+msgid "app.scan.destination.loadFailed"
+msgstr "无法加载你的项目。"
+
 # Source-Hash: 3bf656c4d6f1a25e
 # Review: required
 # AI-Provider: claude-code
@@ -1163,6 +1203,16 @@ msgstr "现有项目"
 #, fuzzy
 msgid "app.scan.destination.loading"
 msgstr "正在加载项目…"
+
+# Source-Hash: 31ac2b6fe31275a0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "The destination is fixed until this scan is attached or discarded."
+#: apps/editor/app/scan/destination-picker.tsx
+#, fuzzy
+msgid "app.scan.destination.locked"
+msgstr "在此扫描添加或丢弃之前，保存位置保持固定。"
 
 # Source-Hash: 9f2cbc9214c8f7b0
 # Review: required
@@ -1194,6 +1244,16 @@ msgstr "留空则按扫描日期命名"
 msgid "app.scan.destination.new"
 msgstr "新建项目"
 
+# Source-Hash: c751b1b45085d85b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "No project matches."
+#: apps/editor/app/scan/destination-picker.tsx
+#, fuzzy
+msgid "app.scan.destination.noMatch"
+msgstr "没有匹配的项目。"
+
 # Source-Hash: 6c6b7df3070f112f
 # Review: required
 # AI-Provider: claude-code
@@ -1203,6 +1263,26 @@ msgstr "新建项目"
 #, fuzzy
 msgid "app.scan.destination.project"
 msgstr "项目"
+
+# Source-Hash: 514c63428de25cfb
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Try again"
+#: apps/editor/app/scan/destination-picker.tsx
+#, fuzzy
+msgid "app.scan.destination.retry"
+msgstr "重试"
+
+# Source-Hash: 592c898c621d321d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Showing the {count} most recently updated projects."
+#: apps/editor/app/scan/destination-picker.tsx
+#, fuzzy
+msgid "app.scan.destination.truncated"
+msgstr "显示最近更新的 {count} 个项目。"
 
 # Source-Hash: 68db9bacb1c8105e
 # Review: required
@@ -1243,6 +1323,16 @@ msgstr "打开项目"
 #, fuzzy
 msgid "app.scan.error.attach"
 msgstr "文件已保存，但无法将扫描模型添加到项目。"
+
+# Source-Hash: d588157782f280cc
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "This capture is outside the scan limits (at most {max} photos). Remove some photos and try again."
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.error.invalidBundle"
+msgstr "此次采集超出扫描限制（最多 {max} 张照片）。请移除部分照片后重试。"
 
 # Source-Hash: cc327dc2dc06e4ec
 # Review: required
@@ -1404,6 +1494,16 @@ msgstr "宽度 (m)"
 msgid "app.scan.measure.windowTitle"
 msgstr "窗 {number}"
 
+# Source-Hash: f89744026cb4ffb5
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Discard scan"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.discard"
+msgstr "丢弃扫描"
+
 # Source-Hash: 726043edb189abab
 # Review: required
 # AI-Provider: claude-code
@@ -1553,6 +1653,16 @@ msgstr "{count} / {max} 张照片"
 #, fuzzy
 msgid "app.scan.photos.hint"
 msgstr "拍摄每面墙体、墙角、门和窗。照片会缩小到 1920 px，并在上传前移除位置信息。"
+
+# Source-Hash: f584c839454187bb
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "{count, plural, one {# photo was not added} other {# photos were not added}}: a scan holds at most {max}."
+#: apps/editor/app/scan/scan-app.tsx
+#, fuzzy
+msgid "app.scan.photos.overLimit"
+msgstr "{count, plural, other {# 张照片未添加}}：一次扫描最多 {max} 张。"
 
 # Source-Hash: 48f20d8ae648477a
 # Review: required

@@ -68,6 +68,8 @@ export async function uploadArtifacts(
   options: {
     fetchImpl?: typeof fetch
     onProgress?: (progress: UploadProgress) => void
+    /** Called once per artifact the API confirmed, so a retry can skip it. */
+    onStored?: (sha256: string) => void
     concurrency?: number
     maxRateLimitRetries?: number
     sleep?: (ms: number) => Promise<void>
@@ -103,6 +105,7 @@ export async function uploadArtifacts(
         response.status,
       )
     }
+    options.onStored?.(artifact.sha256)
     done += 1
     bytesDone += artifact.byteLength
     options.onProgress?.({ done, total: unique.length, bytesDone, bytesTotal })

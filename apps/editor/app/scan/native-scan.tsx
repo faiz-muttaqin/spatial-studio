@@ -1,7 +1,7 @@
 'use client'
 
 import { usePascalI18n } from '@pascal-app/core/i18n'
-import { ScanLine, Upload } from 'lucide-react'
+import { ScanLine, Trash2, Upload } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { PRIMARY_PILL, SECONDARY_PILL } from '@/components/app-shell'
 import {
@@ -18,37 +18,58 @@ function describeEventData(data: unknown): string {
   if (data === null || data === undefined) return ''
   if (typeof data !== 'object') return String(data)
   return Object.entries(data as Record<string, unknown>)
-    .filter(([, value]) => typeof value !== 'object')
+    .filter(([key, value]) => key !== 'sessionId' && typeof value !== 'object')
     .map(([key, value]) => `${key}: ${String(value)}`)
     .join(' · ')
+}
+
+function eventSession(event: BridgeEvent): string | null {
+  const sessionId = (event.data as { sessionId?: unknown } | null)?.sessionId
+  return typeof sessionId === 'string' ? sessionId : null
 }
 
 export function NativeScan({
   client,
   depth,
-  projectId,
   disabled,
+  onBeforeStart,
+  onStarted,
+  onStartFailed,
+  onBeforeUpload,
+  onUploadFailed,
+  onDiscarded,
   onUploaded,
 }: {
   client: NativeBridgeClient
   depth: boolean
-  projectId?: string
   disabled: boolean
-  onUploaded: (result: ScanUploadResult) => void
+  /** Fixes the destination for the scan about to start and returns its project id. */
+  onBeforeStart: () => string
+  onStarted: (sessionId: string) => void
+  onStartFailed: () => void
+  /** Fixes the destination before a scan's upload starts (earlier scans included). */
+  onBeforeUpload: (sessionId: string) => void
+  onUploadFailed: (sessionId: string) => void
+  onDiscarded: (sessionId: string) => void
+  /** Attaches an uploaded scan; resolves once attached or failed (failure is shown by the caller). */
+  onUploaded: (result: ScanUploadResult) => Promise<void>
 }) {
   const i18n = usePascalI18n()
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [events, setEvents] = useState<Partial<Record<BridgeEvent['event'], string>>>({})
   const [earlier, setEarlier] = useState<ScanListEntry[]>([])
-  const [busy, setBusy] = useState<'start' | 'upload' | null>(null)
+  const [busy, setBusy] = useState<'start' | 'upload' | 'discard' | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
 
   useEffect(
     () =>
-      client.subscribe('*', (event) =>
-        setEvents((current) => ({ ...current, [event.event]: describeEventData(event.data) })),
-      ),
-    [client],
+      client.subscribe('*', (event) => {
+        const owner = eventSession(event)
+        // Events of another session (an earlier scan uploading) do not overwrite this one's.
+        if (owner && sessionId && owner !== sessionId) return
+        setEvents((current) => ({ ...current, [event.event]: describeEventData(event.data) }))
+      }),
+    [client, sessionId],
   )
 
   useEffect(() => {
@@ -62,7 +83,7 @@ export function NativeScan({
     }
   }, [client])
 
-  const run = async (kind: 'start' | 'upload', action: () => Promise<void>) => {
+  const run = async (kind: 'start' | 'upload' | 'discard', action: () => Promise<void>) => {
     setBusy(kind)
     setFailure(null)
     try {
@@ -77,13 +98,39 @@ export function NativeScan({
   const start = () =>
     run('start', async () => {
       setEvents({})
-      const result = await client.startScan({ projectId, options: { depth } })
-      setSessionId(result.sessionId)
+      const projectId = onBeforeStart()
+      try {
+        const result = await client.startScan({ projectId, options: { depth } })
+        setSessionId(result.sessionId)
+        onStarted(result.sessionId)
+      } catch (error) {
+        onStartFailed()
+        throw error
+      }
     })
 
   const upload = (id: string) =>
     run('upload', async () => {
-      onUploaded(await client.uploadScan(id))
+      onBeforeUpload(id)
+      let result: ScanUploadResult
+      try {
+        result = await client.uploadScan(id)
+      } catch (error) {
+        onUploadFailed(id)
+        throw error
+      }
+      // Uploaded scans leave the list whatever happens next; a failed attach keeps its result.
+      setEarlier((entries) => entries.filter((entry) => entry.sessionId !== id))
+      if (id === sessionId) setSessionId(null)
+      await onUploaded(result)
+    })
+
+  const discard = (id: string) =>
+    run('discard', async () => {
+      await client.discardScan(id)
+      setSessionId(null)
+      setEvents({})
+      onDiscarded(id)
     })
 
   return (
@@ -97,7 +144,7 @@ export function NativeScan({
       </p>
       <button
         className={cn(PRIMARY_PILL, 'h-11 w-full')}
-        disabled={disabled || busy !== null}
+        disabled={disabled || busy !== null || sessionId !== null}
         onClick={start}
         type="button"
       >
@@ -117,17 +164,29 @@ export function NativeScan({
           {events['upload.progress'] ? (
             <p className="text-muted-foreground">{events['upload.progress']}</p>
           ) : null}
-          <button
-            className={cn(SECONDARY_PILL, 'h-11 w-full')}
-            disabled={disabled || busy !== null}
-            onClick={() => upload(sessionId)}
-            type="button"
-          >
-            <Upload className="h-4 w-4" />
-            {busy === 'upload'
-              ? i18n._({ id: 'app.scan.native.uploading', message: 'Uploading…' })
-              : i18n._({ id: 'app.scan.native.upload', message: 'Upload this scan' })}
-          </button>
+          <div className="grid grid-cols-[1fr_auto] gap-2">
+            <button
+              className={cn(SECONDARY_PILL, 'h-11')}
+              disabled={disabled || busy !== null}
+              onClick={() => upload(sessionId)}
+              type="button"
+            >
+              <Upload className="h-4 w-4" />
+              {busy === 'upload'
+                ? i18n._({ id: 'app.scan.native.uploading', message: 'Uploading…' })
+                : i18n._({ id: 'app.scan.native.upload', message: 'Upload this scan' })}
+            </button>
+            <button
+              aria-label={i18n._({ id: 'app.scan.native.discard', message: 'Discard scan' })}
+              className={cn(SECONDARY_PILL, 'h-11')}
+              disabled={disabled || busy !== null}
+              onClick={() => discard(sessionId)}
+              title={i18n._({ id: 'app.scan.native.discard', message: 'Discard scan' })}
+              type="button"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       ) : null}
 
@@ -151,7 +210,7 @@ export function NativeScan({
                 </span>
                 <button
                   className={SECONDARY_PILL}
-                  disabled={disabled || busy !== null}
+                  disabled={disabled || busy !== null || sessionId !== null}
                   onClick={() => upload(entry.sessionId)}
                   type="button"
                 >
