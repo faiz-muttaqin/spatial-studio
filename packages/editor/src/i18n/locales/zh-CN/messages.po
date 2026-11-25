@@ -2235,6 +2235,70 @@ msgstr "上传失败。未添加任何内容，你可以重试。"
 msgid "app.scan.intro"
 msgstr "用这部手机拍摄照片并记录尺寸。它们会作为重建房间的参考图层与项目一起保存。"
 
+# Source-Hash: 2d7d77c9c235dd59
+# Review: required
+# English: "Floor covered {percent}%"
+#: apps/editor/app/scan/live/live-view.tsx
+#, fuzzy
+msgid "app.scan.live.coverage"
+msgstr "地面已覆盖 {percent}%"
+
+# Source-Hash: cb5e84c098e62d2c
+# Review: required
+# English: "The preview could not connect"
+#: apps/editor/app/scan/live/live-view.tsx
+#, fuzzy
+msgid "app.scan.live.failed"
+msgstr "预览无法连接"
+
+# Source-Hash: 66768389d06c4aab
+# Review: required
+# English: "The live preview is shown inside the companion app while scanning."
+#: apps/editor/app/scan/live/live-view.tsx
+#, fuzzy
+msgid "app.scan.live.noApp"
+msgstr "扫描时，实时预览会显示在配套应用内。"
+
+# Source-Hash: dd3cd056185905ac
+# Review: required
+# English: "Live preview"
+#: apps/editor/app/scan/live/live-view.tsx
+#, fuzzy
+msgid "app.scan.live.open"
+msgstr "实时预览"
+
+# Source-Hash: 0c36b1b7902a20a9
+# Review: required
+# English: "No room outline yet. Keep moving around the room."
+#: apps/editor/app/scan/live/live-view.tsx
+#, fuzzy
+msgid "app.scan.live.outlineUnclear"
+msgstr "暂无房间轮廓。请继续在房间里移动。"
+
+# Source-Hash: b0c0000eeb008e92
+# Review: required
+# English: "Paused"
+#: apps/editor/app/scan/live/live-view.tsx
+#, fuzzy
+msgid "app.scan.live.paused"
+msgstr "已暂停"
+
+# Source-Hash: f9a1c6d607daa91d
+# Review: required
+# English: "{frames} frames, {kb} KB"
+#: apps/editor/app/scan/live/live-view.tsx
+#, fuzzy
+msgid "app.scan.live.stats"
+msgstr "{frames} 帧，{kb} KB"
+
+# Source-Hash: eaa1aac63a5ce4d0
+# Review: required
+# English: "Connecting to the scan"
+#: apps/editor/app/scan/live/live-view.tsx
+#, fuzzy
+msgid "app.scan.live.waiting"
+msgstr "正在连接扫描"
+
 # Source-Hash: ccee46b3fa1542a3
 # Review: required
 # AI-Provider: claude-code
@@ -2460,6 +2524,22 @@ msgstr "配套应用使用 ARCore 记录位姿、平面、深度和关键帧，�
 #, fuzzy
 msgid "app.scan.native.inProject"
 msgstr "已在 {project} 中"
+
+# Source-Hash: 4c03e9893226a97d
+# Review: required
+# English: "Show a live map while scanning"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.livePreview"
+msgstr "扫描时显示实时地图"
+
+# Source-Hash: 9afb1cceb0c6a8b8
+# Review: required
+# English: "Off by default. A small preview of coverage and the room outline appears on the scan screen. It is only a preview; the saved scan is the same either way."
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.livePreviewHint"
+msgstr "默认关闭。扫描界面会显示覆盖范围和房间轮廓的小型预览。它只是预览，保存的扫描结果在两种情况下完全相同。"
 
 # Source-Hash: 3177d0e4a4ca7c04
 # Review: required

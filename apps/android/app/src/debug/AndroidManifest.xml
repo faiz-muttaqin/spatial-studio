@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- Debug only: the P2N.3 transport benchmark. Exported because `adb shell am start` is refused for a non-exported activity (checked on an API 36 emulator); it takes only a trusted-origin URL and does nothing else. Not in release. -->
+        <activity
+            android:name=".live.LiveBenchActivity"
+            android:exported="true" />
+    </application>
+</manifest>

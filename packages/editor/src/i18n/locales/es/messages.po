@@ -2235,6 +2235,70 @@ msgstr "Error al subir. No se adjuntó nada; puede volver a intentarlo."
 msgid "app.scan.intro"
 msgstr "Tome fotos y medidas con este teléfono. Se guardan con el proyecto como capa de referencia para reconstruir la estancia."
 
+# Source-Hash: 2d7d77c9c235dd59
+# Review: required
+# English: "Floor covered {percent}%"
+#: apps/editor/app/scan/live/live-view.tsx
+#, fuzzy
+msgid "app.scan.live.coverage"
+msgstr "Suelo cubierto {percent} %"
+
+# Source-Hash: cb5e84c098e62d2c
+# Review: required
+# English: "The preview could not connect"
+#: apps/editor/app/scan/live/live-view.tsx
+#, fuzzy
+msgid "app.scan.live.failed"
+msgstr "No se pudo conectar la vista previa"
+
+# Source-Hash: 66768389d06c4aab
+# Review: required
+# English: "The live preview is shown inside the companion app while scanning."
+#: apps/editor/app/scan/live/live-view.tsx
+#, fuzzy
+msgid "app.scan.live.noApp"
+msgstr "La vista previa en vivo se muestra dentro de la aplicación complementaria durante el escaneo."
+
+# Source-Hash: dd3cd056185905ac
+# Review: required
+# English: "Live preview"
+#: apps/editor/app/scan/live/live-view.tsx
+#, fuzzy
+msgid "app.scan.live.open"
+msgstr "Vista previa en vivo"
+
+# Source-Hash: 0c36b1b7902a20a9
+# Review: required
+# English: "No room outline yet. Keep moving around the room."
+#: apps/editor/app/scan/live/live-view.tsx
+#, fuzzy
+msgid "app.scan.live.outlineUnclear"
+msgstr "Aún no hay contorno de la sala. Sigue moviéndote por la sala."
+
+# Source-Hash: b0c0000eeb008e92
+# Review: required
+# English: "Paused"
+#: apps/editor/app/scan/live/live-view.tsx
+#, fuzzy
+msgid "app.scan.live.paused"
+msgstr "En pausa"
+
+# Source-Hash: f9a1c6d607daa91d
+# Review: required
+# English: "{frames} frames, {kb} KB"
+#: apps/editor/app/scan/live/live-view.tsx
+#, fuzzy
+msgid "app.scan.live.stats"
+msgstr "{frames} fotogramas, {kb} KB"
+
+# Source-Hash: eaa1aac63a5ce4d0
+# Review: required
+# English: "Connecting to the scan"
+#: apps/editor/app/scan/live/live-view.tsx
+#, fuzzy
+msgid "app.scan.live.waiting"
+msgstr "Conectando con el escaneo"
+
 # Source-Hash: ccee46b3fa1542a3
 # Review: required
 # AI-Provider: claude-code
@@ -2460,6 +2524,22 @@ msgstr "La aplicación complementaria registra la pose, los planos, la profundid
 #, fuzzy
 msgid "app.scan.native.inProject"
 msgstr "Ya está en {project}"
+
+# Source-Hash: 4c03e9893226a97d
+# Review: required
+# English: "Show a live map while scanning"
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.livePreview"
+msgstr "Mostrar un mapa en vivo durante el escaneo"
+
+# Source-Hash: 9afb1cceb0c6a8b8
+# Review: required
+# English: "Off by default. A small preview of coverage and the room outline appears on the scan screen. It is only a preview; the saved scan is the same either way."
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.livePreviewHint"
+msgstr "Desactivado por defecto. En la pantalla de escaneo aparece una pequeña vista previa de la cobertura y del contorno de la sala. Es solo una vista previa; el escaneo guardado es el mismo en ambos casos."
 
 # Source-Hash: 3177d0e4a4ca7c04
 # Review: required

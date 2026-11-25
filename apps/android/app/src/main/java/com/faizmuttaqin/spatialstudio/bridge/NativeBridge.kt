@@ -120,7 +120,7 @@ class NativeBridge(
         }
         worker.execute {
             val reply = try {
-                BridgeProtocol.okReply(request.id, handle(request))
+                BridgeProtocol.okReply(request.id, handle(request, origin))
             } catch (e: BridgeException) {
                 BridgeProtocol.errorReply(request.id, e.code, e.message.orEmpty())
             } catch (e: Exception) {
@@ -131,7 +131,7 @@ class NativeBridge(
         }
     }
 
-    private fun handle(request: BridgeRequest): JsonElement = when (request.method) {
+    private fun handle(request: BridgeRequest, origin: OriginAllowlist.Origin): JsonElement = when (request.method) {
         "bridge.hello" -> buildJsonObject {
             put("bridgeVersion", BridgeProtocol.VERSION)
             put("appVersion", BuildConfig.VERSION_NAME)
@@ -139,14 +139,14 @@ class NativeBridge(
             put("methods", JsonArray(BridgeProtocol.METHODS.map(::JsonPrimitive)))
         }
         "capabilities.get" -> CapabilityProbe(appContext).probe(scanActive = ScanCoordinator.active != null)
-        "scan.start" -> startScan(ScanParams.start(request.params))
+        "scan.start" -> startScan(ScanParams.start(request.params), origin)
         "scan.list" -> listScans()
         "scan.discard" -> discard(ScanParams.sessionId(request.params))
         "scan.markAttached" -> markAttached(ScanParams.sessionId(request.params))
         else -> throw BridgeException(BridgeErrorCode.UNKNOWN_METHOD, "Unknown method")
     }
 
-    private fun startScan(params: ScanStartParams): JsonElement {
+    private fun startScan(params: ScanStartParams, origin: OriginAllowlist.Origin): JsonElement {
         val availability = ArCoreApk.getInstance().checkAvailability(appContext)
         if (availability.isUnsupported) {
             throw BridgeException(BridgeErrorCode.UNSUPPORTED, "ARCore is not supported on this device")
@@ -156,7 +156,7 @@ class NativeBridge(
         }
         val sessionId = UUID.randomUUID().toString()
         Log.i(TAG, "scan.start $sessionId")
-        if (!ScanCoordinator.begin(ScanCoordinator.ActiveScan(sessionId, params.projectId, params.options))) {
+        if (!ScanCoordinator.begin(ScanCoordinator.ActiveScan(sessionId, params.projectId, params.options, origin.toString()))) {
             Log.i(TAG, "scan.start rejected as busy: a scan is already running")
             throw BridgeException(BridgeErrorCode.BUSY, "A scan is already running")
         }

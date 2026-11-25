@@ -18,6 +18,10 @@ data class ScanOptions(
     val sensors: Boolean = true,
     /** Approximate location for `geolocation` and the compass declination. Off unless the page opts in. */
     val location: Boolean = false,
+    /** Shows the live preview panel on the scan screen (P2N.3). Off unless the page opts in. */
+    val livePreview: Boolean = false,
+    /** Page language (BCP 47) for the live preview panel; never saved with the scan. */
+    val locale: String? = null,
     /** Contract v1.3: ARCore torch for the whole scan, set when the session is configured. Off by default. */
     val torch: Boolean = false,
 ) {
@@ -28,6 +32,7 @@ data class ScanOptions(
         const val MIN_SPACING_M = 0.05
         const val MAX_SPACING_M = 2.0
         const val MAX_PROJECT_ID_LENGTH = 200
+        val LOCALE = Regex("^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$")
     }
 }
 
@@ -83,8 +88,16 @@ object ScanParams {
         }
         val sensors = o["sensors"]?.let { (it as? JsonPrimitive)?.takeIf { p -> !p.isString }?.booleanOrNull ?: invalid("options.sensors must be a boolean") }
         val location = o["location"]?.let { (it as? JsonPrimitive)?.takeIf { p -> !p.isString }?.booleanOrNull ?: invalid("options.location must be a boolean") }
+        val livePreview = o["livePreview"]?.let { (it as? JsonPrimitive)?.takeIf { p -> !p.isString }?.booleanOrNull ?: invalid("options.livePreview must be a boolean") }
+        val locale = o["locale"]?.let {
+            val v = (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content
+            if (v == null || v.length > 35 || !ScanOptions.LOCALE.matches(v)) invalid("options.locale must be a BCP 47 language tag")
+            v
+        }
         val torch = o["torch"]?.let { (it as? JsonPrimitive)?.takeIf { p -> !p.isString }?.booleanOrNull ?: invalid("options.torch must be a boolean") }
         return ScanOptions(
+            locale = locale,
+            livePreview = livePreview ?: defaults.livePreview,
             torch = torch ?: defaults.torch,
             sensors = sensors ?: defaults.sensors,
             location = location ?: defaults.location,

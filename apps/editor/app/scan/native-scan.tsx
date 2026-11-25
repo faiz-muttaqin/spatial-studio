@@ -1,6 +1,6 @@
 'use client'
 
-import { usePascalI18n } from '@pascal-app/core/i18n'
+import { useLocale, usePascalI18n } from '@pascal-app/core/i18n'
 import { ScanLine, Trash2, Upload } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { PRIMARY_PILL, SECONDARY_PILL } from '@/components/app-shell'
@@ -78,6 +78,7 @@ export function NativeScan({
   onUploaded: (result: ScanUploadResult & { projectId?: string | null }) => Promise<void>
 }) {
   const i18n = usePascalI18n()
+  const locale = useLocale()
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [events, setEvents] = useState<Partial<Record<BridgeEvent['event'], string>>>({})
   const [earlier, setEarlier] = useState<ScanListEntry[]>([])
@@ -86,6 +87,7 @@ export function NativeScan({
   const [busy, setBusy] = useState<'start' | 'upload' | 'discard' | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
   const [location, setLocation] = useState(false)
+  const [livePreview, setLivePreview] = useState(false)
   const [torch, setTorch] = useState(false)
   /** Where each uploaded scan stands on this site; null while it is being checked. */
   const [report, setReport] = useState<UploadedScanReport | null>(null)
@@ -153,7 +155,10 @@ export function NativeScan({
       setEvents({})
       const projectId = onBeforeStart()
       try {
-        const result = await client.startScan({ projectId, options: { depth, location, torch } })
+        const result = await client.startScan({
+          projectId,
+          options: { depth, location, torch, livePreview, locale },
+        })
         setSessionId(result.sessionId)
         onStarted(result.sessionId)
       } catch (error) {
@@ -309,6 +314,28 @@ export function NativeScan({
               id: 'app.scan.native.torchHint',
               message:
                 'Set before the scan and kept on throughout. Tracking may be less reliable with the torch on.',
+            })}
+          </span>
+        </span>
+      </label>
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          checked={livePreview}
+          className="mt-1"
+          disabled={disabled || busy !== null || sessionId !== null}
+          onChange={(event) => setLivePreview(event.target.checked)}
+          type="checkbox"
+        />
+        <span>
+          {i18n._({
+            id: 'app.scan.native.livePreview',
+            message: 'Show a live map while scanning',
+          })}
+          <span className="block text-muted-foreground text-xs">
+            {i18n._({
+              id: 'app.scan.native.livePreviewHint',
+              message:
+                'Off by default. A small preview of coverage and the room outline appears on the scan screen. It is only a preview; the saved scan is the same either way.',
             })}
           </span>
         </span>
