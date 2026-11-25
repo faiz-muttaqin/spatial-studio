@@ -10,3 +10,6 @@ node_modules
 *.log
 *.tsbuildinfo
 **/*.tsbuildinfo
+
+# Android companion: built by its own Gradle workflow, never part of the web image.
+apps/android
