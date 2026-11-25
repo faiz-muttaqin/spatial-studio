@@ -1,0 +1,19 @@
+[versions]
+agp = "8.8.2"
+kotlin = "2.0.21"
+activity = "1.10.1"
+webkit = "1.13.0"
+arcore = "1.57.0"
+serialization = "1.7.3"
+junit = "4.13.2"
+
+[libraries]
+androidx-activity-ktx = { module = "androidx.activity:activity-ktx", version.ref = "activity" }
+androidx-webkit = { module = "androidx.webkit:webkit", version.ref = "webkit" }
+arcore = { module = "com.google.ar:core", version.ref = "arcore" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
+junit = { module = "junit:junit", version.ref = "junit" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }

@@ -28,6 +28,7 @@ A bundle is one `CaptureSessionManifest` schema version 2 (`packages/core/src/ca
 
 - `coordinateFrames`: `{ id: "world", convention: "arcore-world" }` for the companion (right-handed, Y up, metres, gravity aligned, origin at session start) or `"webxr-local-floor"` for WebXR. Browser-photo bundles have no world frame.
 - Matrices are 16 numbers, column-major (Three.js `Matrix4.fromArray` and ARCore `Pose.toMatrix` order), camera-to-world.
+- Camera poses use OpenGL camera axes: +X right, +Y up, -Z along the view direction. For `android-arcore`, keyframe and trajectory poses are ARCore `Camera.getPose()`, whose right and up are relative to the image readout, so they match the stored, unrotated JPEG and its intrinsics (`Camera.getImageIntrinsics()`, scaled to the stored size); depth intrinsics are `Camera.getTextureIntrinsics()` scaled to the depth image. The manifest records this as `metadata.camera: { convention: "opengl", frame: "image-readout", sensorOrientationDeg }`. Consumers using the computer-vision convention (+Y down, +Z forward) flip the Y and Z axes of the camera frame.
 - `clocks`: `{ id: "device", timebase: "nanoseconds" }` for ARCore frame timestamps and `{ id: "wall", timebase: "milliseconds", epoch: "unix" }` for capture times.
 
 ### Streams
