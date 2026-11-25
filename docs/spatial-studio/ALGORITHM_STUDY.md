@@ -47,3 +47,35 @@ Status: study of 2026-11-25, owner request. The owner treats this fork as a priv
 | R3 | Android coverage grid, speed and jump guard, torch experiment (flag recorded per keyframe) | `apps/android` | M |
 | R4 | Mapping view: a host view beside 3D and 2D showing the colour orthomap with the scene's walls and the proposal overlaid, computed in a Web Worker | `apps/editor` host view | M |
 | Later | Tape solver, door-to-door joining, loop closure, texture atlas | core and editor | M to L |
+
+## RoomPlan and Polycam parity
+
+Target experience: Apple RoomPlan (labelled walls, doors, windows, openings and furniture as sized objects) and Polycam (photoreal capture), built from open methods on this fork. Our differentiator stays the editable Pascal scene plus the MCP agent.
+
+| Capability | Open source to learn from | Our route | Step |
+|---|---|---|---|
+| Guided capture, coverage | SceneView `ScanCoverage.kt` | Android coverage grid and guards | R3 |
+| Walls and outline | Plan3D carving, our depth walls | carving plus depth-fit plus planes | R2 |
+| Coloured scan, top-down map | SceneView fusion, 3DLiveScanner texturing | colour cloud and orthomap | R1 |
+| Doors, windows, furniture as objects | SpatialLM (`8913c44d84a4`), RoomFormer (`e88a7e3a81e3`) | agent-driven semantics (below); SpatialLM as an optional GPU benchmark | R5, R7 |
+| Photoreal capture | Brush (`d43bd1e6b232`, Apache-2.0) | Brush dataset export, splat layer in the viewer | R6 |
+| Mapping view | (ours) | host view beside 3D and 2D | R4 |
+
+### Semantics without a GPU (R5)
+
+SpatialLM outputs `Wall(ax,ay,az,bx,by,bz,height,thickness)`, `Door/Window(wall, centre, width, height)` and `Bbox(class, centre, yaw, size)` from a Z-up metric point cloud. However, the shipped code needs CUDA, and the published checkpoints carry non-commercial terms. Its own phone-video test set gives F1@.25 of about 68 for walls, 47 for doors and 51 for windows, and weak scores for most furniture. Our primary path uses the MCP agent instead:
+1. For each wall, choose keyframes that face it.
+2. The agent marks doors, windows and furniture in those photos (label, 2D box, confidence).
+3. Lift the marks to 3D with the 160x90 depth inside the box (confidence-filtered median), the intrinsics and the pose. Snap doors and windows to the nearest wall; fit oriented boxes for furniture.
+4. Cluster detections across views (two or more views, or flag as uncertain).
+5. Map to Pascal `door`/`window` nodes and catalogue items (`search_assets`, `place_items`), all as a draft for the user to verify.
+
+SpatialLM's output grammar is a good target schema for the agent's structured answer. An optional SpatialLM GPU service (Z-up PLY in, layout JSON out, stored as a derived stream with model version and seed) can benchmark the agent path on the same scans (R7).
+
+### Photoreal capture (R6)
+
+Brush trains Gaussian splats on desktop, Android or browser WebGPU (Chrome 134+) from a nerfstudio `transforms.json` or COLMAP dataset, with poses fixed as given and an optional initial PLY.
+- **Export.** A "Brush dataset" zip: `images/` with unrotated 1920x1080 keyframes, `transforms.json` with `transform_matrix` taken directly from our column-major OpenGL camera-to-world (written as rows) and `fl_x, fl_y, cx, cy, w, h`, and `points.ply` from the R1 colour cloud. Check the export by reprojecting the cloud into keyframes.
+- **Training.** The owner trains in Brush on a GPU machine or a WebGPU laptop; the VM does not.
+- **Upload and render.** The exported splat PLY (or a compressed format) is uploaded as a `gaussian-splat` stream (kind already named in the core schema) and rendered as a capture layer in ARCore world metres, so it needs no extra transform. Spark (three.js) is the first renderer to try.
+- **Risks.** ARCore drift and exposure changes cause floaters; Brush has no pose refinement; splat files are large, so deliver them compressed.
