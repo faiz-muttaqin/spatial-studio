@@ -2,7 +2,7 @@
 
 import { usePascalI18n } from '@pascal-app/core/i18n'
 import { ScanLine, Trash2, Upload } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { PRIMARY_PILL, SECONDARY_PILL } from '@/components/app-shell'
 import {
   BridgeError,
@@ -11,6 +11,7 @@ import {
   type ScanListEntry,
   type ScanUploadResult,
 } from '@/lib/scan/native-bridge'
+import { classifyUploadedScans, type UploadedScanReport } from '@/lib/scan/uploaded-scans'
 import { cn } from '@/lib/utils'
 
 /** Event payloads are the companion's to define; show them as plain key/value text. */
@@ -25,6 +26,25 @@ function describeEventData(data: unknown): string {
 
 /** The list shows only the latest few; the companion does not say which were attached. */
 const MAX_UPLOADED_SHOWN = 3
+const MAX_CHECKED = 8
+const HIDDEN_KEY = 'spatial-studio.scan.hidden'
+
+/** Scans the user hid on this device; the companion's copy is untouched. */
+function readHidden(): Set<string> {
+  try {
+    const raw = window.localStorage.getItem(HIDDEN_KEY)
+    const parsed: unknown = raw ? JSON.parse(raw) : []
+    return new Set(Array.isArray(parsed) ? parsed.filter((id) => typeof id === 'string') : [])
+  } catch {
+    return new Set()
+  }
+}
+
+function writeHidden(ids: Set<string>) {
+  try {
+    window.localStorage.setItem(HIDDEN_KEY, JSON.stringify([...ids]))
+  } catch {}
+}
 
 function eventSession(event: BridgeEvent): string | null {
   const sessionId = (event.data as { sessionId?: unknown } | null)?.sessionId
@@ -66,6 +86,9 @@ export function NativeScan({
   const [busy, setBusy] = useState<'start' | 'upload' | 'discard' | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
   const [location, setLocation] = useState(false)
+  const [torch, setTorch] = useState(false)
+  /** Where each uploaded scan stands on this site; null while it is being checked. */
+  const [report, setReport] = useState<UploadedScanReport | null>(null)
 
   useEffect(
     () =>
@@ -95,7 +118,16 @@ export function NativeScan({
       (entries) => {
         if (!active) return
         setEarlier(entries.filter((entry) => !entry.uploaded))
-        setUploaded(entries.filter((entry) => entry.uploaded && entry.manifestUrl))
+        const found = entries.filter((entry) => entry.uploaded && entry.manifestUrl)
+        setUploaded(found)
+        // Only the entries that can be shown are checked; the previous answers stay on screen meanwhile.
+        const shown = found
+          .filter((entry) => !entry.attached && !readHidden().has(entry.sessionId))
+          .slice(0, MAX_CHECKED)
+        classifyUploadedScans(shown, {}).then(
+          (result) => active && setReport(result),
+          () => active && setReport({ statuses: new Map(), projectNames: new Map() }),
+        )
       },
       () => {},
     )
@@ -121,7 +153,7 @@ export function NativeScan({
       setEvents({})
       const projectId = onBeforeStart()
       try {
-        const result = await client.startScan({ projectId, options: { depth, location } })
+        const result = await client.startScan({ projectId, options: { depth, location, torch } })
         setSessionId(result.sessionId)
         onStarted(result.sessionId)
       } catch (error) {
@@ -163,10 +195,65 @@ export function NativeScan({
       })
     })
 
-  // Scans the companion says are attached, or this visit handled, are not offered; the latest few remain.
-  const offered = uploaded
-    .filter((entry) => !entry.attached && !handled.has(entry.sessionId))
+  // Scans the companion says are attached, or this visit handled, are not offered.
+  const [hiddenVersion, setHiddenVersion] = useState(0)
+  const hidden = useMemo(() => readHidden(), [hiddenVersion])
+  const unhandled = uploaded.filter(
+    (entry) => !entry.attached && !handled.has(entry.sessionId) && !hidden.has(entry.sessionId),
+  )
+  const statusOf = (entry: ScanListEntry) => report?.statuses.get(entry.sessionId) ?? null
+  const attachable = unhandled
+    .filter((entry) => {
+      const status = statusOf(entry)
+      return status === null || status.kind === 'attachable'
+    })
     .slice(0, MAX_UPLOADED_SHOWN)
+  const others = unhandled.filter((entry) => {
+    const status = statusOf(entry)
+    return status !== null && status.kind !== 'attachable'
+  })
+  const offered = [...attachable, ...others]
+
+  const hideScan = (id: string) => {
+    const ids = readHidden().add(id)
+    writeHidden(ids)
+    setHiddenVersion((version) => version + 1)
+  }
+
+  /** Deletes the phone's only copy: asks first. */
+  const removeScan = (id: string) => {
+    const sure = window.confirm(
+      i18n._({
+        id: 'app.scan.native.removeConfirm',
+        message:
+          'Delete this scan from the phone? It is not on this site, so this cannot be undone.',
+      }),
+    )
+    if (!sure) return
+    run('discard', async () => {
+      await client.discardScan(id)
+      setUploaded((entries) => entries.filter((entry) => entry.sessionId !== id))
+    })
+  }
+
+  const markAttachedOnPhone = (id: string) =>
+    run('upload', async () => {
+      await client.markAttached(id)
+      markHandled(id)
+    })
+
+  const describeEntry = (entry: ScanListEntry) => {
+    const created = new Date(entry.createdAt)
+    const when = Number.isNaN(created.getTime())
+      ? String(entry.createdAt)
+      : created.toLocaleString()
+    const size = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(
+      entry.bytes / 1_000_000,
+    )
+    // Omitted when the project is not known (not created yet, or the list could not be read).
+    const project = entry.projectId ? (report?.projectNames.get(entry.projectId) ?? null) : null
+    return { when, size, project }
+  }
 
   const discard = (id: string) =>
     run('discard', async () => {
@@ -203,6 +290,25 @@ export function NativeScan({
               id: 'app.scan.native.locationHint',
               message:
                 'Off by default. The location is saved with the scan and used to correct the compass to true north when the scan is processed. The phone asks for permission first.',
+            })}
+          </span>
+        </span>
+      </label>
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          checked={torch}
+          className="mt-1"
+          disabled={disabled || busy !== null || sessionId !== null}
+          onChange={(event) => setTorch(event.target.checked)}
+          type="checkbox"
+        />
+        <span>
+          {i18n._({ id: 'app.scan.native.torch', message: 'Use the torch (experiment)' })}
+          <span className="block text-muted-foreground text-xs">
+            {i18n._({
+              id: 'app.scan.native.torchHint',
+              message:
+                'Set before the scan and kept on throughout. Tracking may be less reliable with the torch on.',
             })}
           </span>
         </span>
@@ -290,31 +396,113 @@ export function NativeScan({
       {offered.length > 0 ? (
         <div className="space-y-2">
           <p className="font-medium text-sm">
-            {i18n._({ id: 'app.scan.native.uploadedList', message: 'Uploaded, not attached yet' })}
+            {i18n._({
+              id: 'app.scan.native.uploadedHeading',
+              message: 'Scans uploaded from the phone',
+            })}
           </p>
           <ul className="space-y-2">
-            {offered.map((entry) => (
-              <li
-                className="flex items-center justify-between gap-2 rounded-lg border border-border/60 p-2 text-sm"
-                key={entry.sessionId}
-              >
-                <span className="text-muted-foreground">
-                  {i18n._({
-                    id: 'app.scan.native.entry',
-                    message: '{keyframes, plural, one {# keyframe} other {# keyframes}}, {state}',
-                    values: { keyframes: entry.keyframes, state: entry.state },
-                  })}
-                </span>
-                <button
-                  className={SECONDARY_PILL}
-                  disabled={disabled || busy !== null}
-                  onClick={() => attachUploaded(entry)}
-                  type="button"
+            {offered.map((entry) => {
+              const status = statusOf(entry)
+              const info = describeEntry(entry)
+              return (
+                <li
+                  className="flex items-center justify-between gap-2 rounded-lg border border-border/60 p-2 text-sm"
+                  key={entry.sessionId}
                 >
-                  {i18n._({ id: 'app.scan.native.attach', message: 'Attach' })}
-                </button>
-              </li>
-            ))}
+                  <span className="space-y-0.5">
+                    <span className="block">
+                      {i18n._({
+                        id: 'app.scan.native.uploadedMeta',
+                        message:
+                          '{when} · {keyframes, plural, one {# photo} other {# photos}} · {size} MB',
+                        values: { when: info.when, keyframes: entry.keyframes, size: info.size },
+                      })}
+                    </span>
+                    <span className="block text-muted-foreground text-xs">
+                      {status?.kind === 'elsewhere'
+                        ? i18n._({
+                            id: 'app.scan.native.elsewhere',
+                            message: 'Uploaded to another server. It is not on this site.',
+                          })
+                        : status?.kind === 'in-project'
+                          ? i18n._({
+                              id: 'app.scan.native.inProject',
+                              message: 'Already in {project}',
+                              values: { project: status.name },
+                            })
+                          : status?.kind === 'unknown'
+                            ? i18n._({
+                                id: 'app.scan.native.unknown',
+                                message: 'Could not check this scan. Try again.',
+                              })
+                            : info.project
+                              ? i18n._({
+                                  id: 'app.scan.native.projectLabel',
+                                  message: 'Project: {project}',
+                                  values: { project: info.project },
+                                })
+                              : null}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 gap-2">
+                    {status === null ? (
+                      <span className="text-muted-foreground text-xs">
+                        {i18n._({ id: 'app.scan.native.checking', message: 'Checking…' })}
+                      </span>
+                    ) : status.kind === 'attachable' ? (
+                      <button
+                        className={SECONDARY_PILL}
+                        disabled={disabled || busy !== null}
+                        onClick={() => attachUploaded(entry)}
+                        type="button"
+                      >
+                        {i18n._({ id: 'app.scan.native.attach', message: 'Attach' })}
+                      </button>
+                    ) : status.kind === 'in-project' ? (
+                      <button
+                        className={SECONDARY_PILL}
+                        disabled={disabled || busy !== null}
+                        onClick={() => markAttachedOnPhone(entry.sessionId)}
+                        type="button"
+                      >
+                        {i18n._({ id: 'app.scan.native.markAttached', message: 'Mark attached' })}
+                      </button>
+                    ) : status.kind === 'unknown' ? (
+                      <button
+                        className={SECONDARY_PILL}
+                        disabled={disabled || busy !== null}
+                        onClick={() => setListVersion((version) => version + 1)}
+                        type="button"
+                      >
+                        {i18n._({ id: 'app.scan.native.checkAgain', message: 'Check again' })}
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          className={SECONDARY_PILL}
+                          onClick={() => hideScan(entry.sessionId)}
+                          type="button"
+                        >
+                          {i18n._({ id: 'app.scan.native.hide', message: 'Hide' })}
+                        </button>
+                        <button
+                          className={SECONDARY_PILL}
+                          disabled={disabled || busy !== null}
+                          onClick={() => removeScan(entry.sessionId)}
+                          type="button"
+                        >
+                          {i18n._({
+                            id: 'app.scan.native.deleteFromPhone',
+                            message: 'Delete from phone',
+                          })}
+                        </button>
+                      </>
+                    )}
+                  </span>
+                </li>
+              )
+            })}
           </ul>
         </div>
       ) : null}

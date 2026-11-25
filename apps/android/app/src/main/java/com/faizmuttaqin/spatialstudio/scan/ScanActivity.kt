@@ -87,7 +87,6 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
     private lateinit var sensorsText: TextView
     private lateinit var sensorsToggle: CheckBox
     private lateinit var locationToggle: CheckBox
-    private lateinit var torchToggle: CheckBox
     private lateinit var guidanceText: TextView
     private lateinit var resumeButton: Button
     private lateinit var markToggle: Button
@@ -118,7 +117,6 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
     private var capabilitiesProbedAtMs = 0L
     private var cameraConfigJson: JsonObject = JsonObject(emptyMap())
     private var sensorOrientationDeg: Int? = null
-    @Volatile private var pendingLightMode: Config.LightEstimationMode? = null
     private var locationDeclined = false
     private var locationDialogShown = false
     private var locationConfirmed = false
@@ -128,9 +126,12 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
     private var locationDenied = false
     private var updatingToggles = false
 
-    // Torch experiment (v1.3): the toggle states what the user wants; the GL thread applies it to ARCore.
-    @Volatile private var torchWanted = false
-    private val torchChange = java.util.concurrent.atomic.AtomicBoolean(false)
+    // Torch experiment (v1.3): decided at session configure from options.torch; never changed mid-scan, because
+    // a reconfigure disturbs tracking and shifts the frame clock (device finding of 2026-11-25).
+    private var torchProbe: Boolean? = null
+    private var torchOn = false
+    private var torchConfigureFailed = false
+    private var torchLightDegraded = false
     private val headingPose = FloatArray(16)
     private var installRequested = false
     private var permissionRequested = false
@@ -191,7 +192,6 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         sensorsText = ActivityCompat.requireViewById(this, R.id.scan_sensors)
         sensorsToggle = ActivityCompat.requireViewById(this, R.id.scan_toggle_sensors)
         locationToggle = ActivityCompat.requireViewById(this, R.id.scan_toggle_location)
-        torchToggle = ActivityCompat.requireViewById(this, R.id.scan_toggle_torch)
         guidanceText = ActivityCompat.requireViewById(this, R.id.scan_guidance)
         resumeButton = ActivityCompat.requireViewById(this, R.id.scan_resume)
         resumeButton.setOnClickListener {
@@ -211,8 +211,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             if (updatingToggles) return@setOnCheckedChangeListener
             sensorRecorder?.setSensorsEnabled(checked)
             recorder?.setLightEnabled(checked, lightMode)
-            // ARCore stops estimating light too; applied on the GL thread before the next frame.
-            pendingLightMode = if (checked) lightMode else Config.LightEstimationMode.DISABLED
+            // Recording only: the ARCore configuration stays fixed once the scan runs (a reconfigure disturbs tracking).
             if (!checked) sensorsText.setText(R.string.scan_sensors_off)
         }
         locationToggle.setOnCheckedChangeListener { _, checked ->
@@ -223,12 +222,6 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             } else {
                 sensors.setLocationEnabled(checked)
             }
-        }
-
-        torchToggle.setOnCheckedChangeListener { _, checked ->
-            if (updatingToggles) return@setOnCheckedChangeListener
-            torchWanted = checked
-            torchChange.set(true)
         }
 
         val hud = ActivityCompat.requireViewById<View>(this, R.id.scan_hud)
@@ -284,8 +277,6 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             markToggle.isEnabled = true
         }
         sensorRecorder?.start()
-        // ARCore keeps its configuration across pause and resume; applyTorch only reconfigures on a mismatch.
-        if (torchWanted) torchChange.set(true)
         ScanCoordinator.state(scan.sessionId, "scanning")
     }
 
@@ -390,6 +381,13 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         }
         val scanRecorder = ScanRecorder(dir, scan.options, depthKind)
         scanRecorder.lightMode = lightMode
+        if (scan.options.torch) {
+            torchProbe?.let(scanRecorder::torchProbed)
+            if (torchConfigureFailed) scanRecorder.torchConfigureFailed()
+            if (torchLightDegraded) scanRecorder.warnings.add("light-estimation-degraded-for-torch")
+            scanRecorder.setTorch(torchOn)
+            if (!torchOn) runOnUiThread { Toast.makeText(this, R.string.scan_torch_unsupported, Toast.LENGTH_LONG).show() }
+        }
         recorder = scanRecorder
         val sensors = SensorRecorder(
             this,
@@ -463,6 +461,8 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                 else -> Config.DepthMode.DISABLED
             }
         }
+        // Settle the light estimation mode first (HDR may be unsupported), so the torch probe below runs against
+        // the configuration that will actually be used.
         try {
             session.configure(config)
         } catch (e: UnsupportedConfigurationException) {
@@ -470,7 +470,43 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             config.lightEstimationMode = Config.LightEstimationMode.AMBIENT_INTENSITY
             session.configure(config)
         }
+        if (scan.options.torch) {
+            torchOn = applyTorch(session, config)
+        }
         lightMode = config.lightEstimationMode
+    }
+
+    /**
+     * Probes and applies the torch against the settled configuration. When the probe fails with the current
+     * light estimation mode, it is retried with ambient intensity (the mode is restored if that fails too).
+     * Never called after the scan starts: a mid-scan reconfigure disturbs tracking and the frame clock.
+     */
+    @Suppress("DEPRECATION") // isSupported is the probe the reference uses; the replacement is not in ARCore 1.57.
+    private fun applyTorch(session: Session, config: Config): Boolean {
+        val originalLight = config.lightEstimationMode
+        config.flashMode = Config.FlashMode.TORCH
+        var supported = session.isSupported(config)
+        var degradedLight = false
+        if (!supported && originalLight != Config.LightEstimationMode.AMBIENT_INTENSITY && originalLight != Config.LightEstimationMode.DISABLED) {
+            config.lightEstimationMode = Config.LightEstimationMode.AMBIENT_INTENSITY
+            supported = session.isSupported(config)
+            degradedLight = supported
+            if (!supported) config.lightEstimationMode = originalLight
+        }
+        torchProbe = supported
+        if (supported) {
+            try {
+                session.configure(config)
+                if (degradedLight) torchLightDegraded = true
+                return true
+            } catch (e: UnsupportedConfigurationException) {
+                torchConfigureFailed = true
+            }
+        }
+        config.flashMode = Config.FlashMode.OFF
+        config.lightEstimationMode = originalLight
+        session.configure(config)
+        return false
     }
 
     private fun setToggles(sensors: SensorRecorder) {
@@ -512,12 +548,6 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             session.setDisplayGeometry(displayRotation(), viewportWidth, viewportHeight)
             displayGeometryDirty = false
         }
-        pendingLightMode?.let { mode ->
-            pendingLightMode = null
-            runCatching { session.configure(session.config.apply { lightEstimationMode = mode }) }
-                .onFailure { Log.w(TAG, "Could not change light estimation", it) }
-        }
-        if (torchChange.getAndSet(false)) applyTorch(session, recorder, torchWanted)
         val frame = try {
             session.update()
         } catch (e: SessionPausedException) {
@@ -556,48 +586,8 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         }
     }
 
-    /** GL thread. Asks ARCore for the torch, probing support first; falls back to off with a message. */
-    @Suppress("DEPRECATION") // isSupported is the probe the reference uses; the replacement is not in ARCore 1.57.
-    private fun applyTorch(session: Session, recorder: ScanRecorder, want: Boolean) {
-        val config = session.config
-        val mode = if (want) Config.FlashMode.TORCH else Config.FlashMode.OFF
-        if (config.flashMode == mode) {
-            recorder.setTorch(want)
-            return
-        }
-        config.flashMode = mode
-        if (want) {
-            val supported = session.isSupported(config)
-            recorder.torchProbed(supported)
-            if (!supported) {
-                rejectTorch(recorder, R.string.scan_torch_unsupported)
-                return
-            }
-        }
-        try {
-            // Unverified on a device: a mid-scan configure may restart the camera or reset planes.
-            session.configure(config)
-            recorder.setTorch(want)
-            recorder.torchToggledMidScan()
-        } catch (e: Exception) {
-            Log.w(TAG, "Could not change the torch", e)
-            recorder.torchConfigureFailed()
-            rejectTorch(recorder, R.string.scan_torch_failed)
-        }
-    }
-
-    private fun rejectTorch(recorder: ScanRecorder, message: Int) {
-        torchWanted = false
-        recorder.setTorch(false)
-        runOnUiThread {
-            updatingToggles = true
-            torchToggle.isChecked = false
-            updatingToggles = false
-            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-        }
-    }
-
     private fun guidanceLines(g: ScanRecorder.Guidance): String {
+        val torchNote = if (recorder?.torchActive == true) getString(R.string.scan_torch_on) else null
         val floor = g.floorPercent?.let { getString(R.string.scan_floor_covered, it) } ?: getString(R.string.scan_floor_waiting)
         val alert = when {
             g.jumpStuck -> getString(R.string.scan_jump_stuck)
@@ -614,7 +604,8 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                 )
             }
         }
-        return if (alert == null) floor else getString(R.string.scan_guidance_lines, floor, alert)
+        val text = if (alert == null) floor else getString(R.string.scan_guidance_lines, floor, alert)
+        return if (torchNote == null) text else getString(R.string.scan_guidance_lines, text, torchNote)
     }
 
     private fun reportProgress(recorder: ScanRecorder, state: TrackingState, failure: TrackingFailureReason) {
@@ -901,11 +892,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         ScanCoordinator.state(scan.sessionId, "finalizing")
         sensorsToggle.isEnabled = false
         locationToggle.isEnabled = false
-        torchToggle.isEnabled = false
         resumeButton.visibility = View.GONE
-        // The GL thread switches the torch off; recording stops with the finalizer.
-        torchWanted = false
-        torchChange.set(true)
         markToggle.isEnabled = false
         marking = false
         pendingTap.set(null)
@@ -945,6 +932,10 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                 }
                 if (sensors.sensorsEnabled && NorthEstimator.estimate(sensorCapture?.heading.orEmpty())?.segmentsAgree == false) {
                     recorder.warnings.add("true-north-segments-disagree")
+                    // The estimate then comes from the best supported segment alone.
+                    if (NorthEstimator.estimate(sensorCapture?.heading.orEmpty())?.fromSegment == true) {
+                        recorder.warnings.add("true-north-from-segment")
+                    }
                 }
                 if (locationDeclined) recorder.warnings.add("location-declined")
                 if (!locationDeclined && (scan.options.location || sensors.locationEnabled)) {
@@ -1053,8 +1044,6 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
 
     private fun discardPartial(state: String, error: JsonObject?) {
         phase = Phase.DONE
-        torchWanted = false
-        torchToggle.isEnabled = false
         val sessionId = scan.sessionId
         val recorder = recorder
         finalizer.execute {

@@ -18,6 +18,8 @@ data class ScanOptions(
     val sensors: Boolean = true,
     /** Approximate location for `geolocation` and the compass declination. Off unless the page opts in. */
     val location: Boolean = false,
+    /** Contract v1.3: ARCore torch for the whole scan, set when the session is configured. Off by default. */
+    val torch: Boolean = false,
 ) {
     companion object {
         const val DEFAULT_SPACING_M = 0.25
@@ -81,7 +83,9 @@ object ScanParams {
         }
         val sensors = o["sensors"]?.let { (it as? JsonPrimitive)?.takeIf { p -> !p.isString }?.booleanOrNull ?: invalid("options.sensors must be a boolean") }
         val location = o["location"]?.let { (it as? JsonPrimitive)?.takeIf { p -> !p.isString }?.booleanOrNull ?: invalid("options.location must be a boolean") }
+        val torch = o["torch"]?.let { (it as? JsonPrimitive)?.takeIf { p -> !p.isString }?.booleanOrNull ?: invalid("options.torch must be a boolean") }
         return ScanOptions(
+            torch = torch ?: defaults.torch,
             sensors = sensors ?: defaults.sensors,
             location = location ?: defaults.location,
             depth = depth ?: defaults.depth,

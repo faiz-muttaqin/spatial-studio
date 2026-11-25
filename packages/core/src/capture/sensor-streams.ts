@@ -186,6 +186,16 @@ export const TrueNorthSchema = z
     declinationDeg: finite.min(-180).max(180).nullable(),
     /** False when separate tracking segments disagree on the offset; confidence is then capped. */
     segmentsAgree: z.boolean(),
+    /**
+     * v1.3: present when the segments disagreed and this estimate is one segment's: it holds only for frame
+     * timestamps inside this span (nanoseconds, the clock of keyframes and the trajectory).
+     */
+    segment: z
+      .object({ startTimestampNs: finite.nonnegative(), endTimestampNs: finite.nonnegative() })
+      .refine((span) => span.endTimestampNs >= span.startTimestampNs, {
+        message: 'segment must end at or after its start.',
+      })
+      .optional(),
   })
   .refine(
     (north) =>
