@@ -600,6 +600,10 @@ msgid "app.scan.measure.windowTitle"
 msgstr "Window {number}"
 
 #: apps/editor/app/scan/native-scan.tsx
+msgid "app.scan.native.attach"
+msgstr "Attach"
+
+#: apps/editor/app/scan/native-scan.tsx
 msgid "app.scan.native.discard"
 msgstr "Discard scan"
 
@@ -638,6 +642,10 @@ msgstr "Opening the scanner…"
 #: apps/editor/app/scan/native-scan.tsx
 msgid "app.scan.native.upload"
 msgstr "Upload this scan"
+
+#: apps/editor/app/scan/native-scan.tsx
+msgid "app.scan.native.uploadedList"
+msgstr "Uploaded, not attached yet"
 
 #: apps/editor/app/scan/native-scan.tsx
 msgid "app.scan.native.uploading"

@@ -40,9 +40,10 @@ object BridgeProtocol {
         "scan.list",
         "scan.upload",
         "scan.discard",
+        "scan.markAttached",
     )
 
-    val EVENTS = setOf("scan.state", "scan.progress", "upload.progress")
+    val EVENTS = setOf("scan.state", "scan.progress", "upload.progress", "upload.done")
 
     private val ID_PATTERN = Regex("^[A-Za-z0-9._:-]{1,$MAX_ID_LENGTH}$")
 

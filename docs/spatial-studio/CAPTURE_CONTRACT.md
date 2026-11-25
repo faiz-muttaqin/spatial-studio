@@ -154,7 +154,7 @@ type BridgeRequest = { v: 1; id: string; method: string; params?: Record<string,
 type BridgeReply =
   | { v: 1; id: string; ok: true; result: unknown }
   | { v: 1; id: string; ok: false; error: { code: string; message: string } }
-type BridgeEvent = { v: 1; event: 'scan.state' | 'scan.progress' | 'upload.progress'; data: unknown }
+type BridgeEvent = { v: 1; event: 'scan.state' | 'scan.progress' | 'upload.progress' | 'upload.done'; data: unknown }
 ```
 
 Event `data` is an object that carries the `sessionId` it belongs to. The page extends a pending `scan.upload` timeout only on `upload.progress` events for that upload's session.
@@ -168,9 +168,10 @@ Error codes: `forbidden`, `invalid_request`, `unknown_method`, `unsupported`, `p
 | `bridge.hello` | none | `{ bridgeVersion: 1, appVersion, platform: "android", methods: string[] }` |
 | `capabilities.get` | none | `{ arcore: { availability, depth: boolean, rawDepth: boolean }, cameras: [{ id, facing, focalLengths, intrinsics, depthOutput, logicalMultiCamera, physicalIds }], sensors: { accelerometer, gyroscope, rotationVector, magnetometer, barometer, ... }, device: { manufacturer, model, sdkInt, webViewVersion } }` |
 | `scan.start` | `{ projectId?, options?: { depth?: boolean, keyframeSpacingM?: number, maxKeyframes?: number, location?: boolean, sensors?: boolean } }` | `{ sessionId }`, then `scan.state` and `scan.progress` events while the native scan screen runs |
-| `scan.list` | none | `[{ sessionId, createdAt, state, keyframes, bytes, uploaded }]` |
-| `scan.upload` | `{ sessionId }` | `{ sessionId, manifestUrl, manifestSha256 }` after every artifact and the manifest are stored; `upload.progress` events meanwhile |
+| `scan.list` | none | `[{ sessionId, createdAt, state, keyframes, bytes, uploaded, uploading?, attached?, projectId?, manifestUrl? }]`; `manifestUrl` is present once `uploaded` is true |
+| `scan.upload` | `{ sessionId }` | `{ sessionId, manifestUrl, manifestSha256 }` after every artifact and the manifest are stored; `upload.progress` events meanwhile. A repeated request for a session that is already uploading joins that upload and gets the same result (v1.3: it was `busy`); `busy` is only for a different session. A session whose manifest is already stored is answered at once without network work. `upload.progress` data carries `phase`: `artifacts`, `manifest` (the manifest PUT) or `finalising` (stored on the site, the app is writing its record; this event has no counts), so a stall is visible. An upload that shows no activity (bytes sent, a retry or a progress step) for 90 s is cancelled, its HTTP request is cut, and it is replaced by a repeated request for the same session, instead of answering `busy`. A single PUT is cut after 45 s without bytes moving or 10 min in all. A scan counts as already uploaded only for the origin it was uploaded to; the same session toward another origin is `busy` while one runs. Retries are capped: 8 attempts and 120 s per artifact, 100 retries and 30 min per upload; `Retry-After` waits are capped at 30 s. On success the app also emits `upload.done` with the same object to the page that most recently sent a request, so a reloaded page can attach. |
 | `scan.discard` | `{ sessionId }` | `{ sessionId }` |
+| `scan.markAttached` | `{ sessionId }` | `{ sessionId }`; v1.3. The page calls it after it attached the uploaded scan to a project; `scan.list` then reports `attached: true` so a reloaded page does not offer the scan again |
 
 ### Upload and security rules
 

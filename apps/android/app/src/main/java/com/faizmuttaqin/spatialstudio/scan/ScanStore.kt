@@ -19,6 +19,10 @@ data class SessionRecord(
     val bytes: Long = 0,
     val manifestSha256: String? = null,
     val uploadedAtMs: Long? = null,
+    /** The studio origin the manifest was stored on; an upload to another origin is not "already uploaded". */
+    val uploadedOrigin: String? = null,
+    /** Set when the page confirmed it attached the scan to a project (`scan.markAttached`). */
+    val attachedAtMs: Long? = null,
     /** Why a `failed` scan could not be saved; the files stay until discarded. */
     val error: String? = null,
 ) {
@@ -57,7 +61,13 @@ class ScanStore(val root: File) {
         return runCatching { decode(JsonUtil.json.parseToJsonElement(file.readText()) as JsonObject) }.getOrNull()
     }
 
-    fun write(record: SessionRecord) {
+    /** Read-modify-write of one record under the store lock; null when there is no record. */
+    fun update(sessionId: String, change: (SessionRecord) -> SessionRecord): SessionRecord? = synchronized(LOCK) {
+        val current = read(sessionId) ?: return null
+        change(current).also { write(it) }
+    }
+
+    fun write(record: SessionRecord) = synchronized(LOCK) {
         val json = buildJsonObject {
             put("sessionId", record.sessionId)
             put("createdAtMs", record.createdAtMs)
@@ -67,6 +77,8 @@ class ScanStore(val root: File) {
             put("bytes", record.bytes)
             put("manifestSha256", record.manifestSha256)
             put("uploadedAtMs", record.uploadedAtMs)
+            put("uploadedOrigin", record.uploadedOrigin)
+            put("attachedAtMs", record.attachedAtMs)
             put("error", record.error)
         }
         JsonUtil.writeAtomically(File(dir(record.sessionId), RECORD_FILE), JsonUtil.encode(json).toByteArray(Charsets.UTF_8))
@@ -124,11 +136,15 @@ class ScanStore(val root: File) {
             bytes = long("bytes") ?: 0,
             manifestSha256 = str("manifestSha256"),
             uploadedAtMs = long("uploadedAtMs"),
+            uploadedOrigin = str("uploadedOrigin"),
+            attachedAtMs = long("attachedAtMs"),
             error = str("error"),
         )
     }
 
     private companion object {
         const val RECORD_FILE = "session.json"
+        /** One lock for every store instance: the app and the scan screen each build their own. */
+        val LOCK = Any()
     }
 }

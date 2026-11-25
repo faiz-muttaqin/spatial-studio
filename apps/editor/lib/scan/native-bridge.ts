@@ -42,7 +42,12 @@ export class BridgeError extends Error {
   }
 }
 
-export const BRIDGE_EVENTS = ['scan.state', 'scan.progress', 'upload.progress'] as const
+export const BRIDGE_EVENTS = [
+  'scan.state',
+  'scan.progress',
+  'upload.progress',
+  'upload.done',
+] as const
 export type BridgeEventName = (typeof BRIDGE_EVENTS)[number]
 export type BridgeEvent = { v: 1; event: BridgeEventName; data: unknown }
 
@@ -74,6 +79,15 @@ const ScanListResultSchema = z.array(
       keyframes: z.number().int().nonnegative(),
       bytes: z.number().int().nonnegative(),
       uploaded: z.boolean(),
+      /** The page confirmed the scan was attached to a project (`scan.markAttached`). */
+      attached: z.boolean().optional(),
+      /** The project id the scan was started for; the attach target after a reload. */
+      projectId: z.string().nullable().optional(),
+      /** Present once the scan is uploaded; the page can attach it without uploading again. */
+      manifestUrl: z
+        .string()
+        .regex(/^\/api\/artifacts\/[0-9a-f]{64}$/)
+        .optional(),
     })
     .loose(),
 )
@@ -163,6 +177,8 @@ export type NativeBridgeClient = {
   listScans(): Promise<ScanListEntry[]>
   uploadScan(sessionId: string): Promise<ScanUploadResult>
   discardScan(sessionId: string): Promise<{ sessionId: string }>
+  /** Tells the companion the scan is attached, so `scan.list` stops offering it. */
+  markAttached(sessionId: string): Promise<{ sessionId: string }>
   subscribe(event: BridgeEventName | '*', listener: (event: BridgeEvent) => void): () => void
   dispose(): void
 }
@@ -290,6 +306,12 @@ export function createNativeBridgeClient(
           { sessionId },
           { timeoutMs: UPLOAD_IDLE_TIMEOUT_MS, keepAlive: isUploadProgressFor(sessionId) },
         ),
+      ),
+    markAttached: (sessionId) =>
+      typed(
+        ScanDiscardResultSchema,
+        'scan.markAttached',
+        request('scan.markAttached', { sessionId }),
       ),
     discardScan: (sessionId) =>
       typed(ScanDiscardResultSchema, 'scan.discard', request('scan.discard', { sessionId })),
