@@ -231,25 +231,42 @@ export const DeviceCapabilitiesSchema = z
     message: 'A capability probe reports the browser, the native companion, or both.',
   })
 
-export const ScanBundleMetadataSchema = z.object({
-  provider: CaptureProviderIdSchema,
-  appVersion: z.string().min(1),
-  bridgeVersion: z.number().int().positive().optional(),
-  device: z.object({
-    manufacturer: z.string().nullable(),
-    model: z.string().nullable(),
-    os: z.string().nullable(),
-  }),
-  /** ISO 8601. */
-  createdAt: z.iso.datetime({ offset: true }),
-  trackingLossCount: z.number().int().nonnegative(),
-  warnings: z.array(z.string()),
+/**
+ * Camera-pose convention of a bundle's keyframe and trajectory poses. ARCore
+ * poses use OpenGL camera axes (+X right, +Y up, -Z forward) relative to the
+ * image readout, matching the stored, unrotated JPEG and its intrinsics.
+ */
+export const CapturePoseConventionSchema = z.object({
+  convention: z.literal('opengl'),
+  frame: z.literal('image-readout'),
+  sensorOrientationDeg: z.number().int().nullable(),
 })
+
+/** Provider-specific extras (the companion's `arcore` block, for one) are kept, not stripped. */
+export const ScanBundleMetadataSchema = z
+  .object({
+    provider: CaptureProviderIdSchema,
+    appVersion: z.string().min(1),
+    bridgeVersion: z.number().int().positive().optional(),
+    device: z.object({
+      manufacturer: z.string().nullable(),
+      model: z.string().nullable(),
+      os: z.string().nullable(),
+    }),
+    /** ISO 8601. */
+    createdAt: z.iso.datetime({ offset: true }),
+    trackingLossCount: z.number().int().nonnegative(),
+    warnings: z.array(z.string()),
+    /** Present when the bundle has poses. */
+    camera: CapturePoseConventionSchema.optional(),
+  })
+  .loose()
 
 export type CameraIntrinsics = z.infer<typeof CameraIntrinsicsSchema>
 export type CaptureArtifactPointer = z.infer<typeof CaptureArtifactPointerSchema>
 export type CapturePlane = z.infer<typeof CapturePlaneSchema>
 export type CapturePlaneSet = z.infer<typeof CapturePlaneSetSchema>
+export type CapturePoseConvention = z.infer<typeof CapturePoseConventionSchema>
 export type CapturePointCloudPayload = z.infer<typeof CapturePointCloudPayloadSchema>
 export type CaptureProviderId = z.infer<typeof CaptureProviderIdSchema>
 export type CaptureTrackingState = z.infer<typeof CaptureTrackingStateSchema>

@@ -65,6 +65,8 @@ export {
   CapturePlaneSetSchema,
   type CapturePointCloudPayload,
   CapturePointCloudPayloadSchema,
+  type CapturePoseConvention,
+  CapturePoseConventionSchema,
   type CaptureProviderId,
   CaptureProviderIdSchema,
   type CaptureTrackingState,

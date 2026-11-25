@@ -277,6 +277,28 @@ describe('scan bundle metadata', () => {
     expect(manifest.metadata?.provider).toBe('browser-photo')
   })
 
+  test('keeps the companion pose convention and its provider extras', () => {
+    const metadata = ScanBundleMetadataSchema.parse({
+      provider: 'android-arcore',
+      appVersion: '0.1.0',
+      bridgeVersion: 1,
+      device: { manufacturer: 'Test', model: 'Synthetic', os: 'Android 16' },
+      createdAt: '2026-11-25T08:00:00.000Z',
+      trackingLossCount: 1,
+      warnings: [],
+      camera: { convention: 'opengl', frame: 'image-readout', sensorOrientationDeg: 90 },
+      arcore: { version: '1.57.0' },
+    })
+    expect(metadata.camera?.sensorOrientationDeg).toBe(90)
+    expect((metadata as Record<string, unknown>).arcore).toEqual({ version: '1.57.0' })
+    expect(
+      ScanBundleMetadataSchema.safeParse({
+        ...metadata,
+        camera: { convention: 'cv', frame: 'image-readout', sensorOrientationDeg: 0 },
+      }).success,
+    ).toBe(false)
+  })
+
   test('rejects unknown providers', () => {
     expect(
       ScanBundleMetadataSchema.safeParse({
