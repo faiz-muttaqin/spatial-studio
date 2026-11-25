@@ -25,9 +25,9 @@ export type ScanSessionSummary = {
 }
 
 export function summarizeSession(descriptor: CaptureSessionDescriptor): ScanSessionSummary {
-  const metadata = ScanBundleMetadataSchema.safeParse(descriptor.metadata ?? {})
+  const metadataResult = ScanBundleMetadataSchema.safeParse(descriptor.metadata ?? {})
   const loose = (descriptor.metadata ?? {}) as Record<string, unknown>
-  const parsed = metadata.success ? metadata.data : null
+  const parsed = metadataResult.success ? metadataResult.data : null
   const device = parsed
     ? [parsed.device.manufacturer, parsed.device.model].filter(Boolean).join(' ') ||
       parsed.device.os ||
