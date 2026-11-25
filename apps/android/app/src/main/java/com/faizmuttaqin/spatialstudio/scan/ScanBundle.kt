@@ -86,6 +86,8 @@ class BundleInput(
     val lightEstimates: List<LightRecord> = emptyList(),
     /** Acquisition filter recorded with the point cloud. */
     val pointMaxDistanceM: Double? = null,
+    /** v1.2 assisted boundary marks; empty when none were made, which writes no stream. */
+    val boundaryMarks: List<BoundaryMark> = emptyList(),
 )
 
 class ArtifactFile(val path: String, val sha256: String, val byteLength: Long, val mediaType: String) {
@@ -287,6 +289,41 @@ object ScanBundle {
                 addJsonObject {
                     put("timestamp", s.timestampNs)
                     put("hPa", JsonUtil.rounded(s.hPa, 3))
+                }
+            }
+        }
+    }
+
+    private fun basePoint(point: BasePoint): JsonObject = buildJsonObject {
+        putJsonArray("point") {
+            add(JsonUtil.rounded(point.x.toDouble(), 6))
+            add(JsonUtil.rounded(point.y.toDouble(), 6))
+            add(JsonUtil.rounded(point.z.toDouble(), 6))
+        }
+        put("pose", JsonUtil.matrix(point.pose))
+        put("planeId", point.planeId)
+        put("timestamp", point.timestampNs)
+    }
+
+    /** `boundary-marks` payload (v1.2). The point is the pose translation, rounded the same way as the pose. */
+    fun boundaryMarks(marks: List<BoundaryMark>): JsonObject = buildJsonObject {
+        putJsonArray("marks") {
+            for (m in marks) {
+                addJsonObject {
+                    put("id", m.id)
+                    put("kind", m.kind.wire)
+                    putJsonArray("base") {
+                        add(basePoint(m.start))
+                        add(basePoint(m.end))
+                    }
+                    putJsonObject("height") {
+                        put("metres", nullable(m.height.metres, 3))
+                        put("source", m.height.source.wire)
+                        put("ceilingPlaneId", m.height.ceilingPlaneId)
+                    }
+                    put("source", "manual-ar-marking")
+                    put("createdAt", m.createdAtMs)
+                    put("notes", JsonNull)
                 }
             }
         }
@@ -512,6 +549,27 @@ class ScanBundleWriter(private val dir: File) {
                     put("source", "arcore")
                     put("mode", lightRecords.first().mode)
                     put("count", lightRecords.size)
+                }
+            }
+        }
+
+        // Marks reference planes by id; a mark with a non-finite pose cannot be written as JSON and is dropped.
+        val marks = input.boundaryMarks.filter { m ->
+            PoseMath.isFinite(m.start.pose) && PoseMath.isFinite(m.end.pose)
+        }
+        if (marks.size < input.boundaryMarks.size) warnings += "boundary-mark-invalid"
+        if (marks.isNotEmpty()) {
+            val file = writeJson("boundary-marks.json", ScanBundle.boundaryMarks(marks))
+            streams += buildJsonObject {
+                put("id", "boundary-marks")
+                put("kind", "boundary-marks")
+                put("role", "boundaryMarks")
+                put("availability", "ready")
+                put("frameId", "world")
+                put("artifact", ScanBundle.artifactRef(sessionId, "boundary-marks", file))
+                putJsonObject("metadata") {
+                    put("source", "manual-ar-marking")
+                    put("count", marks.size)
                 }
             }
         }

@@ -12,11 +12,19 @@ import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.util.Log
+import android.view.MotionEvent
 import android.view.Surface
 import android.view.View
 import android.view.WindowManager
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.ViewGroup
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.CheckBox
+import android.widget.EditText
+import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -31,11 +39,17 @@ import com.faizmuttaqin.spatialstudio.bridge.BridgeErrorCode
 import com.faizmuttaqin.spatialstudio.bridge.NativeBridge
 import com.faizmuttaqin.spatialstudio.capabilities.CapabilityProbe
 import com.faizmuttaqin.spatialstudio.scan.gl.CameraBackground
+import com.faizmuttaqin.spatialstudio.scan.gl.LineOverlay
 import com.faizmuttaqin.spatialstudio.scan.gl.PointOverlay
 import com.google.ar.core.ArCoreApk
 import com.google.ar.core.CameraConfig
 import com.google.ar.core.CameraConfigFilter
 import com.google.ar.core.Config
+import com.google.ar.core.DepthPoint
+import com.google.ar.core.Frame
+import com.google.ar.core.InstantPlacementPoint
+import com.google.ar.core.Plane
+import com.google.ar.core.Point
 import com.google.ar.core.Session
 import com.google.ar.core.TrackingFailureReason
 import com.google.ar.core.TrackingState
@@ -49,6 +63,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicReference
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 
@@ -71,6 +86,26 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
     private lateinit var sensorsText: TextView
     private lateinit var sensorsToggle: CheckBox
     private lateinit var locationToggle: CheckBox
+    private lateinit var markToggle: Button
+    private lateinit var markPanel: View
+    private lateinit var markStatus: TextView
+    private lateinit var markKind: Spinner
+    private lateinit var markHeight: EditText
+    private lateinit var markUndo: Button
+    private lateinit var markConfirm: Button
+    private lateinit var markCeiling: CheckBox
+
+    // Assisted boundary marking (v1.2). Marks live here; the GL thread resolves taps against ARCore.
+    private val marks = BoundaryMarkBook()
+    @Volatile private var marking = false
+    @Volatile private var markKindSelected = BoundaryKind.WALL
+    @Volatile private var heightText = ""
+    @Volatile private var toCeiling = true
+    private val pendingTap = AtomicReference<FloatArray?>(null)
+    private val confirmRequested = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /** A tapped floor point waiting for Confirm; shown in the camera view. */
+    @Volatile private var candidate: BasePoint? = null
 
     @Volatile private var phase = Phase.STARTING
     private var session: Session? = null
@@ -96,6 +131,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
 
     private val background = CameraBackground()
     private val overlay = PointOverlay()
+    private val lines = LineOverlay()
     private var textureBound = false
     private var viewportWidth = 0
     private var viewportHeight = 0
@@ -146,6 +182,15 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         sensorsText = ActivityCompat.requireViewById(this, R.id.scan_sensors)
         sensorsToggle = ActivityCompat.requireViewById(this, R.id.scan_toggle_sensors)
         locationToggle = ActivityCompat.requireViewById(this, R.id.scan_toggle_location)
+        markToggle = ActivityCompat.requireViewById(this, R.id.scan_mark_toggle)
+        markPanel = ActivityCompat.requireViewById(this, R.id.scan_mark_panel)
+        markStatus = ActivityCompat.requireViewById(this, R.id.scan_mark_status)
+        markKind = ActivityCompat.requireViewById(this, R.id.scan_mark_kind)
+        markHeight = ActivityCompat.requireViewById(this, R.id.scan_mark_height)
+        markUndo = ActivityCompat.requireViewById(this, R.id.scan_mark_undo)
+        markConfirm = ActivityCompat.requireViewById(this, R.id.scan_mark_confirm)
+        markCeiling = ActivityCompat.requireViewById(this, R.id.scan_mark_ceiling)
+        setUpMarking()
         sensorsToggle.setOnCheckedChangeListener { _, checked ->
             if (updatingToggles) return@setOnCheckedChangeListener
             sensorRecorder?.setSensorsEnabled(checked)
@@ -214,6 +259,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             phase = Phase.SCANNING
             startedAtElapsed = SystemClock.elapsedRealtime()
             finishButton.isEnabled = true
+            markToggle.isEnabled = true
         }
         sensorRecorder?.start()
         ScanCoordinator.state(scan.sessionId, "scanning")
@@ -418,6 +464,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         GLES20.glClearColor(0f, 0f, 0f, 1f)
         background.create()
         overlay.create()
+        lines.create()
         textureBound = false
     }
 
@@ -465,6 +512,8 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                     camera.pose.toMatrix(headingPose, 0)
                     sensorRecorder?.onFrame(frame.timestamp, headingPose)
                 }
+                pendingTap.getAndSet(null)?.let { tap -> handleMarkTap(session, frame, camera, recorder, tap[0], tap[1]) }
+                if (confirmRequested.getAndSet(false)) confirmCandidate(session, frame, recorder)
             } catch (e: Exception) {
                 Log.w(TAG, "Frame processing failed", e)
             }
@@ -473,6 +522,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             camera.getViewMatrix(view, 0)
             camera.getProjectionMatrix(projection, 0, 0.1f, 100f)
             overlay.draw(recorder.overlayPoints, recorder.overlayCount, view, projection)
+            lines.draw(marks.snapshot(), marks.pending(), candidate, view, projection)
         }
         if (progressGate.ready(frame.timestamp)) {
             reportProgress(recorder, camera.trackingState, camera.trackingFailureReason)
@@ -558,6 +608,198 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         },
     )
 
+
+    // --- Assisted boundary marking ---
+
+    // The surface only forwards the lifted finger as a tap for marking; it has no click action of its own.
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    private fun setUpMarking() {
+        val labels = resources.getStringArray(R.array.mark_kinds)
+        markKind.adapter = object : ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, labels) {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View =
+                (super.getView(position, convertView, parent) as TextView).apply { setTextColor(getColor(R.color.brand_foreground)) }
+        }.also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+        markKind.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                val kind = BoundaryKind.entries[position]
+                markKindSelected = kind
+                // "To ceiling" is on for walls, off for glass, and unavailable for mirrors, doors and openings.
+                markCeiling.isEnabled = kind.offersCeiling
+                markCeiling.isChecked = kind.ceilingByDefault
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
+        markHeight.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+            override fun afterTextChanged(s: Editable?) {
+                heightText = s?.toString().orEmpty()
+            }
+        })
+        markCeiling.setOnCheckedChangeListener { _, checked -> toCeiling = checked && markKindSelected.offersCeiling }
+        markToggle.setOnClickListener { setMarking(!marking) }
+        markConfirm.setOnClickListener {
+            if (candidate != null) confirmRequested.set(true)
+        }
+        markUndo.setOnClickListener {
+            pendingTap.set(null)
+            confirmRequested.set(false)
+            candidate = null
+            // A typed height belongs to the mark being finished; dropping its start drops the height too.
+            if (marks.pending() != null) markHeight.text = null
+            if (!marks.undo()) Toast.makeText(this, R.string.mark_nothing_to_undo, Toast.LENGTH_SHORT).show()
+            updateMarkUi()
+        }
+        surface.setOnTouchListener { v, event ->
+            val action = when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> MarkTouch.Action.DOWN
+                MotionEvent.ACTION_UP -> MarkTouch.Action.UP
+                else -> MarkTouch.Action.OTHER
+            }
+            val scanning = phase == Phase.SCANNING
+            // The surface is not clickable, so it must take ACTION_DOWN to be offered the ACTION_UP of the same gesture.
+            if (MarkTouch.enqueuesTap(marking, scanning, action)) {
+                // Resolved on the GL thread against the next frame, so the hit-test matches what is on screen.
+                pendingTap.set(floatArrayOf(event.x, event.y))
+                v.performClick()
+            }
+            MarkTouch.consumes(marking, scanning, action)
+        }
+    }
+
+    private fun setMarking(on: Boolean) {
+        if (on && phase != Phase.SCANNING) return
+        marking = on
+        pendingTap.set(null)
+        confirmRequested.set(false)
+        candidate = null
+        markPanel.visibility = if (on) View.VISIBLE else View.GONE
+        markToggle.setText(if (on) R.string.mark_stop else R.string.mark_start)
+        updateMarkUi()
+    }
+
+    /** Shows [message], or the next step and the mark count; [detail] goes on a second line. */
+    private fun updateMarkUi(message: Int? = null, detail: String? = null) {
+        runOnUiThread {
+            val pending = marks.pending()
+            markKind.isEnabled = pending == null
+            markConfirm.isEnabled = candidate != null
+            val line = message?.let(::getString)
+                ?: getString(
+                    R.string.mark_step_count,
+                    getString(if (pending == null) R.string.mark_tap_start else R.string.mark_tap_end),
+                    marks.count(),
+                )
+            markStatus.text = if (detail == null) line else getString(R.string.mark_two_lines, line, detail)
+        }
+    }
+
+    private fun planeKind(plane: Plane): HitKind = when (plane.type) {
+        Plane.Type.HORIZONTAL_UPWARD_FACING -> HitKind.HORIZONTAL_UP_PLANE
+        Plane.Type.HORIZONTAL_DOWNWARD_FACING -> HitKind.HORIZONTAL_DOWN_PLANE
+        else -> HitKind.VERTICAL_PLANE
+    }
+
+    private fun trackedPlanes(session: Session): List<Pair<Plane, PlaneSummary>> =
+        session.getAllTrackables(Plane::class.java)
+            .filter { it.trackingState == TrackingState.TRACKING && it.subsumedBy == null }
+            .mapIndexed { index, plane ->
+                // Provisional ids: a plane only gets its stream id (and so a place in the plane-set) once a mark uses it.
+                plane to PlaneSummary("p$index", planeKind(plane), true, plane.centerPose.ty(), plane.extentX, plane.extentZ)
+            }
+
+    /** GL thread: turns a tap into a candidate floor point, or refuses it with a reason. Nothing is committed yet. */
+    private fun handleMarkTap(session: Session, frame: Frame, camera: com.google.ar.core.Camera, recorder: ScanRecorder, x: Float, y: Float) {
+        if (!marking) return
+        candidate = null
+        if (camera.trackingState != TrackingState.TRACKING) {
+            updateMarkUi(R.string.mark_not_tracking)
+            return
+        }
+        val planes = trackedPlanes(session).map { it.second }
+        val cameraY = camera.pose.ty()
+        val hits = frame.hitTest(x, y)
+        val candidates = hits.map { hit ->
+            val trackable = hit.trackable
+            val plane = trackable as? Plane
+            val kind = when {
+                plane != null -> planeKind(plane)
+                trackable is DepthPoint -> HitKind.DEPTH_POINT
+                trackable is Point -> HitKind.FEATURE_POINT
+                trackable is InstantPlacementPoint -> HitKind.INSTANT_PLACEMENT
+                else -> HitKind.OTHER
+            }
+            HitCandidate(
+                kind = kind,
+                inPolygon = plane?.isPoseInPolygon(hit.hitPose) == true,
+                tracking = trackable.trackingState == TrackingState.TRACKING,
+                distanceM = hit.distance,
+                pose = FloatArray(16).also { hit.hitPose.toMatrix(it, 0) },
+                planeId = null,
+                cameraY = cameraY,
+            )
+        }
+        val decision = BoundaryMarking.chooseFloorHit(candidates, BoundaryMarking.floorY(planes))
+        if (decision is HitDecision.Refused) {
+            updateMarkUi(
+                when (decision.reason) {
+                    Refusal.NO_HIT -> R.string.mark_no_hit
+                    Refusal.NOT_TRACKING -> R.string.mark_not_tracking
+                    Refusal.NOT_FLOOR -> R.string.mark_not_floor
+                    Refusal.OBSTRUCTED -> R.string.mark_obstructed
+                    Refusal.ABOVE_FLOOR -> R.string.mark_above_floor
+                    Refusal.OUT_OF_RANGE -> R.string.mark_out_of_range
+                    Refusal.TOO_SHALLOW -> R.string.mark_too_shallow
+                },
+            )
+            return
+        }
+        val accepted = (decision as HitDecision.Accepted).hit
+        val plane = hits.getOrNull(candidates.indexOf(accepted))?.trackable as? Plane
+        candidate = BasePoint(accepted.pose, plane?.let(recorder::planeIdFor), frame.timestamp)
+        updateMarkUi(R.string.mark_confirm_prompt)
+    }
+
+    /** GL thread: commits the candidate point as a mark start or end. */
+    private fun confirmCandidate(session: Session, frame: Frame, recorder: ScanRecorder) {
+        val point = candidate ?: return
+        val tracked = trackedPlanes(session)
+        val planes = tracked.map { it.second }
+        // The typed height is read only when a mark is being finished.
+        val finishing = marks.pending() != null
+        val typed = if (finishing) BoundaryMarking.parseTypedHeight(heightText) else null
+        if (finishing && heightText.isNotBlank() && typed == null) {
+            updateMarkUi(R.string.mark_bad_height)
+            return
+        }
+        val result = marks.tap(markKindSelected, point, System.currentTimeMillis()) { kind, baseY ->
+            val choice = BoundaryMarking.resolveHeight(kind, typed, toCeiling, baseY, planes)
+            // Swap the provisional plane id for the stream id only now that the plane is used.
+            val ceilingPlane = tracked.firstOrNull { it.second.id == choice.ceilingPlaneId }?.first
+            if (ceilingPlane == null) choice else BoundaryMarking.HeightChoice(choice.metres, choice.source, recorder.planeIdFor(ceilingPlane))
+        }
+        if (result is BoundaryMarkBook.Result.Started || result is BoundaryMarkBook.Result.Completed) candidate = null
+        when (result) {
+            is BoundaryMarkBook.Result.Started -> updateMarkUi()
+            is BoundaryMarkBook.Result.Completed -> {
+                val height = result.mark.height
+                runOnUiThread { markHeight.text = null }
+                updateMarkUi(
+                    detail = when (height.source) {
+                        HeightSource.CEILING_PLANE -> getString(R.string.mark_height_ceiling, height.metres)
+                        HeightSource.TYPED -> getString(R.string.mark_height_typed, height.metres)
+                        HeightSource.UNKNOWN -> getString(R.string.mark_height_unknown)
+                    },
+                )
+            }
+            BoundaryMarkBook.Result.TooShort -> updateMarkUi(R.string.mark_too_short)
+            BoundaryMarkBook.Result.TooLong -> updateMarkUi(R.string.mark_too_long)
+            BoundaryMarkBook.Result.TooSteep -> updateMarkUi(R.string.mark_too_steep)
+            BoundaryMarkBook.Result.Full -> updateMarkUi(R.string.mark_full)
+        }
+    }
+
     // --- Finish, cancel, fail ---
 
     private fun finishScan() {
@@ -569,12 +811,20 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         ScanCoordinator.state(scan.sessionId, "finalizing")
         sensorsToggle.isEnabled = false
         locationToggle.isEnabled = false
+        markToggle.isEnabled = false
+        marking = false
+        pendingTap.set(null)
+        candidate = null
+        markPanel.visibility = View.GONE
         sensorRecorder?.stop()
         val planes = recorder?.latestPlanes.orEmpty()
-        finalizer.execute { finalizeBundle(planes) }
+        // A start point without an end is not a mark; say so in the bundle rather than dropping it silently.
+        if (marks.pending() != null) recorder?.warnings?.add("boundary-mark-incomplete")
+        val boundaryMarks = marks.snapshot()
+        finalizer.execute { finalizeBundle(planes, boundaryMarks) }
     }
 
-    private fun finalizeBundle(planes: List<PlaneRecord>) {
+    private fun finalizeBundle(planes: List<PlaneRecord>, boundaryMarks: List<BoundaryMark>) {
         val recorder = recorder ?: return
         try {
             recorder.stop()
@@ -637,6 +887,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                 sensors = sensorCapture,
                 lightEstimates = captured.lightEstimates,
                 pointMaxDistanceM = ScanRecorder.POINT_MAX_DISTANCE_M.toDouble(),
+                boundaryMarks = boundaryMarks,
             )
             val bundle = ScanBundleWriter(store.dir(scan.sessionId)).finalize(input)
             val record = store.read(scan.sessionId)

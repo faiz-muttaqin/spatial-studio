@@ -378,6 +378,10 @@ class ScanRecorder(
         encoder.awaitTermination(5, TimeUnit.SECONDS)
     }
 
+    /** Stable id of a plane, shared with the plane-set stream. GL thread. */
+    @Synchronized
+    fun planeIdFor(plane: Plane): String = planeId(plane)
+
     private fun planeId(plane: Plane): String = planeIds.getOrPut(plane) { "plane-${planeIds.size + 1}" }
 
     private fun intrinsicsFor(source: CameraIntrinsics, width: Int, height: Int): Intrinsics? {
