@@ -15363,6 +15363,15 @@ msgstr "Cerrar foto"
 msgid "editor.panels.scanEvidence.device"
 msgstr "Dispositivo"
 
+# English: "Download Brush dataset (.zip)"
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.downloadDataset"
+msgstr "Descargar conjunto de datos de Brush (.zip)"
+
 # Source-Hash: b5e1914dc8543d0c
 # Review: required
 # AI-Provider: claude-code
@@ -15412,6 +15421,15 @@ msgstr "Modelo 3D"
 #, fuzzy
 msgid "editor.panels.scanEvidence.layer.pointCloud"
 msgstr "Nube de puntos"
+
+# English: "Gaussian splat"
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.layer.splat"
+msgstr "Gaussian splat"
 
 # Source-Hash: d162bd068d79cdf1
 # Review: required
@@ -15532,6 +15550,15 @@ msgstr "{part}: aún no está listo."
 #, fuzzy
 msgid "editor.panels.scanEvidence.photoDialog"
 msgstr "Foto de la captura"
+
+# English: "Photoreal capture"
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.photoreal"
+msgstr "Captura fotorrealista"
 
 # Source-Hash: e44ffe32c2b2e0f6
 # Review: required
@@ -15683,6 +15710,51 @@ msgstr "Largo"
 msgid "editor.panels.scanEvidence.roomWidth"
 msgstr "Ancho"
 
+# English: "Splat attached ({count} splats)."
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.splatDone"
+msgstr "Splat adjuntado ({count} splats)."
+
+# English: "The splat could not be attached."
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.splatFailed"
+msgstr "No se pudo adjuntar el splat."
+
+# English: "This is not a binary 3D Gaussian splat PLY."
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.splatInvalid"
+msgstr "No es un PLY binario de Gaussian splat 3D."
+
+# English: "The file is larger than 96 MiB."
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.splatTooLarge"
+msgstr "El archivo supera los 96 MiB."
+
+# English: "Uploading…"
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.splatUploading"
+msgstr "Subiendo…"
+
 # Source-Hash: a4364c1ff0695334
 # Review: required
 # AI-Provider: claude-code
@@ -15752,6 +15824,15 @@ msgstr "Pérdidas de seguimiento"
 #, fuzzy
 msgid "editor.panels.scanEvidence.unavailable"
 msgstr "No se pudieron cargar los datos de captura."
+
+# English: "Upload trained splat (.ply)"
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.uploadSplat"
+msgstr "Subir splat entrenado (.ply)"
 
 # Source-Hash: 7e1647f9ce51509e
 # Review: required

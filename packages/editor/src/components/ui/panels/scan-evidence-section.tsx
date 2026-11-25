@@ -7,10 +7,12 @@ import {
   captureLayerKey,
   captureStreamLabel,
 } from '@pascal-app/core/capture'
+import { useViewer } from '@pascal-app/viewer'
 import { X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useCaptureSourceResolver } from '../../../lib/capture-source-context'
+import { attachSplatToManifest, type SplatAttachError } from '../../../lib/scan-evidence/attach-splat'
 import { loadScanEvidence, type ScanEvidence } from '../../../lib/scan-evidence/load'
 import { selectKeyframePage } from '../../../lib/scan-evidence/shape'
 import { PanelSection } from '../controls/panel-section'
@@ -134,6 +136,7 @@ function ScanEvidenceContent({ node }: { node: CaptureScan }) {
           })}
         </Group>
       )}
+      <PhotorealGroup evidence={evidence} i18n={i18n} node={node} />
       {evidence.measurements && (
         <MeasurementFacts i18n={i18n} measurements={evidence.measurements} />
       )}
@@ -165,8 +168,121 @@ function layerLabel(key: string, i18n: PascalI18n): string | null {
       return i18n._({ id: 'editor.panels.scanEvidence.layer.pointCloud', message: 'Point cloud' })
     case 'surfaceMesh':
       return i18n._({ id: 'editor.panels.scanEvidence.layer.surfaceMesh', message: 'Surface mesh' })
+    case 'splat':
+      return i18n._({ id: 'editor.panels.scanEvidence.layer.splat', message: 'Gaussian splat' })
     default:
       return null
+  }
+}
+
+type SplatUpload =
+  | { status: 'idle' }
+  | { status: 'uploading' }
+  | { status: 'done'; splatCount: number }
+  | { status: 'error'; code: SplatAttachError['code'] }
+
+/** The Brush dataset download and the trained-splat upload (docs/spatial-studio/BRUSH_WORKFLOW.md). */
+function PhotorealGroup({
+  evidence,
+  i18n,
+  node,
+}: {
+  evidence: ScanEvidence
+  i18n: PascalI18n
+  node: CaptureScan
+}) {
+  const projectId = useViewer((state) => state.projectId)
+  const updateNode = useScene((state) => state.updateNode)
+  const [upload, setUpload] = useState<SplatUpload>({ status: 'idle' })
+  const manifestUrl = node.captureSession.manifestUrl
+  const hasKeyframes = (evidence.keyframes?.frames.length ?? 0) > 0
+  if (!(hasKeyframes && manifestUrl)) return null
+
+  const onFile = async (file: File | undefined) => {
+    if (!file) return
+    setUpload({ status: 'uploading' })
+    try {
+      const result = await attachSplatToManifest(file, manifestUrl)
+      updateNode(node.id, {
+        captureSession: { ...node.captureSession, manifestUrl: result.manifestUrl },
+      })
+      setUpload({ status: 'done', splatCount: result.splatCount })
+    } catch (cause) {
+      const code = (cause as { code?: SplatAttachError['code'] }).code ?? 'upload_failed'
+      setUpload({ status: 'error', code })
+    }
+  }
+
+  return (
+    <Group label={i18n._({ id: 'editor.panels.scanEvidence.photoreal', message: 'Photoreal capture' })}>
+      {projectId && (
+        <a
+          className="text-xs underline"
+          download
+          href={`/api/scans/${encodeURIComponent(projectId)}/${encodeURIComponent(node.id)}/brush-dataset`}
+        >
+          {i18n._({
+            id: 'editor.panels.scanEvidence.downloadDataset',
+            message: 'Download Brush dataset (.zip)',
+          })}
+        </a>
+      )}
+      <label className="flex flex-col gap-1 text-xs">
+        {i18n._({
+          id: 'editor.panels.scanEvidence.uploadSplat',
+          message: 'Upload trained splat (.ply)',
+        })}
+        <input
+          accept=".ply"
+          className="text-xs"
+          disabled={upload.status === 'uploading'}
+          onChange={(event) => {
+            void onFile(event.target.files?.[0])
+            event.target.value = ''
+          }}
+          type="file"
+        />
+      </label>
+      {upload.status === 'uploading' && (
+        <p className="text-muted-foreground text-xs" role="status">
+          {i18n._({ id: 'editor.panels.scanEvidence.splatUploading', message: 'Uploading…' })}
+        </p>
+      )}
+      {upload.status === 'done' && (
+        <p className="text-xs" role="status">
+          {i18n._({
+            id: 'editor.panels.scanEvidence.splatDone',
+            message: 'Splat attached ({count} splats).',
+            values: { count: upload.splatCount },
+          })}
+        </p>
+      )}
+      {upload.status === 'error' && (
+        <p className="text-amber-600 text-xs" role="alert">
+          {splatErrorMessage(upload.code, i18n)}
+        </p>
+      )}
+    </Group>
+  )
+}
+
+function splatErrorMessage(code: SplatAttachError['code'], i18n: PascalI18n): string {
+  switch (code) {
+    case 'too_large':
+      return i18n._({
+        id: 'editor.panels.scanEvidence.splatTooLarge',
+        message: 'The file is larger than 96 MiB.',
+      })
+    case 'invalid_file':
+      return i18n._({
+        id: 'editor.panels.scanEvidence.splatInvalid',
+        message: 'This is not a binary 3D Gaussian splat PLY.',
+      })
+    default:
+      return i18n._({
+        id: 'editor.panels.scanEvidence.splatFailed',
+        message: 'The splat could not be attached.',
+      })
   }
 }
 

@@ -15363,6 +15363,15 @@ msgstr "关闭照片"
 msgid "editor.panels.scanEvidence.device"
 msgstr "设备"
 
+# English: "Download Brush dataset (.zip)"
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.downloadDataset"
+msgstr "下载 Brush 数据集 (.zip)"
+
 # Source-Hash: b5e1914dc8543d0c
 # Review: required
 # AI-Provider: claude-code
@@ -15412,6 +15421,15 @@ msgstr "3D 模型"
 #, fuzzy
 msgid "editor.panels.scanEvidence.layer.pointCloud"
 msgstr "点云"
+
+# English: "Gaussian splat"
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.layer.splat"
+msgstr "高斯泼溅"
 
 # Source-Hash: d162bd068d79cdf1
 # Review: required
@@ -15532,6 +15550,15 @@ msgstr "{part}：尚未就绪。"
 #, fuzzy
 msgid "editor.panels.scanEvidence.photoDialog"
 msgstr "采集照片"
+
+# English: "Photoreal capture"
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.photoreal"
+msgstr "照片级真实感采集"
 
 # Source-Hash: e44ffe32c2b2e0f6
 # Review: required
@@ -15683,6 +15710,51 @@ msgstr "长度"
 msgid "editor.panels.scanEvidence.roomWidth"
 msgstr "宽度"
 
+# English: "Splat attached ({count} splats)."
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.splatDone"
+msgstr "已附加泼溅（{count} 个）。"
+
+# English: "The splat could not be attached."
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.splatFailed"
+msgstr "无法附加泼溅。"
+
+# English: "This is not a binary 3D Gaussian splat PLY."
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.splatInvalid"
+msgstr "这不是二进制 3D 高斯泼溅 PLY 文件。"
+
+# English: "The file is larger than 96 MiB."
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.splatTooLarge"
+msgstr "文件超过 96 MiB。"
+
+# English: "Uploading…"
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.splatUploading"
+msgstr "正在上传…"
+
 # Source-Hash: a4364c1ff0695334
 # Review: required
 # AI-Provider: claude-code
@@ -15752,6 +15824,15 @@ msgstr "跟踪丢失次数"
 #, fuzzy
 msgid "editor.panels.scanEvidence.unavailable"
 msgstr "无法加载采集数据。"
+
+# English: "Upload trained splat (.ply)"
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.uploadSplat"
+msgstr "上传训练好的泼溅 (.ply)"
 
 # Source-Hash: 7e1647f9ce51509e
 # Review: required

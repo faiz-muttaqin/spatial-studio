@@ -15363,6 +15363,15 @@ msgstr "写真を閉じる"
 msgid "editor.panels.scanEvidence.device"
 msgstr "デバイス"
 
+# English: "Download Brush dataset (.zip)"
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.downloadDataset"
+msgstr "Brush データセットをダウンロード (.zip)"
+
 # Source-Hash: b5e1914dc8543d0c
 # Review: required
 # AI-Provider: claude-code
@@ -15412,6 +15421,15 @@ msgstr "3Dモデル"
 #, fuzzy
 msgid "editor.panels.scanEvidence.layer.pointCloud"
 msgstr "点群"
+
+# English: "Gaussian splat"
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.layer.splat"
+msgstr "ガウシアンスプラット"
 
 # Source-Hash: d162bd068d79cdf1
 # Review: required
@@ -15532,6 +15550,15 @@ msgstr "{part}：まだ準備できていません。"
 #, fuzzy
 msgid "editor.panels.scanEvidence.photoDialog"
 msgstr "キャプチャの写真"
+
+# English: "Photoreal capture"
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.photoreal"
+msgstr "フォトリアル撮影"
 
 # Source-Hash: e44ffe32c2b2e0f6
 # Review: required
@@ -15683,6 +15710,51 @@ msgstr "長さ"
 msgid "editor.panels.scanEvidence.roomWidth"
 msgstr "幅"
 
+# English: "Splat attached ({count} splats)."
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.splatDone"
+msgstr "スプラットを添付しました ({count} 個)。"
+
+# English: "The splat could not be attached."
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.splatFailed"
+msgstr "スプラットを添付できませんでした。"
+
+# English: "This is not a binary 3D Gaussian splat PLY."
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.splatInvalid"
+msgstr "バイナリ形式の 3D ガウシアンスプラット PLY ではありません。"
+
+# English: "The file is larger than 96 MiB."
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.splatTooLarge"
+msgstr "ファイルが 96 MiB を超えています。"
+
+# English: "Uploading…"
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.splatUploading"
+msgstr "アップロード中…"
+
 # Source-Hash: a4364c1ff0695334
 # Review: required
 # AI-Provider: claude-code
@@ -15752,6 +15824,15 @@ msgstr "トラッキング喪失"
 #, fuzzy
 msgid "editor.panels.scanEvidence.unavailable"
 msgstr "キャプチャデータを読み込めませんでした。"
+
+# English: "Upload trained splat (.ply)"
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.uploadSplat"
+msgstr "学習済みスプラットをアップロード (.ply)"
 
 # Source-Hash: 7e1647f9ce51509e
 # Review: required
