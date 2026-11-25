@@ -37,6 +37,13 @@ Next actionable work: see the latest dated entry below. For each session record 
 - Limits: no ground truth for the real scans; neck cut can drop a legitimate narrow arm (reported in the notes); carved glass detection depends on floor depth and floor planes; two-room or multi-level walks are not modelled.
 - Checks: see the PR description.
 
+### 2026-11-25: scan.upload joins an in-flight upload (device finding)
+
+- Branch `fix/scan-upload-join` from `2cf4c830`. Finding from the owner's torch test: the scan finished and the native upload completed (234/234), but the page never got the `scan.upload` reply and then showed `busy` on a second request. Most likely cause (not confirmed): the page was recreated while uploading, so the first reply went to a dead proxy and the second request hit `beginUpload`.
+- Fix: a second `scan.upload` for the session already uploading queues its reply and gets the same result (`busy` only for a different session); a scan with a stored manifest is answered at once; success also emits `upload.done`; the native scan panel lists the latest three uploaded scans with an Attach button (the companion does not say which were already attached, so that list can include attached scans). `scan.start` and `scan.upload` begin, end and busy rejections log with `Log.i` (no cookies or URLs). Contract in its own commit.
+- Commands: `./gradlew :app:testDebugUnitTest :app:assembleDebug :app:lintDebug` succeeded, 226 tests, 0 failures (6 new: join, busy for another session, failure to every waiter, `upload.done`, other-session finish, already-uploaded result); lint 0 errors. In `apps/editor`: `bun test lib/scan` 52 pass (1 new), `bun run check-types` clean, `bun run check` no errors.
+- Device evidence: none for this change. The reload-during-upload sequence is not reproduced on a device.
+
 ### 2026-11-25: Android scan guidance, motion guard and torch experiment (R3)
 
 - Branch `fix/brave-liskov-89cf6e` from `3b2f11b0`. Step R3 of [ALGORITHM_STUDY.md](ALGORITHM_STUDY.md). Contract v1.3 is its own commit: optional `torch` boolean on `rgb-keyframes` entries (core Zod schema `RgbKeyframeSchema`, one new test), plus `metadata.arcore.torch` and `metadata.arcore.motionGuard` in [CAPTURE_CONTRACT.md](CAPTURE_CONTRACT.md).
