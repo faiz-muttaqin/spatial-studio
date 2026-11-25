@@ -1494,6 +1494,14 @@ msgstr "Largeur (m)"
 msgid "app.scan.measure.windowTitle"
 msgstr "Fenêtre {number}"
 
+# English: "Attach"
+# Source-Hash: 9511a3005483b68b
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.attach"
+msgstr "Rattacher"
+
 # Source-Hash: f89744026cb4ffb5
 # Review: required
 # AI-Provider: claude-code
@@ -1593,6 +1601,14 @@ msgstr "Ouverture du scanner…"
 #, fuzzy
 msgid "app.scan.native.upload"
 msgstr "Envoyer ce relevé"
+
+# English: "Uploaded, not attached yet"
+# Source-Hash: 3eb37861f2f38005
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.uploadedList"
+msgstr "Envoyé, pas encore rattaché"
 
 # Source-Hash: 756844bbc7a4b1cf
 # Review: required
