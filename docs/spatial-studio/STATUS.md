@@ -12,3 +12,7 @@
 | P5/P6 | Deferred | Optional after MVP |
 
 Next actionable work: P1.0 PR for fork release/registry guard and CI hygiene (do not weaken checks), then locked build and VM/device smoke following DEPLOYMENT.md. Owner deploys VM; record domain only if intentionally public, no secrets. If build fails, capture logs and fix baseline separately. Inspect actual WebXR plugin before duplicate scanner. No mandatory native or GPU service. For each session update date / phase / branch / PR / base SHA / files / commands + actual results / device evidence / blockers / next task.
+
+### P1.0 work in progress — fork publishing guards (2026-11-25)
+
+Branch `p1/fork-publishing-guards` from `96de268`. Guard release, registry publish/hosted checks and legacy deprecation; normal CI untouched. Source-level checks only; GitHub CI pending verification. See [P1_FORK_SAFETY.md](P1_FORK_SAFETY.md). VM deployment handled in parallel by another agent. No runtime modifications.

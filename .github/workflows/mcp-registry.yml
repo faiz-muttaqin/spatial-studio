@@ -153,6 +153,7 @@ jobs:
 
       # OAuth is discovered from the 401 challenge, so the remote declares no headers.
       - name: Verify hosted endpoint contract
+        if: github.repository == 'pascalorg/editor'
         run: |
           jq --exit-status '
             .remotes == [{
@@ -177,7 +178,7 @@ jobs:
   # The registry reads mcpName from the npm tarball, so this waits until npm serves the
   # version, and it fails unless the registry lists the version afterwards.
   publish:
-    if: inputs.publish
+    if: github.repository == 'pascalorg/editor' && inputs.publish
     needs: validate
     runs-on: ubuntu-latest
     # The environment's deployment rule allows only main; it holds MCP_REGISTRY_PRIVATE_KEY.
@@ -303,7 +304,7 @@ jobs:
   # this repository, so they only match after that deployment picks up this version.
   # It does not gate the registry publish.
   hosted-matches-manifest:
-    if: inputs.check-hosted
+    if: github.repository == 'pascalorg/editor' && inputs.check-hosted
     runs-on: ubuntu-latest
     permissions:
       contents: read
