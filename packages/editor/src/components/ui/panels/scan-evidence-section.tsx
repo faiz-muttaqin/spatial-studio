@@ -7,11 +7,13 @@ import {
   captureLayerKey,
   captureStreamLabel,
 } from '@pascal-app/core/capture'
-import { useViewer } from '@pascal-app/viewer'
 import { X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useCaptureSourceResolver } from '../../../lib/capture-source-context'
+import {
+  useBrushDatasetUrl,
+  useCaptureSourceResolver,
+} from '../../../lib/capture-source-context'
 import { attachSplatToManifest, type SplatAttachError } from '../../../lib/scan-evidence/attach-splat'
 import { loadScanEvidence, type ScanEvidence } from '../../../lib/scan-evidence/load'
 import { selectKeyframePage } from '../../../lib/scan-evidence/shape'
@@ -191,7 +193,7 @@ function PhotorealGroup({
   i18n: PascalI18n
   node: CaptureScan
 }) {
-  const projectId = useViewer((state) => state.projectId)
+  const datasetUrl = useBrushDatasetUrl()
   const updateNode = useScene((state) => state.updateNode)
   const [upload, setUpload] = useState<SplatUpload>({ status: 'idle' })
   const manifestUrl = node.captureSession.manifestUrl
@@ -215,12 +217,8 @@ function PhotorealGroup({
 
   return (
     <Group label={i18n._({ id: 'editor.panels.scanEvidence.photoreal', message: 'Photoreal capture' })}>
-      {projectId && (
-        <a
-          className="text-xs underline"
-          download
-          href={`/api/scans/${encodeURIComponent(projectId)}/${encodeURIComponent(node.id)}/brush-dataset`}
-        >
+      {datasetUrl && (
+        <a className="text-xs underline" download href={datasetUrl(node.id)}>
           {i18n._({
             id: 'editor.panels.scanEvidence.downloadDataset',
             message: 'Download Brush dataset (.zip)',

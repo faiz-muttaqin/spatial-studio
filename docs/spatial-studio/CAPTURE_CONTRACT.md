@@ -153,7 +153,7 @@ Optional and additive: a v1 to v1.3 reader ignores the stream, and a bundle with
 Rules:
 
 - Units are metres, and the splat is in the same frame as the keyframes it was trained from. Brush keeps the poses it is given, so a splat trained from the Brush dataset export needs no transform. This was reasoned from Brush's source (`nerfstudio.rs`, `opengl_c2w_to_pose`) and has not been checked against a trained splat from a real scan.
-- The viewer layer draws the degree-0 colour only. Higher-order spherical harmonics stay in the file for other viewers and are not used for view-dependent colour. It draws at most 1,500,000 splats and thins a larger file evenly.
+- The viewer layer draws the degree-0 colour only. Higher-order spherical harmonics stay in the file for other viewers and are not used for view-dependent colour. It draws at most 1,000,000 splats and thins a larger file evenly.
 - A splat is a trained estimate. It can carry floaters where ARCore drifted or exposure changed, and it is not a measurement. Consumers must not derive wall positions or dimensions from it.
 - Replacing a splat writes a new manifest with one `gaussian-splat` stream; earlier artifacts stay in the store.
 

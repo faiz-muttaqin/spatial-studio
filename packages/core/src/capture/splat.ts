@@ -24,7 +24,7 @@ export const GAUSSIAN_SPLAT_MEDIA_TYPE = 'application/ply'
  */
 export const CAPTURE_MAX_SPLAT_ARTIFACT_BYTES = 96 * 1024 * 1024
 /** Most splats the viewer layer draws; a larger file is thinned evenly. */
-export const CAPTURE_MAX_RENDERED_SPLATS = 1_500_000
+export const CAPTURE_MAX_RENDERED_SPLATS = 1_000_000
 
 export const GaussianSplatMetadataSchema = z.object({
   format: z.literal('ply'),
