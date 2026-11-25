@@ -10,6 +10,8 @@ import { VIEW_2D, VIEW_3D, withoutView } from '../store/view-layout'
 export type EditorHostView = {
   id: string
   label: string
+  /** Translatable name for the view bar; `label` stays the fallback and the accessible name elsewhere. */
+  labelMessage?: { id: string; message: string }
   icon: IconRef
   component: LazyComponent
   /** The view exists in a project only while this plugin is installed there. */

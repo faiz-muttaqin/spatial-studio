@@ -24,6 +24,7 @@ import { registerPhotoToSceneTool } from './photo-to-scene'
 import { registerRedo } from './redo'
 import { registerRoomTools } from './room-tools'
 import { registerScanMapTool } from './scan-map-tool'
+import { registerScanSemanticsTools } from './scan-semantics-tools'
 import { type CaptureArtifactHost, registerScanTools } from './scan-tools'
 import { registerSceneLifecycleTools } from './scene-lifecycle'
 import { registerSetZone } from './set-zone'
@@ -88,6 +89,7 @@ export function registerTools(
   if (captureArtifacts) {
     registerScanTools(server, operations, captureArtifacts)
     registerScanMapTool(server, operations, captureArtifacts)
+    registerScanSemanticsTools(server, operations, captureArtifacts)
   }
   registerConstructionTools(server, operations)
   registerRoomTools(server, operations, geometryScripts)
