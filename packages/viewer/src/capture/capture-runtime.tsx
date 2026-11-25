@@ -329,7 +329,11 @@ export function CaptureStreamLayer({
     )
   } else if (layerKey === 'deviceMotion') {
     content = trajectory ? (
-      <CaptureDeviceMotionLayer key={motionPlaybackKey} trajectory={trajectory} />
+      <CaptureDeviceMotionLayer
+        key={motionPlaybackKey}
+        opacity={scan.opacity / 100}
+        trajectory={trajectory}
+      />
     ) : null
   } else if (layerKey === 'pointCloud') {
     content = (
@@ -338,6 +342,7 @@ export function CaptureStreamLayer({
           isCapturePointCloudArtifact(stream.artifact) ? (artifactUrl ?? undefined) : undefined
         }
         inline={payload}
+        opacity={scan.opacity / 100}
         packets={stream.availability === 'live' ? packets : []}
       />
     )
@@ -347,6 +352,7 @@ export function CaptureStreamLayer({
         appearance={meshPresentation?.previewMaterial}
         dollhouse={meshPresentation?.dollhouse}
         inline={payload}
+        opacity={scan.opacity / 100}
       />
     )
   }

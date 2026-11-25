@@ -18,6 +18,7 @@ import {
   usePascalI18n,
   useScene,
 } from '@pascal-app/core'
+import type { CaptureSourceResolver } from '@pascal-app/core/capture'
 import {
   type HoverStyles,
   InteractiveSystem,
@@ -30,6 +31,7 @@ import {
   type ViewerImmersiveSession,
   ViewerPresentations,
 } from '@pascal-app/viewer'
+import { CaptureRuntime } from '@pascal-app/viewer/capture'
 import { useViewerUiSounds } from '@pascal-app/viewer/sfx'
 import {
   type ActionMenuPlacement,
@@ -69,6 +71,7 @@ import { useKeyboard } from '../../hooks/use-keyboard'
 import { useSaveShortcut } from '../../hooks/use-save-shortcut'
 import { useSceneLoader } from '../../hooks/use-scene-loader'
 import { type HINT_KEY_NAMES, toolHintKey, toolHintKeyDescriptor } from '../../i18n/node-messages'
+import { CaptureSourceResolverProvider } from '../../lib/capture-source-context'
 import { useCeilingEditSessionOwner } from '../../lib/ceiling-edit-session'
 import { showsWholeBuilding, useEditorLevelDisplay } from '../../lib/editor-level-display'
 import { isSceneView } from '../../lib/editor-views'
@@ -287,6 +290,12 @@ export interface EditorProps {
   multiSelectionFooter?: ReactNode
 
   /** Host-owned content mounted inside the editor's React Three Fiber scene. */
+  /**
+   * Resolves a scan's `captureSession` to a capture source (manifest and artifacts). The editor
+   * mounts the viewer's capture layers and the scan evidence panel with it. Omit it and capture
+   * scans stay reference entries that draw nothing.
+   */
+  captureSourceResolver?: CaptureSourceResolver
   viewerSceneSlot?: ReactNode
   /** Host-owned SVG content mounted in the transformed floor-plan scene. */
   floorplanSceneSlot?: ReactNode
@@ -951,6 +960,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   isStudioMode,
   onThumbnailCapture,
   viewerSceneSlot,
+  captureSourceResolver,
   presentationsReady,
 }: {
   isVersionPreviewMode: boolean
@@ -960,6 +970,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   isStudioMode: boolean
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
   viewerSceneSlot?: ReactNode
+  captureSourceResolver?: CaptureSourceResolver
   presentationsReady: boolean
 }) {
   // Studio mode is a clean render/snapshot surface — no selection or editing
@@ -1006,6 +1017,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!isXRMode && <VectorEdgeExtractor />}
       {!(isFirstPersonMode || isXRMode) && <SiteEdgeLabels />}
       {presentationsReady ? <ViewerPresentations /> : null}
+      {captureSourceResolver ? <CaptureRuntime resolveSource={captureSourceResolver} /> : null}
       {!noEditing && viewerSceneSlot}
     </>
   )
@@ -1233,6 +1245,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   presentationsReady,
   sceneDataPending,
   viewerSceneSlot,
+  captureSourceResolver,
   floorplanSceneSlot,
   disablePostFx = false,
   immersive,
@@ -1254,6 +1267,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   presentationsReady: boolean
   sceneDataPending: boolean
   viewerSceneSlot?: ReactNode
+  captureSourceResolver?: CaptureSourceResolver
   floorplanSceneSlot?: ReactNode
   disablePostFx?: boolean
   immersive?: ViewerImmersiveSession
@@ -1440,6 +1454,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
                   onThumbnailCapture={onThumbnailCapture}
                   presentationsReady={presentationsReady}
                   viewerSceneSlot={viewerSceneSlot}
+                  captureSourceResolver={captureSourceResolver}
                 />
               </Viewer>
               {!showLoader &&
@@ -1585,6 +1600,7 @@ function EditorContent({
   inspectorFooter,
   multiSelectionFooter,
   viewerSceneSlot,
+  captureSourceResolver,
   floorplanSceneSlot,
   projectId,
   onLoad,
@@ -1974,6 +1990,7 @@ function EditorContent({
       sceneReadyKey={sceneReadyKey}
       showLoader={showLoader}
       viewerSceneSlot={viewerSceneSlot}
+      captureSourceResolver={captureSourceResolver}
       floorplanSceneSlot={floorplanSceneSlot}
       immersive={immersive}
     />
@@ -2206,9 +2223,11 @@ function EditorContent({
 function EditorFrame(props: EditorProps) {
   return (
     <Profiler id="editor" onRender={recordEditorRender}>
-      <FloorplanDimensionHitsGate>
-        <EditorContent {...props} />
-      </FloorplanDimensionHitsGate>
+      <CaptureSourceResolverProvider value={props.captureSourceResolver ?? null}>
+        <FloorplanDimensionHitsGate>
+          <EditorContent {...props} />
+        </FloorplanDimensionHitsGate>
+      </CaptureSourceResolverProvider>
     </Profiler>
   )
 }

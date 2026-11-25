@@ -32,6 +32,8 @@ export type PointDiscCloudProps = {
   version?: number
   /** Disc diameter in metres. */
   size?: number
+  /** 0 to 1; below 1 the discs blend with what is behind them. */
+  opacity?: number
   /** The Three.js layer to draw on (see `lib/layers.ts`); the scene's by default. */
   layer?: number
   name?: string
@@ -47,6 +49,7 @@ export function PointDiscCloud({
   count,
   layer = SCENE_LAYER,
   name = 'point-disc-cloud',
+  opacity = 1,
   positions,
   size = POINT_DISC_SIZE,
   version,
@@ -58,18 +61,19 @@ export function PointDiscCloud({
     const positionAttribute = new InstancedBufferAttribute(positions, 3)
     const colorAttribute = colors ? new InstancedBufferAttribute(colors, 3) : null
     const sizeUniform = uniform(POINT_DISC_SIZE)
+    const opacityUniform = uniform(1)
     const material = new SpriteNodeMaterial()
     material.positionNode = instanced(positionAttribute)
     material.colorNode = colorAttribute ? instanced(colorAttribute, 'vec3') : color(UNCOLORED_POINT)
     material.scaleNode = sizeUniform
     // A disc: the quad's corners cut away.
-    material.opacityNode = step(uv().sub(0.5).length(), float(0.5))
+    material.opacityNode = step(uv().sub(0.5).length(), float(0.5)).mul(opacityUniform)
     material.alphaTest = 0.5
     const sprite = new Sprite(material)
     sprite.count = 0
     sprite.frustumCulled = false
     sprite.raycast = NO_RAYCAST
-    return { colorAttribute, material, positionAttribute, sizeUniform, sprite }
+    return { colorAttribute, material, opacityUniform, positionAttribute, sizeUniform, sprite }
   }, [colors, dynamic, positions])
   useEffect(
     () => () => {
@@ -82,6 +86,15 @@ export function PointDiscCloud({
   useLayoutEffect(() => {
     built.sizeUniform.value = size
   }, [built, size])
+  useLayoutEffect(() => {
+    const blended = opacity < 1
+    built.opacityUniform.value = Math.min(1, Math.max(0, opacity))
+    built.material.transparent = blended
+    built.material.depthWrite = !blended
+    // The disc's cut-away corners are 0, so a low threshold still clips them while the rest fades.
+    built.material.alphaTest = blended ? 0.01 : 0.5
+    built.material.needsUpdate = true
+  }, [built, opacity])
   useLayoutEffect(() => {
     built.sprite.name = name
     built.sprite.layers.set(layer)

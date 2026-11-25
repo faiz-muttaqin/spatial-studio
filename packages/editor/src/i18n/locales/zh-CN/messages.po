@@ -15282,6 +15282,306 @@ msgstr "{use}“{name}”"
 msgid "editor.panels.roomPanel.viewCode"
 msgstr "查看代码"
 
+# Source-Hash: 0915fe9c7fdeebcf
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Camera axes"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.cameraConvention"
+msgstr "相机坐标轴"
+
+# Source-Hash: 01fd790fea2a3691
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Captured"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.capturedAt"
+msgstr "采集时间"
+
+# Source-Hash: 4d67d141c81f3350
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Ceiling height"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.ceilingHeight"
+msgstr "天花板高度"
+
+# Source-Hash: 81cb6713552e7f93
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Floor to ceiling"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.clearHeight"
+msgstr "地面到天花板"
+
+# Source-Hash: 92a3228b45ae1ecb
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Close photo"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.close"
+msgstr "关闭照片"
+
+# Source-Hash: 4a58d77261797015
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Device"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.device"
+msgstr "设备"
+
+# Source-Hash: b5e1914dc8543d0c
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Enlarge photo"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.enlarge"
+msgstr "放大照片"
+
+# Source-Hash: c74d8e27f5f1e186
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Floor height"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.floorHeight"
+msgstr "地面高度"
+
+# Source-Hash: 4ccd2fc1a471fca5
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Layers"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.layers"
+msgstr "图层"
+
+# Source-Hash: 2ab934c278ddd866
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Loading capture data…"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.loading"
+msgstr "正在加载采集数据…"
+
+# Source-Hash: 14a2b70d707928be
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Manual measurements"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.measurements"
+msgstr "手动测量"
+
+# Source-Hash: 9a8bb238dc855a1c
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Next"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.nextPage"
+msgstr "下一页"
+
+# Source-Hash: a86ca97fec1d4f51
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Doors, windows"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.openings"
+msgstr "门、窗"
+
+# Source-Hash: 886b1b60006a7bc1
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "{page} of {pages}"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.pageOf"
+msgstr "第 {page} 页，共 {pages} 页"
+
+# Source-Hash: 131af82ccbeed864
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Some evidence in this capture could not be read."
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.partial"
+msgstr "此次采集中的部分依据无法读取。"
+
+# Source-Hash: e44ffe32c2b2e0f6
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Photos ({count})"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.photos"
+msgstr "照片（{count}）"
+
+# Source-Hash: bd70e0434f0713f5
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Detected planes"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.planes"
+msgstr "检测到的平面"
+
+# Source-Hash: 83222fb54dce3ba0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Ceiling-facing"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.planesCeilings"
+msgstr "朝向天花板"
+
+# Source-Hash: 4f4bf38c1b4dc0e5
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Floor-facing"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.planesFloors"
+msgstr "朝向地面"
+
+# Source-Hash: eb08755a0e5f42cc
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Heights are in the capture’s own frame. Merged planes are counted once."
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.planesNote"
+msgstr "高度基于采集自身的坐标系。已合并的平面只计一次。"
+
+# Source-Hash: 8038a34ffebf4932
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Vertical"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.planesWalls"
+msgstr "垂直"
+
+# Source-Hash: 2d3a261467ff6b32
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Previous"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.previousPage"
+msgstr "上一页"
+
+# Source-Hash: 33f9a30399fa52a1
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Provider"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.provider"
+msgstr "采集方"
+
+# Source-Hash: 646ef0fbcbc58edf
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Height"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.roomHeight"
+msgstr "高度"
+
+# Source-Hash: 643687bc3adaac76
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Length"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.roomLength"
+msgstr "长度"
+
+# Source-Hash: 3a0ccd6c46877a87
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Width"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.roomWidth"
+msgstr "宽度"
+
+# Source-Hash: 8f8699138b7446ad
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Scan evidence"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.title"
+msgstr "扫描依据"
+
+# Source-Hash: 9b915d540404ec67
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Tracking losses"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.trackingLoss"
+msgstr "跟踪丢失次数"
+
+# Source-Hash: c3ccba3cbcf54b97
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The capture data could not be loaded."
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.unavailable"
+msgstr "无法加载采集数据。"
+
+# Source-Hash: 7e1647f9ce51509e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Warnings"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.warnings"
+msgstr "警告"
+
 # Source-Hash: ba15840e60ce672b
 # Review: required
 # AI-Provider: claude-code
