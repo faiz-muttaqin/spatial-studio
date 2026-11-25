@@ -14,9 +14,11 @@ import {
   useBrushDatasetUrl,
   useCaptureSourceResolver,
 } from '../../../lib/capture-source-context'
+import { openEditorView } from '../../../lib/editor-views'
 import { attachSplatToManifest, type SplatAttachError } from '../../../lib/scan-evidence/attach-splat'
 import { loadScanEvidence, type ScanEvidence } from '../../../lib/scan-evidence/load'
 import { selectKeyframePage } from '../../../lib/scan-evidence/shape'
+import { useScanReview } from '../../../store/use-scan-review'
 import { PanelSection } from '../controls/panel-section'
 
 type CaptureScan = ScanNode & { captureSession: NonNullable<ScanNode['captureSession']> }
@@ -69,6 +71,8 @@ function ScanEvidenceContent({ node }: { node: CaptureScan }) {
     // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on sessionKey
   }, [resolver, sessionKey])
 
+  const reviewViewId = useScanReview((review) => review.viewId)
+  const requestReview = useScanReview((review) => review.request)
   const setLayer = useCallback(
     (key: string, visible: boolean) =>
       updateNode(node.id, { layers: { ...node.layers, [key]: visible } }),
@@ -137,6 +141,18 @@ function ScanEvidenceContent({ node }: { node: CaptureScan }) {
             )
           })}
         </Group>
+      )}
+      {reviewViewId && (
+        <button
+          className="mt-1 w-full rounded-md border border-border/50 px-2.5 py-1.5 font-medium text-xs transition-colors hover:bg-accent"
+          onClick={() => {
+            requestReview(node.id)
+            openEditorView(reviewViewId)
+          }}
+          type="button"
+        >
+          {i18n._({ id: 'editor.panels.scanEvidence.review', message: 'Review scan' })}
+        </button>
       )}
       <PhotorealGroup evidence={evidence} i18n={i18n} node={node} />
       {evidence.measurements && (

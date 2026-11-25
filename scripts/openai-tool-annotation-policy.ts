@@ -99,6 +99,7 @@ export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   save_scene: policy(false, true, false),
   search_assets: policy(true, false, false),
   search_materials: policy(true, false, false),
+  solve_room_outline: policy(true, false, false),
   set_checkpoint: policy(false, false, false),
   set_floor_foundation: policy(false, false, false),
   set_room_floor_construction: policy(false, false, false),
