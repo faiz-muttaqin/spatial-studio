@@ -22,6 +22,7 @@ import { registerGetScene } from './get-scene'
 import { registerMeasure } from './measure'
 import { registerPhotoToSceneTool } from './photo-to-scene'
 import { registerRedo } from './redo'
+import { registerRoomOutlineTool } from './room-outline-tool'
 import { registerRoomTools } from './room-tools'
 import { registerScanMapTool } from './scan-map-tool'
 import { registerScanSemanticsTools } from './scan-semantics-tools'
@@ -86,6 +87,7 @@ export function registerTools(
   registerGetSource(server, operations, geometryScripts)
   registerMeasure(server, operations)
   registerViewScene(server, operations, sceneViews)
+  registerRoomOutlineTool(server)
   if (captureArtifacts) {
     registerScanTools(server, operations, captureArtifacts)
     registerScanMapTool(server, operations, captureArtifacts)

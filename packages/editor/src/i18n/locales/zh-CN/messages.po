@@ -1564,6 +1564,447 @@ msgstr "墙"
 msgid "app.mapping.view"
 msgstr "映射"
 
+# Source-Hash: 10d5a934c3800674
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Build walls"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.build"
+msgstr "生成墙体"
+
+# Source-Hash: a2032d86a72e4128
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Build anyway"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.buildAnyway"
+msgstr "仍然生成"
+
+# Source-Hash: 083fd91471c923e6
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The walls were not built: {reason}"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.buildFailed"
+msgstr "未能生成墙体：{reason}"
+
+# Source-Hash: fbf9ff28acc64691
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The outline still has problems shown above. Press again to build it as it is, or fix them first."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.buildWarning"
+msgstr "轮廓仍存在上方所示的问题。再次点击将按现状生成，也可以先修正。"
+
+# Source-Hash: d7cf5045c01b2eb9
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Close"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.close"
+msgstr "关闭"
+
+# Source-Hash: 74b254183bfa0183
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The right angle at corner {corner} is {value}° off. The tapes do not allow it."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.conflictCorner"
+msgstr "转角 {corner} 的直角偏差 {value}°。卷尺测量值不允许这样。"
+
+# Source-Hash: 836dfaa9823c2f82
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Walls {a} and {b} differ by {value} m."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.conflictEqual"
+msgstr "墙体 {a} 与墙体 {b} 相差 {value} 米。"
+
+# Source-Hash: 9c04ed2590199226
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Corner {corner} moved {value} m although it was fixed."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.conflictFixed"
+msgstr "已固定的转角 {corner} 移动了 {value} 米。"
+
+# Source-Hash: 8f2bb26708a50e57
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Walls {a} and {b} are {value}° from parallel."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.conflictParallel"
+msgstr "墙体 {a} 与墙体 {b} 偏离平行 {value}°。"
+
+# Source-Hash: c57e13ed1ed24a98
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "These do not fit together:"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.conflicts"
+msgstr "以下内容相互矛盾："
+
+# Source-Hash: 7d1482cba891419e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The tape of {tape} m between corners {a} and {b} comes out {value} m off. It disagrees with the other tapes or right angles."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.conflictTape"
+msgstr "转角 {a} 与转角 {b} 之间 {tape} 米的卷尺测量值偏差 {value} 米，与其他测量值或直角不一致。"
+
+# Source-Hash: 3ce6a6a1bdee7189
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Corner {number}"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.corner"
+msgstr "转角 {number}"
+
+# Source-Hash: 09d4274834614a15
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Right angles"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.corners"
+msgstr "直角"
+
+# Source-Hash: bd8689af82652eb0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The outline crosses itself. Move a corner before building."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.crosses"
+msgstr "轮廓自身相交。请先移动某个转角再生成。"
+
+# Source-Hash: 612dcd5bf06a79c4
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Room"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.defaultName"
+msgstr "房间"
+
+# Source-Hash: ad924ecd9d304d78
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "{value}°"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.degrees"
+msgstr "{value}°"
+
+# Source-Hash: c24141732d9760ea
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Ceiling height, m"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.height"
+msgstr "天花板高度（米）"
+
+# Source-Hash: c022de864bbef74a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "From the scan: {value} m (an estimate)."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.heightFrom"
+msgstr "来自扫描：{value} 米（估计值）。"
+
+# Source-Hash: 040dba126c0523fd
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The ceiling height must be between {min} m and {max} m."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.heightInvalid"
+msgstr "天花板高度必须在 {min} 米到 {max} 米之间。"
+
+# Source-Hash: d69304d8ba2e6547
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "This outline is a guess from the scan, not a measurement. Drag corners, type tape lengths and tick right angles, then build the walls."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.intro"
+msgstr "此轮廓是根据扫描推测的，并非实测。请拖动转角、输入卷尺测量长度并勾选直角，然后生成墙体。"
+
+# Source-Hash: 872665476ae886d6
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Measure this wall next: it is the least certain."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.measureNext"
+msgstr "下一步请测量这面墙体：它的不确定性最大。"
+
+# Source-Hash: 9de1772ec94180b3
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "{value} m"
+#: apps/editor/components/mapping-view.tsx
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.metres"
+msgstr "{value} 米"
+
+# Source-Hash: 6a973fd4c9076adc
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Also lower the scan so its detected floor sits at the level floor."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.moveScan"
+msgstr "同时下移扫描，使检测到的地面与楼层地面对齐。"
+
+# Source-Hash: fe03450bed432a64
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The floor height was estimated from depth and may be off."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.moveScanLow"
+msgstr "地面高度由深度估算，可能不准确。"
+
+# Source-Hash: bf75e739dd7e5877
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Room name"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.name"
+msgstr "房间名称"
+
+# Source-Hash: 858301c87e8ae947
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "No outline could be proposed from this scan, so there is nothing to review yet."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.review.noProposal"
+msgstr "无法根据此扫描提出轮廓，因此暂无可审核的内容。"
+
+# Source-Hash: 848ffd2285f63a56
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The fit did not settle, so these lengths may be off. Remove a tape or a right angle and try again."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.notConverged"
+msgstr "拟合未收敛，这些长度可能不准确。请移除一个卷尺测量值或直角后重试。"
+
+# Source-Hash: c0bdcd412e7c9dac
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Review scan"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.review.open"
+msgstr "审核扫描"
+
+# Source-Hash: ca7e25a7dce565cf
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Start over"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.reset"
+msgstr "重新开始"
+
+# Source-Hash: 8f71ff5faff1b5f4
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The fit scaled the outline by {percent}%. The scan itself is not rescaled, so its picture and the walls can differ by that much."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.scale"
+msgstr "拟合将轮廓缩放了 {percent}%。扫描本身不会被缩放，因此其画面与墙体可能存在同等程度的差异。"
+
+# Source-Hash: 86d25bde4d323e64
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "± {value} m"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.sigma"
+msgstr "± {value} 米"
+
+# Source-Hash: d243d67d3f4123d6
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Enter a length in metres, more than 0 and at most 200."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.tapeInvalid"
+msgstr "请输入大于 0 且不超过 200 的长度（米）。"
+
+# Source-Hash: 277dd231dd8a7864
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Tape length of wall {number}, in metres"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.tapeLabel"
+msgstr "墙体 {number} 的卷尺测量长度（米）"
+
+# Source-Hash: 1308e7871a369ff9
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Tape measure, m"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.tapePlaceholder"
+msgstr "卷尺测量（米）"
+
+# Source-Hash: 2c4b0241d37d8fd5
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Review scan outline"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.title"
+msgstr "审核扫描轮廓"
+
+# Source-Hash: 47f49a668bb0936b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Assumed"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.tone.assumed"
+msgstr "假定"
+
+# Source-Hash: 798413c1ab394a82
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Likely glass"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.tone.glass"
+msgstr "可能是玻璃"
+
+# Source-Hash: e2bf302b3006c3e3
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "High confidence"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.tone.high"
+msgstr "置信度高"
+
+# Source-Hash: 73ef8eda3f84d4ab
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Low confidence"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.tone.low"
+msgstr "置信度低"
+
+# Source-Hash: 4fdb55b275c2d690
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Medium confidence"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.tone.medium"
+msgstr "置信度中"
+
+# Source-Hash: da0432b81c2c6bc0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Building is one step in the undo history."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.undoHint"
+msgstr "生成算作撤销历史中的一步。"
+
+# Source-Hash: 0894d370809dff14
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "What the scan did not show"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.unknowns"
+msgstr "扫描未显示的内容"
+
+# Source-Hash: c70a47b95dfe26ee
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Wall {number}"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.wall"
+msgstr "墙体 {number}"
+
+# Source-Hash: 6b61af90dc8b54d6
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Wall lengths"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.walls"
+msgstr "墙体长度"
+
 # Source-Hash: 51d4b567c394bc97
 # Review: required
 # AI-Provider: claude-code
@@ -1794,65 +2235,65 @@ msgstr "上传失败。未添加任何内容，你可以重试。"
 msgid "app.scan.intro"
 msgstr "用这部手机拍摄照片并记录尺寸。它们会作为重建房间的参考图层与项目一起保存。"
 
-# English: "Floor covered {percent}%"
 # Source-Hash: 2d7d77c9c235dd59
 # Review: required
+# English: "Floor covered {percent}%"
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.coverage"
 msgstr "地面已覆盖 {percent}%"
 
-# English: "The preview could not connect"
 # Source-Hash: cb5e84c098e62d2c
 # Review: required
+# English: "The preview could not connect"
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.failed"
 msgstr "预览无法连接"
 
-# English: "The live preview is shown inside the companion app while scanning."
 # Source-Hash: 66768389d06c4aab
 # Review: required
+# English: "The live preview is shown inside the companion app while scanning."
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.noApp"
 msgstr "扫描时，实时预览会显示在配套应用内。"
 
-# English: "Live preview"
 # Source-Hash: dd3cd056185905ac
 # Review: required
+# English: "Live preview"
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.open"
 msgstr "实时预览"
 
-# English: "No room outline yet. Keep moving around the room."
 # Source-Hash: 0c36b1b7902a20a9
 # Review: required
+# English: "No room outline yet. Keep moving around the room."
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.outlineUnclear"
 msgstr "暂无房间轮廓。请继续在房间里移动。"
 
-# English: "Paused"
 # Source-Hash: b0c0000eeb008e92
 # Review: required
+# English: "Paused"
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.paused"
 msgstr "已暂停"
 
-# English: "{frames} frames, {kb} KB"
 # Source-Hash: f9a1c6d607daa91d
 # Review: required
+# English: "{frames} frames, {kb} KB"
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.stats"
 msgstr "{frames} 帧，{kb} KB"
 
-# English: "Connecting to the scan"
 # Source-Hash: eaa1aac63a5ce4d0
 # Review: required
+# English: "Connecting to the scan"
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.waiting"
@@ -2084,17 +2525,17 @@ msgstr "配套应用使用 ARCore 记录位姿、平面、深度和关键帧，�
 msgid "app.scan.native.inProject"
 msgstr "已在 {project} 中"
 
-# English: "Show a live map while scanning"
 # Source-Hash: 4c03e9893226a97d
 # Review: required
+# English: "Show a live map while scanning"
 #: apps/editor/app/scan/native-scan.tsx
 #, fuzzy
 msgid "app.scan.native.livePreview"
 msgstr "扫描时显示实时地图"
 
-# English: "Off by default. A small preview of coverage and the room outline appears on the scan screen. It is only a preview; the saved scan is the same either way."
 # Source-Hash: 9afb1cceb0c6a8b8
 # Review: required
+# English: "Off by default. A small preview of coverage and the room outline appears on the scan screen. It is only a preview; the saved scan is the same either way."
 #: apps/editor/app/scan/native-scan.tsx
 #, fuzzy
 msgid "app.scan.native.livePreviewHint"
@@ -16302,6 +16743,16 @@ msgstr "浏览器照片"
 #, fuzzy
 msgid "editor.panels.scanEvidence.provider.webxr"
 msgstr "WebXR"
+
+# Source-Hash: c0bdcd412e7c9dac
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Review scan"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.review"
+msgstr "审核扫描"
 
 # Source-Hash: 646ef0fbcbc58edf
 # Review: required

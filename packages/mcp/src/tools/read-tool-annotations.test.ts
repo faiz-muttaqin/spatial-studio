@@ -45,6 +45,7 @@ const TOOL_POLICIES = [
       'list_collections',
       'search_assets',
       'search_materials',
+      'solve_room_outline',
       'validate_design',
       'verify_scene',
       'view_assets',

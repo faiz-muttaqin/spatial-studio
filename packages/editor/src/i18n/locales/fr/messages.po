@@ -1564,6 +1564,447 @@ msgstr "Murs"
 msgid "app.mapping.view"
 msgstr "Cartographie"
 
+# Source-Hash: 10d5a934c3800674
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Build walls"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.build"
+msgstr "Construire les murs"
+
+# Source-Hash: a2032d86a72e4128
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Build anyway"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.buildAnyway"
+msgstr "Construire quand même"
+
+# Source-Hash: 083fd91471c923e6
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The walls were not built: {reason}"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.buildFailed"
+msgstr "Les murs n’ont pas été construits : {reason}"
+
+# Source-Hash: fbf9ff28acc64691
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The outline still has problems shown above. Press again to build it as it is, or fix them first."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.buildWarning"
+msgstr "Le contour présente encore les problèmes indiqués ci-dessus. Appuyez de nouveau pour le construire tel quel, ou corrigez-les d’abord."
+
+# Source-Hash: d7cf5045c01b2eb9
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Close"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.close"
+msgstr "Fermer"
+
+# Source-Hash: 74b254183bfa0183
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The right angle at corner {corner} is {value}° off. The tapes do not allow it."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.conflictCorner"
+msgstr "L’angle droit de l’angle {corner} s’écarte de {value}°. Les mesures au mètre ne le permettent pas."
+
+# Source-Hash: 836dfaa9823c2f82
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Walls {a} and {b} differ by {value} m."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.conflictEqual"
+msgstr "Les murs {a} et {b} diffèrent de {value} m."
+
+# Source-Hash: 9c04ed2590199226
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Corner {corner} moved {value} m although it was fixed."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.conflictFixed"
+msgstr "L’angle {corner} a bougé de {value} m alors qu’il était fixé."
+
+# Source-Hash: 8f2bb26708a50e57
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Walls {a} and {b} are {value}° from parallel."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.conflictParallel"
+msgstr "Les murs {a} et {b} s’écartent de {value}° du parallélisme."
+
+# Source-Hash: c57e13ed1ed24a98
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "These do not fit together:"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.conflicts"
+msgstr "Ces données sont incompatibles entre elles :"
+
+# Source-Hash: 7d1482cba891419e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The tape of {tape} m between corners {a} and {b} comes out {value} m off. It disagrees with the other tapes or right angles."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.conflictTape"
+msgstr "La mesure de {tape} m entre les angles {a} et {b} s’écarte de {value} m. Elle ne concorde pas avec les autres mesures ou angles droits."
+
+# Source-Hash: 3ce6a6a1bdee7189
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Corner {number}"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.corner"
+msgstr "Angle {number}"
+
+# Source-Hash: 09d4274834614a15
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Right angles"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.corners"
+msgstr "Angles droits"
+
+# Source-Hash: bd8689af82652eb0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The outline crosses itself. Move a corner before building."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.crosses"
+msgstr "Le contour se croise lui-même. Déplacez un angle avant de construire."
+
+# Source-Hash: 612dcd5bf06a79c4
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Room"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.defaultName"
+msgstr "Pièce"
+
+# Source-Hash: ad924ecd9d304d78
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "{value}°"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.degrees"
+msgstr "{value}°"
+
+# Source-Hash: c24141732d9760ea
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Ceiling height, m"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.height"
+msgstr "Hauteur sous plafond, m"
+
+# Source-Hash: c022de864bbef74a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "From the scan: {value} m (an estimate)."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.heightFrom"
+msgstr "D’après le scan : {value} m (une estimation)."
+
+# Source-Hash: 040dba126c0523fd
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The ceiling height must be between {min} m and {max} m."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.heightInvalid"
+msgstr "La hauteur sous plafond doit être comprise entre {min} m et {max} m."
+
+# Source-Hash: d69304d8ba2e6547
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "This outline is a guess from the scan, not a measurement. Drag corners, type tape lengths and tick right angles, then build the walls."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.intro"
+msgstr "Ce contour est une estimation tirée du scan, pas une mesure. Faites glisser les angles, saisissez les mesures au mètre et cochez les angles droits, puis construisez les murs."
+
+# Source-Hash: 872665476ae886d6
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Measure this wall next: it is the least certain."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.measureNext"
+msgstr "Mesurez ce mur ensuite : c’est le moins certain."
+
+# Source-Hash: 9de1772ec94180b3
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "{value} m"
+#: apps/editor/components/mapping-view.tsx
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.metres"
+msgstr "{value} m"
+
+# Source-Hash: 6a973fd4c9076adc
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Also lower the scan so its detected floor sits at the level floor."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.moveScan"
+msgstr "Abaisser aussi le scan pour que le sol détecté soit au niveau du sol de l’étage."
+
+# Source-Hash: fe03450bed432a64
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The floor height was estimated from depth and may be off."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.moveScanLow"
+msgstr "La hauteur du sol a été estimée à partir de la profondeur et peut être inexacte."
+
+# Source-Hash: bf75e739dd7e5877
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Room name"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.name"
+msgstr "Nom de la pièce"
+
+# Source-Hash: 858301c87e8ae947
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "No outline could be proposed from this scan, so there is nothing to review yet."
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.review.noProposal"
+msgstr "Aucun contour n’a pu être proposé à partir de ce scan, il n’y a donc encore rien à vérifier."
+
+# Source-Hash: 848ffd2285f63a56
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The fit did not settle, so these lengths may be off. Remove a tape or a right angle and try again."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.notConverged"
+msgstr "L’ajustement ne s’est pas stabilisé, ces longueurs peuvent donc être inexactes. Retirez une mesure ou un angle droit et réessayez."
+
+# Source-Hash: c0bdcd412e7c9dac
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Review scan"
+#: apps/editor/components/mapping-view.tsx
+#, fuzzy
+msgid "app.review.open"
+msgstr "Vérifier le scan"
+
+# Source-Hash: ca7e25a7dce565cf
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Start over"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.reset"
+msgstr "Recommencer"
+
+# Source-Hash: 8f71ff5faff1b5f4
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "The fit scaled the outline by {percent}%. The scan itself is not rescaled, so its picture and the walls can differ by that much."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.scale"
+msgstr "L’ajustement a mis le contour à l’échelle de {percent} %. Le scan lui-même n’est pas redimensionné ; son image et les murs peuvent donc différer d’autant."
+
+# Source-Hash: 86d25bde4d323e64
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "± {value} m"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.sigma"
+msgstr "± {value} m"
+
+# Source-Hash: d243d67d3f4123d6
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Enter a length in metres, more than 0 and at most 200."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.tapeInvalid"
+msgstr "Saisissez une longueur en mètres, supérieure à 0 et d’au plus 200."
+
+# Source-Hash: 277dd231dd8a7864
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Tape length of wall {number}, in metres"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.tapeLabel"
+msgstr "Mesure au mètre du mur {number}, en mètres"
+
+# Source-Hash: 1308e7871a369ff9
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Tape measure, m"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.tapePlaceholder"
+msgstr "Mètre ruban, m"
+
+# Source-Hash: 2c4b0241d37d8fd5
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Review scan outline"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.title"
+msgstr "Vérifier le contour du scan"
+
+# Source-Hash: 47f49a668bb0936b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Assumed"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.tone.assumed"
+msgstr "Supposé"
+
+# Source-Hash: 798413c1ab394a82
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Likely glass"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.tone.glass"
+msgstr "Probablement du verre"
+
+# Source-Hash: e2bf302b3006c3e3
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "High confidence"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.tone.high"
+msgstr "Confiance élevée"
+
+# Source-Hash: 73ef8eda3f84d4ab
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Low confidence"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.tone.low"
+msgstr "Confiance faible"
+
+# Source-Hash: 4fdb55b275c2d690
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Medium confidence"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.tone.medium"
+msgstr "Confiance moyenne"
+
+# Source-Hash: da0432b81c2c6bc0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Building is one step in the undo history."
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.undoHint"
+msgstr "La construction compte pour une seule étape de l’historique d’annulation."
+
+# Source-Hash: 0894d370809dff14
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "What the scan did not show"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.unknowns"
+msgstr "Ce que le scan n’a pas montré"
+
+# Source-Hash: c70a47b95dfe26ee
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Wall {number}"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.wall"
+msgstr "Mur {number}"
+
+# Source-Hash: 6b61af90dc8b54d6
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Wall lengths"
+#: apps/editor/components/scan-review-panel.tsx
+#, fuzzy
+msgid "app.review.walls"
+msgstr "Longueurs des murs"
+
 # Source-Hash: 51d4b567c394bc97
 # Review: required
 # AI-Provider: claude-code
@@ -1794,65 +2235,65 @@ msgstr "Échec de l’envoi. Rien n’a été rattaché ; vous pouvez réessayer
 msgid "app.scan.intro"
 msgstr "Prenez des photos et des mesures avec ce téléphone. Elles sont enregistrées avec le projet comme calque de référence pour reconstruire la pièce."
 
-# English: "Floor covered {percent}%"
 # Source-Hash: 2d7d77c9c235dd59
 # Review: required
+# English: "Floor covered {percent}%"
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.coverage"
 msgstr "Sol couvert à {percent} %"
 
-# English: "The preview could not connect"
 # Source-Hash: cb5e84c098e62d2c
 # Review: required
+# English: "The preview could not connect"
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.failed"
 msgstr "L'aperçu n'a pas pu se connecter"
 
-# English: "The live preview is shown inside the companion app while scanning."
 # Source-Hash: 66768389d06c4aab
 # Review: required
+# English: "The live preview is shown inside the companion app while scanning."
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.noApp"
 msgstr "L'aperçu en direct s'affiche dans l'application compagnon pendant le scan."
 
-# English: "Live preview"
 # Source-Hash: dd3cd056185905ac
 # Review: required
+# English: "Live preview"
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.open"
 msgstr "Aperçu en direct"
 
-# English: "No room outline yet. Keep moving around the room."
 # Source-Hash: 0c36b1b7902a20a9
 # Review: required
+# English: "No room outline yet. Keep moving around the room."
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.outlineUnclear"
 msgstr "Pas encore de contour de la pièce. Continuez à vous déplacer dans la pièce."
 
-# English: "Paused"
 # Source-Hash: b0c0000eeb008e92
 # Review: required
+# English: "Paused"
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.paused"
 msgstr "En pause"
 
-# English: "{frames} frames, {kb} KB"
 # Source-Hash: f9a1c6d607daa91d
 # Review: required
+# English: "{frames} frames, {kb} KB"
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.stats"
 msgstr "{frames} images, {kb} Ko"
 
-# English: "Connecting to the scan"
 # Source-Hash: eaa1aac63a5ce4d0
 # Review: required
+# English: "Connecting to the scan"
 #: apps/editor/app/scan/live/live-view.tsx
 #, fuzzy
 msgid "app.scan.live.waiting"
@@ -2084,17 +2525,17 @@ msgstr "L’application compagnon enregistre la pose, les plans, la profondeur e
 msgid "app.scan.native.inProject"
 msgstr "Déjà dans {project}"
 
-# English: "Show a live map while scanning"
 # Source-Hash: 4c03e9893226a97d
 # Review: required
+# English: "Show a live map while scanning"
 #: apps/editor/app/scan/native-scan.tsx
 #, fuzzy
 msgid "app.scan.native.livePreview"
 msgstr "Afficher une carte en direct pendant le scan"
 
-# English: "Off by default. A small preview of coverage and the room outline appears on the scan screen. It is only a preview; the saved scan is the same either way."
 # Source-Hash: 9afb1cceb0c6a8b8
 # Review: required
+# English: "Off by default. A small preview of coverage and the room outline appears on the scan screen. It is only a preview; the saved scan is the same either way."
 #: apps/editor/app/scan/native-scan.tsx
 #, fuzzy
 msgid "app.scan.native.livePreviewHint"
@@ -16302,6 +16743,16 @@ msgstr "Photos du navigateur"
 #, fuzzy
 msgid "editor.panels.scanEvidence.provider.webxr"
 msgstr "WebXR"
+
+# Source-Hash: c0bdcd412e7c9dac
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-sonnet-5-5
+# English: "Review scan"
+#: packages/editor/src/components/ui/panels/scan-evidence-section.tsx
+#, fuzzy
+msgid "editor.panels.scanEvidence.review"
+msgstr "Vérifier le scan"
 
 # Source-Hash: 646ef0fbcbc58edf
 # Review: required

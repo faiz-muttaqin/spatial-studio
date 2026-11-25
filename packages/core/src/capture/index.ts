@@ -94,6 +94,22 @@ export {
   type OrthomapSource,
 } from './orthomap'
 export {
+  edgeSigma,
+  OUTLINE_MAX_CONSTRAINTS_PER_CORNER,
+  OUTLINE_MAX_COORDINATE,
+  OUTLINE_MAX_CORNERS,
+  OUTLINE_SIGMA,
+  type OutlineConstraint,
+  type OutlineEdgeResult,
+  type OutlineEdgeTrust,
+  type OutlinePoint,
+  type OutlineResidual,
+  type OutlineSolution,
+  type OutlineSolverInput,
+  OutlineSolverInputError,
+  solveRoomOutline,
+} from './outline-solver'
+export {
   analysePlanes,
   captureDirectionToLevel,
   captureToLevel,

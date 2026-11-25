@@ -11,6 +11,8 @@ import {
   DepthKeyframeIndexSchema,
   DeviceMotionTrajectorySchema,
   downscaleOrthomap,
+  type EdgeBasis,
+  type EdgeConfidence,
   type ManualMeasurements,
   ManualMeasurementsSchema,
   multiplyMatrix4,
@@ -78,12 +80,42 @@ export type MapRefusalCode =
   | 'no-map'
   | 'timeout'
 
+export type ProposalReview = {
+  polygon: Array<[number, number]>
+  edges: Array<{
+    confidence: EdgeConfidence
+    basis: EdgeBasis
+    likelyGlass: boolean
+    length: number
+  }>
+  height: {
+    value: number
+    basis: 'plane-estimate' | 'depth-estimate' | 'manual-measurement'
+  } | null
+  suggestedScanTransform: {
+    position: [number, number, number]
+    rotation: [number, number, number]
+    scale: number
+    confidence: 'low' | 'medium'
+    floorBasis: 'plane' | 'depth-histogram'
+  } | null
+  unknowns: string[]
+  /** The scan transform the proposal was computed with; the suggested one is relative to it. */
+  scanTransform: {
+    position: [number, number, number]
+    rotation: [number, number, number]
+    scale: number
+  }
+}
+
 export type ScanMapResult = {
   map: Orthomap
   /** The walked path in level x, z. */
   path: Array<[number, number]>
   /** The room outline `proposeRoom` gives on these frames, in level x, z, or null. */
   proposal: Array<[number, number]> | null
+  /** What a person needs to review that outline: edge confidence, height and the suggested scan placement. */
+  review: ProposalReview | null
   /** Direction of north in level x, z as a unit vector, or null when the scan has no trueNorth. */
   north: [number, number] | null
   northReference: 'true' | 'magnetic' | null
@@ -431,6 +463,7 @@ export async function loadScanMap(
 
   progress('outline', 0, 1)
   let proposalPolygon: Array<[number, number]> | null = null
+  let review: ProposalReview | null = null
   let floorY: number | null = null
   let ceilingY: number | null = null
   const walked = motion ? pathPositions(motion.samples, frameOf('device-motion')) : null
@@ -459,6 +492,34 @@ export async function loadScanMap(
       proposalPolygon = proposal.polygon
         ? (proposal.polygon as Array<readonly [number, number]>).map(([x, z]) => [x, z])
         : null
+      if (proposalPolygon && proposal.edges.length === proposalPolygon.length) {
+        const suggested = proposal.suggestedScanTransform
+        review = {
+          polygon: proposalPolygon,
+          edges: proposal.edges.map((edge) => ({
+            confidence: edge.confidence,
+            basis: edge.basis,
+            likelyGlass: edge.likelyGlass,
+            length: edge.length,
+          })),
+          height: proposal.height,
+          suggestedScanTransform: suggested
+            ? {
+                position: suggested.position,
+                rotation: suggested.rotation,
+                scale: suggested.scale,
+                confidence: suggested.confidence,
+                floorBasis: suggested.floorBasis,
+              }
+            : null,
+          unknowns: proposal.unknowns,
+          scanTransform: {
+            position: [...request.transform.position],
+            rotation: [...request.transform.rotation],
+            scale: request.transform.scale,
+          },
+        }
+      }
     } catch {
       notes.push({ code: 'outline-failed' })
     }
@@ -491,6 +552,7 @@ export async function loadScanMap(
     map,
     path,
     proposal: proposalPolygon,
+    review,
     north: trueNorth.success ? northInLevel(trueNorth.data.worldYawDeg, request.transform) : null,
     northReference: trueNorth.success ? trueNorth.data.reference : null,
     notes: problems.length ? [...notes, { code: 'streams-unreadable' }] : notes,
