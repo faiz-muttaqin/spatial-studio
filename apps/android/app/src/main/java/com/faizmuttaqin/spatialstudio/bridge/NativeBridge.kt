@@ -24,6 +24,7 @@ import com.faizmuttaqin.spatialstudio.security.OriginAllowlist
 import com.faizmuttaqin.spatialstudio.upload.ArtifactUploader
 import com.faizmuttaqin.spatialstudio.upload.UploadFailedException
 import com.faizmuttaqin.spatialstudio.upload.UploadLog
+import com.faizmuttaqin.spatialstudio.upload.UploadResults
 import com.faizmuttaqin.spatialstudio.util.JsonUtil
 import com.google.ar.core.ArCoreApk
 import kotlinx.serialization.json.JsonArray
@@ -152,7 +153,9 @@ class NativeBridge(
             throw BridgeException(BridgeErrorCode.UNSUPPORTED, "Not enough free storage for a scan")
         }
         val sessionId = UUID.randomUUID().toString()
+        Log.i(TAG, "scan.start $sessionId")
         if (!ScanCoordinator.begin(ScanCoordinator.ActiveScan(sessionId, params.projectId, params.options))) {
+            Log.i(TAG, "scan.start rejected as busy: a scan is already running")
             throw BridgeException(BridgeErrorCode.BUSY, "A scan is already running")
         }
         main.post {
@@ -224,28 +227,55 @@ class NativeBridge(
             post(proxy, BridgeProtocol.errorReply(request.id, e.code, e.message.orEmpty()))
             return
         }
-        if (!ScanCoordinator.beginUpload(sessionId)) {
-            post(proxy, BridgeProtocol.errorReply(request.id, BridgeErrorCode.BUSY, "Another upload is running"))
-            return
+        val waiter = ScanCoordinator.UploadWaiter { outcome ->
+            post(
+                proxy,
+                when (outcome) {
+                    is ScanCoordinator.UploadOutcome.Ok -> BridgeProtocol.okReply(request.id, outcome.result)
+                    is ScanCoordinator.UploadOutcome.Failed -> BridgeProtocol.errorReply(request.id, outcome.code, outcome.message)
+                },
+                request.id,
+            )
         }
-        uploads.execute {
-            val reply = try {
-                BridgeProtocol.okReply(request.id, upload(sessionId, origin))
-            } catch (e: BridgeException) {
-                BridgeProtocol.errorReply(request.id, e.code, e.message.orEmpty())
-            } catch (e: UploadFailedException) {
-                BridgeProtocol.errorReply(request.id, BridgeErrorCode.UPLOAD_FAILED, e.message.orEmpty())
-            } catch (e: Exception) {
-                Log.e(TAG, "Upload failed", e)
-                BridgeProtocol.errorReply(request.id, BridgeErrorCode.INTERNAL, "Internal error during upload")
-            } finally {
-                ScanCoordinator.endUpload(sessionId)
+        // Disk reads stay off the main thread, and off the upload thread that may be busy.
+        worker.execute {
+            val done = store.read(sessionId)?.let(UploadResults::alreadyUploaded)
+            if (done != null && ScanCoordinator.uploading != sessionId) {
+                Log.i(TAG, "scan.upload $sessionId already uploaded; replying without network work")
+                post(proxy, BridgeProtocol.okReply(request.id, done), request.id)
+                return@execute
             }
-            post(proxy, reply, request.id)
+            when (ScanCoordinator.beginOrJoinUpload(sessionId, waiter)) {
+                ScanCoordinator.UploadJoin.BUSY -> {
+                    Log.i(TAG, "scan.upload $sessionId rejected as busy: another session is uploading")
+                    post(proxy, BridgeProtocol.errorReply(request.id, BridgeErrorCode.BUSY, "Another upload is running"), request.id)
+                }
+                ScanCoordinator.UploadJoin.JOINED ->
+                    Log.i(TAG, "scan.upload $sessionId joined the upload already running for it")
+                ScanCoordinator.UploadJoin.STARTED -> {
+                    Log.i(TAG, "scan.upload $sessionId begin")
+                    uploads.execute { runUpload(sessionId, origin) }
+                }
+            }
         }
     }
 
-    private fun upload(sessionId: String, origin: OriginAllowlist.Origin): JsonElement {
+    private fun runUpload(sessionId: String, origin: OriginAllowlist.Origin) {
+        val outcome = try {
+            ScanCoordinator.UploadOutcome.Ok(upload(sessionId, origin))
+        } catch (e: BridgeException) {
+            ScanCoordinator.UploadOutcome.Failed(e.code, e.message.orEmpty())
+        } catch (e: UploadFailedException) {
+            ScanCoordinator.UploadOutcome.Failed(BridgeErrorCode.UPLOAD_FAILED, e.message.orEmpty())
+        } catch (e: Exception) {
+            Log.e(TAG, "Upload failed", e)
+            ScanCoordinator.UploadOutcome.Failed(BridgeErrorCode.INTERNAL, "Internal error during upload")
+        }
+        Log.i(TAG, "scan.upload $sessionId end: ${if (outcome is ScanCoordinator.UploadOutcome.Ok) "ok" else "failed"}")
+        ScanCoordinator.finishUpload(sessionId, outcome)
+    }
+
+    private fun upload(sessionId: String, origin: OriginAllowlist.Origin): JsonObject {
         val record = store.read(sessionId) ?: throw BridgeException(BridgeErrorCode.NOT_FOUND, "No such scan")
         if (record.state != SessionRecord.READY) {
             val reason = record.error?.let { ": $it" }.orEmpty()

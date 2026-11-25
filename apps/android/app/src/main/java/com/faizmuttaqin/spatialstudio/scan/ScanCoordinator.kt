@@ -1,5 +1,6 @@
 package com.faizmuttaqin.spatialstudio.scan
 
+import com.faizmuttaqin.spatialstudio.bridge.BridgeErrorCode
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.buildJsonObject
@@ -12,6 +13,19 @@ import java.util.concurrent.CopyOnWriteArraySet
  * bridge) is rebuilt.
  */
 object ScanCoordinator {
+    /** How a `scan.upload` ended. */
+    sealed class UploadOutcome {
+        class Ok(val result: JsonObject) : UploadOutcome()
+        class Failed(val code: BridgeErrorCode, val message: String) : UploadOutcome()
+    }
+
+    /** A page waiting for the reply to its `scan.upload`; answered once, when the upload ends. */
+    fun interface UploadWaiter {
+        fun onDone(outcome: UploadOutcome)
+    }
+
+    enum class UploadJoin { STARTED, JOINED, BUSY }
+
     class ActiveScan(val sessionId: String, val projectId: String?, val options: ScanOptions)
 
     fun interface Listener {
@@ -30,6 +44,7 @@ object ScanCoordinator {
         private set
 
     private val listeners = CopyOnWriteArraySet<Listener>()
+    private val uploadWaiters = ArrayList<UploadWaiter>()
 
     @Synchronized
     fun begin(scan: ActiveScan): Boolean {
@@ -73,9 +88,37 @@ object ScanCoordinator {
         return true
     }
 
+    /**
+     * Starts the upload of [sessionId] ([UploadJoin.STARTED]: the caller runs it), or, when that same
+     * session is already uploading, queues [waiter] to get the same result ([UploadJoin.JOINED]). A
+     * different session is [UploadJoin.BUSY]. The waiter is queued in the first two cases.
+     */
+    @Synchronized
+    fun beginOrJoinUpload(sessionId: String, waiter: UploadWaiter): UploadJoin {
+        val current = uploading
+        if (current != null && current != sessionId) return UploadJoin.BUSY
+        uploading = sessionId
+        uploadWaiters.add(waiter)
+        return if (current == null) UploadJoin.STARTED else UploadJoin.JOINED
+    }
+
+    /** Ends the upload and answers every waiter with [outcome]; a success is also emitted as `upload.done`. */
+    fun finishUpload(sessionId: String, outcome: UploadOutcome) {
+        val waiting = synchronized(this) {
+            if (uploading != sessionId) return
+            uploading = null
+            uploadWaiters.toList().also { uploadWaiters.clear() }
+        }
+        waiting.forEach { runCatching { it.onDone(outcome) } }
+        if (outcome is UploadOutcome.Ok) emit("upload.done", outcome.result)
+    }
+
     @Synchronized
     fun endUpload(sessionId: String) {
-        if (uploading == sessionId) uploading = null
+        if (uploading == sessionId) {
+            uploading = null
+            uploadWaiters.clear()
+        }
     }
 
     fun addListener(listener: Listener) = listeners.add(listener)
