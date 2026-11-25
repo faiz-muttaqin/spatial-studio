@@ -31,10 +31,13 @@ class BoundaryMarkingTest {
         normalY: Float = 1f,
         x: Float = 0f,
         z: Float = -2f,
+        depression: Float = 40f,
     ): HitCandidate {
         val pose = Matrices.pose(x = x, y = y, z = z)
         pose[5] = normalY
-        return HitCandidate(kind, inPolygon, tracking, distance, pose, "plane-1")
+        // Camera placed so the ray to the hit points [depression] degrees below the horizontal.
+        val cameraY = y + distance * Math.sin(Math.toRadians(depression.toDouble())).toFloat()
+        return HitCandidate(kind, inPolygon, tracking, distance, pose, "plane-1", cameraY)
     }
 
     private fun accepted(decision: HitDecision) = (decision as HitDecision.Accepted).hit
@@ -119,6 +122,33 @@ class BoundaryMarkingTest {
     }
 
     @Test
+    fun refusesAFarFloorHitWithNothingNearer() {
+        // Clear glass detected as nothing: the ray passes through and reaches the floor 6 m behind it.
+        assertEquals(Refusal.OUT_OF_RANGE, refused(BoundaryMarking.chooseFloorHit(listOf(hit(distance = 6f)), -1.4f)))
+        assertEquals(Refusal.OUT_OF_RANGE, refused(BoundaryMarking.chooseFloorHit(listOf(hit(distance = 4.5f)), -1.4f)))
+        assertNotNull(accepted(BoundaryMarking.chooseFloorHit(listOf(hit(distance = 3.5f)), -1.4f)))
+    }
+
+    @Test
+    fun refusesAShallowRay() {
+        assertEquals(Refusal.TOO_SHALLOW, refused(BoundaryMarking.chooseFloorHit(listOf(hit(distance = 3f, depression = 10f)), -1.4f)))
+        assertNotNull(accepted(BoundaryMarking.chooseFloorHit(listOf(hit(distance = 3f, depression = 20f)), -1.4f)))
+    }
+
+    @Test
+    fun anUnknownCameraHeightIsRefused() {
+        val noCamera = HitCandidate(HitKind.HORIZONTAL_UP_PLANE, true, true, 2f, Matrices.pose(y = -1.4f), "plane-1")
+        assertEquals(Refusal.TOO_SHALLOW, refused(BoundaryMarking.chooseFloorHit(listOf(noCamera), -1.4f)))
+    }
+
+    @Test
+    fun depressionAngle() {
+        assertEquals(30f, BoundaryMarking.depressionDeg(1f, 0f, 2f), 0.01f)
+        assertEquals(90f, BoundaryMarking.depressionDeg(2f, 0f, 2f), 0.01f)
+        assertTrue(BoundaryMarking.depressionDeg(1f, 0f, 0f).isNaN())
+    }
+
+    @Test
     fun withoutAKnownFloorTheHitItselfIsTheReference() {
         assertNotNull(accepted(BoundaryMarking.chooseFloorHit(listOf(hit(y = 0.9f)), null)))
     }
@@ -181,17 +211,17 @@ class BoundaryMarkingTest {
     @Test
     fun heightChoicePrefersTypedThenCeilingThenUnknown() {
         val planes = listOf(ceilingPlane(y = 1.2f))
-        val typed = BoundaryMarking.resolveHeight(BoundaryKind.WALL, 2.0, -1.4, planes)
+        val typed = BoundaryMarking.resolveHeight(BoundaryKind.WALL, 2.0, true, -1.4, planes)
         assertEquals(HeightSource.TYPED, typed.source)
         assertEquals(2.0, typed.metres!!, 0.0)
         assertNull(typed.ceilingPlaneId)
 
-        val ceiling = BoundaryMarking.resolveHeight(BoundaryKind.GLASS, null, -1.4, planes)
+        val ceiling = BoundaryMarking.resolveHeight(BoundaryKind.GLASS, null, true, -1.4, planes)
         assertEquals(HeightSource.CEILING_PLANE, ceiling.source)
         assertEquals(2.6, ceiling.metres!!, 1e-6)
         assertEquals("plane-9", ceiling.ceilingPlaneId)
 
-        val none = BoundaryMarking.resolveHeight(BoundaryKind.WALL, null, -1.4, emptyList())
+        val none = BoundaryMarking.resolveHeight(BoundaryKind.WALL, null, true, -1.4, emptyList())
         assertEquals(HeightSource.UNKNOWN, none.source)
         assertNull(none.metres)
     }
@@ -200,8 +230,53 @@ class BoundaryMarkingTest {
     fun doorsAndOpeningsNeverTakeTheCeilingHeight() {
         val planes = listOf(ceilingPlane(y = 1.2f))
         for (kind in listOf(BoundaryKind.DOOR, BoundaryKind.OPENING)) {
-            assertEquals(HeightSource.UNKNOWN, BoundaryMarking.resolveHeight(kind, null, -1.4, planes).source)
-            assertEquals(HeightSource.TYPED, BoundaryMarking.resolveHeight(kind, 2.1, -1.4, planes).source)
+            assertEquals(HeightSource.UNKNOWN, BoundaryMarking.resolveHeight(kind, null, true, -1.4, planes).source)
+            assertEquals(HeightSource.TYPED, BoundaryMarking.resolveHeight(kind, 2.1, true, -1.4, planes).source)
+        }
+    }
+
+    @Test
+    fun theCeilingIsNeverUsedUnlessAsked() {
+        val planes = listOf(ceilingPlane(y = 1.2f))
+        for (kind in BoundaryKind.entries) {
+            val choice = BoundaryMarking.resolveHeight(kind, null, false, -1.4, planes)
+            assertEquals(HeightSource.UNKNOWN, choice.source)
+            assertNull(choice.metres)
+        }
+    }
+
+    @Test
+    fun mirrorsNeverOfferTheCeilingEvenIfAsked() {
+        val planes = listOf(ceilingPlane(y = 1.2f))
+        assertEquals(HeightSource.UNKNOWN, BoundaryMarking.resolveHeight(BoundaryKind.MIRROR, null, true, -1.4, planes).source)
+    }
+
+    @Test
+    fun ceilingDefaultsAreOnForWallsOnly() {
+        assertEquals(
+            listOf(BoundaryKind.WALL),
+            BoundaryKind.entries.filter { it.ceilingByDefault },
+        )
+        assertEquals(listOf(BoundaryKind.WALL, BoundaryKind.GLASS), BoundaryKind.entries.filter { it.offersCeiling })
+    }
+
+    @Test
+    fun theSurfaceTakesActionDownSoItGetsActionUp() {
+        // A non-clickable view that returns false for ACTION_DOWN never sees the ACTION_UP of that gesture.
+        assertTrue(MarkTouch.consumes(true, true, MarkTouch.Action.DOWN))
+        assertTrue(MarkTouch.consumes(true, true, MarkTouch.Action.UP))
+        assertFalse(MarkTouch.enqueuesTap(true, true, MarkTouch.Action.DOWN))
+        assertTrue(MarkTouch.enqueuesTap(true, true, MarkTouch.Action.UP))
+        assertFalse(MarkTouch.enqueuesTap(true, true, MarkTouch.Action.OTHER))
+    }
+
+    @Test
+    fun touchesPassThroughWhenNotMarkingOrNotScanning() {
+        for (action in MarkTouch.Action.entries) {
+            assertFalse(MarkTouch.consumes(false, true, action))
+            assertFalse(MarkTouch.consumes(true, false, action))
+            assertFalse(MarkTouch.enqueuesTap(false, true, action))
+            assertFalse(MarkTouch.enqueuesTap(true, false, action))
         }
     }
 

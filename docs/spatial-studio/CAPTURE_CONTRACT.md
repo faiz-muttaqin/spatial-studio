@@ -122,11 +122,12 @@ type BasePoint = {
 
 Rules:
 
-- Both base points come from ARCore hit-tests against a tracked, upward-facing horizontal plane, inside that plane's polygon, at the floor level (no higher than 0.25 m above the lowest tracked upward plane). Hits on feature points, depth points, instant placement or vertical planes are refused, because on clear glass those land on whatever lies behind it.
+- Both base points come from ARCore hit-tests against a tracked, upward-facing horizontal plane, inside that plane's polygon, at the floor level (no higher than 0.25 m above the lowest tracked upward plane). Hits on feature points, depth points, instant placement or vertical planes are refused, because on clear glass those land on whatever lies behind it. The user taps the floor line at the base, not the glass. A tap resolves to a candidate point shown in the camera view, and the user confirms it before it becomes a base point. Because a ray through undetected glass can reach a floor far behind it, the companion also refuses a hit more than 4 m from the camera, or on a ray less than 15 degrees below the horizontal, or with something nearer than the floor along the ray.
 - The two points are at least 0.05 m and at most 50 m apart horizontally, and differ in height by at most 0.5 m. A base is a floor line, not a slanted one.
-- `ceiling-plane`: the height is the tracked downward-facing plane's height above the mean base height, accepted from 1.8 m to 6 m. The companion offers it for `wall`, `glass` and `mirror` only. A door or opening is not ceiling height, so those take a typed height or stay `unknown`.
+- `ceiling-plane`: the user asked for "to ceiling", and the height is the tracked downward-facing plane's height above the mean base height, accepted from 1.8 m to 6 m. The companion offers the option for `wall` (on by default) and `glass` (off by default, because a balustrade is not ceiling height) and never for `mirror`, `door` or `opening`. It is never applied without the user's choice. `ceilingPlaneId` names the plane in the `plane-set` stream when that plane was still known at the end of the scan, and may otherwise not resolve there.
 - `typed`: the user entered the height in metres. `unknown`: neither was available; a consumer chooses its own default and labels it an assumption.
 - Marks are the user's statement of where a boundary stands. They do not say the surface was seen, and a `glass` or `mirror` mark is the only evidence of such a surface in the bundle. Consumers must not treat a mark as a measurement of thickness, material or reflectivity.
+- Clocks: base point `timestamp` is on the `device` clock (nanoseconds) and `createdAt` on the `wall` clock (milliseconds), so the descriptor carries no single `clockId`.
 - Coordinates are in the scan's world frame, so true north and any scan node transform apply exactly as for the other streams. Marks carry no personal data.
 
 ## Android bridge, protocol v1

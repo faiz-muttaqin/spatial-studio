@@ -52,23 +52,27 @@
         <item>Door</item>
     </string-array>
     <string name="mark_height_hint">Height in m (optional)</string>
-    <string name="mark_tap_start">Tap the floor at the start of the boundary. Scanning continues.</string>
-    <string name="mark_tap_end">Tap the floor at the other end.</string>
+    <string name="mark_tap_start">Tap the floor line at the base of the boundary, not the glass. Then press Confirm. Scanning continues.</string>
+    <string name="mark_tap_end">Tap the floor line at the other end of the base, then Confirm.</string>
     <string name="mark_step_count">%1$s (%2$d marked)</string>
     <string name="mark_height_ceiling">Height %1$.2f m from the ceiling plane</string>
     <string name="mark_height_typed">Height %1$.2f m (typed)</string>
-    <string name="mark_height_unknown">Height not set</string>
+    <string name="mark_height_unknown">Height not set (unknown)</string>
     <string name="mark_not_tracking">Tracking is not ready. Move the phone slowly and try again.</string>
     <string name="mark_no_hit">Nothing found there. Aim at the floor.</string>
     <string name="mark_not_floor">Not a floor plane. Aim at the floor, not at a wall or glass.</string>
     <string name="mark_obstructed">Something is in front of the floor there. Aim at bare floor.</string>
     <string name="mark_above_floor">That is above the floor. Aim at the floor itself.</string>
-    <string name="mark_out_of_range">Too near or too far. Stand about 1 to 5 m from the spot.</string>
+    <string name="mark_out_of_range">Too near or too far. Stand 0.5 to 4 m from the spot on the floor.</string>
     <string name="mark_too_short">The two points are too close together.</string>
     <string name="mark_too_long">The two points are more than 50 m apart.</string>
     <string name="mark_too_steep">The two points are at different floor heights.</string>
     <string name="mark_full">The limit of 200 marks is reached.</string>
     <string name="mark_bad_height">Height must be 0.1 to 10 m. Fix or clear it.</string>
     <string name="mark_two_lines">%1$s\n%2$s</string>
+    <string name="mark_too_shallow">That ray is too flat and may pass through glass. Stand closer and aim down at the floor line.</string>
+    <string name="mark_confirm_prompt">Point shown in the camera view. Press Confirm, or tap again to move it.</string>
+    <string name="mark_confirm">Confirm</string>
+    <string name="mark_to_ceiling">Height to ceiling (otherwise type it)</string>
     <string name="mark_nothing_to_undo">Nothing to undo.</string>
 </resources>

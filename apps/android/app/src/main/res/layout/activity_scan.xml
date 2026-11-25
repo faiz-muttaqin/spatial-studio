@@ -127,12 +127,29 @@
                     android:textSize="14sp" />
 
                 <Button
+                    android:id="@+id/scan_mark_confirm"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:enabled="false"
+                    android:text="@string/mark_confirm" />
+
+                <Button
                     android:id="@+id/scan_mark_undo"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"
                     android:text="@string/mark_undo" />
             </LinearLayout>
+
+            <CheckBox
+                android:id="@+id/scan_mark_ceiling"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:text="@string/mark_to_ceiling"
+                android:textColor="@color/brand_foreground"
+                android:textSize="14sp" />
         </LinearLayout>
 
         <LinearLayout

@@ -92,13 +92,20 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
     private lateinit var markKind: Spinner
     private lateinit var markHeight: EditText
     private lateinit var markUndo: Button
+    private lateinit var markConfirm: Button
+    private lateinit var markCeiling: CheckBox
 
     // Assisted boundary marking (v1.2). Marks live here; the GL thread resolves taps against ARCore.
     private val marks = BoundaryMarkBook()
     @Volatile private var marking = false
     @Volatile private var markKindSelected = BoundaryKind.WALL
     @Volatile private var heightText = ""
+    @Volatile private var toCeiling = true
     private val pendingTap = AtomicReference<FloatArray?>(null)
+    private val confirmRequested = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /** A tapped floor point waiting for Confirm; shown in the camera view. */
+    @Volatile private var candidate: BasePoint? = null
 
     @Volatile private var phase = Phase.STARTING
     private var session: Session? = null
@@ -181,6 +188,8 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         markKind = ActivityCompat.requireViewById(this, R.id.scan_mark_kind)
         markHeight = ActivityCompat.requireViewById(this, R.id.scan_mark_height)
         markUndo = ActivityCompat.requireViewById(this, R.id.scan_mark_undo)
+        markConfirm = ActivityCompat.requireViewById(this, R.id.scan_mark_confirm)
+        markCeiling = ActivityCompat.requireViewById(this, R.id.scan_mark_ceiling)
         setUpMarking()
         sensorsToggle.setOnCheckedChangeListener { _, checked ->
             if (updatingToggles) return@setOnCheckedChangeListener
@@ -504,6 +513,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                     sensorRecorder?.onFrame(frame.timestamp, headingPose)
                 }
                 pendingTap.getAndSet(null)?.let { tap -> handleMarkTap(session, frame, camera, recorder, tap[0], tap[1]) }
+                if (confirmRequested.getAndSet(false)) confirmCandidate(session, frame, recorder)
             } catch (e: Exception) {
                 Log.w(TAG, "Frame processing failed", e)
             }
@@ -512,7 +522,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             camera.getViewMatrix(view, 0)
             camera.getProjectionMatrix(projection, 0, 0.1f, 100f)
             overlay.draw(recorder.overlayPoints, recorder.overlayCount, view, projection)
-            lines.draw(marks.snapshot(), marks.pending(), view, projection)
+            lines.draw(marks.snapshot(), marks.pending(), candidate, view, projection)
         }
         if (progressGate.ready(frame.timestamp)) {
             reportProgress(recorder, camera.trackingState, camera.trackingFailureReason)
@@ -611,7 +621,11 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         }.also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
         markKind.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                markKindSelected = BoundaryKind.entries[position]
+                val kind = BoundaryKind.entries[position]
+                markKindSelected = kind
+                // "To ceiling" is on for walls, off for glass, and unavailable for mirrors, doors and openings.
+                markCeiling.isEnabled = kind.offersCeiling
+                markCeiling.isChecked = kind.ceilingByDefault
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
@@ -623,21 +637,34 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                 heightText = s?.toString().orEmpty()
             }
         })
+        markCeiling.setOnCheckedChangeListener { _, checked -> toCeiling = checked && markKindSelected.offersCeiling }
         markToggle.setOnClickListener { setMarking(!marking) }
+        markConfirm.setOnClickListener {
+            if (candidate != null) confirmRequested.set(true)
+        }
         markUndo.setOnClickListener {
             pendingTap.set(null)
+            confirmRequested.set(false)
+            candidate = null
+            // A typed height belongs to the mark being finished; dropping its start drops the height too.
+            if (marks.pending() != null) markHeight.text = null
             if (!marks.undo()) Toast.makeText(this, R.string.mark_nothing_to_undo, Toast.LENGTH_SHORT).show()
             updateMarkUi()
         }
         surface.setOnTouchListener { v, event ->
-            if (marking && phase == Phase.SCANNING && event.actionMasked == MotionEvent.ACTION_UP) {
+            val action = when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> MarkTouch.Action.DOWN
+                MotionEvent.ACTION_UP -> MarkTouch.Action.UP
+                else -> MarkTouch.Action.OTHER
+            }
+            val scanning = phase == Phase.SCANNING
+            // The surface is not clickable, so it must take ACTION_DOWN to be offered the ACTION_UP of the same gesture.
+            if (MarkTouch.enqueuesTap(marking, scanning, action)) {
                 // Resolved on the GL thread against the next frame, so the hit-test matches what is on screen.
                 pendingTap.set(floatArrayOf(event.x, event.y))
                 v.performClick()
-                true
-            } else {
-                false
             }
+            MarkTouch.consumes(marking, scanning, action)
         }
     }
 
@@ -645,6 +672,8 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         if (on && phase != Phase.SCANNING) return
         marking = on
         pendingTap.set(null)
+        confirmRequested.set(false)
+        candidate = null
         markPanel.visibility = if (on) View.VISIBLE else View.GONE
         markToggle.setText(if (on) R.string.mark_stop else R.string.mark_start)
         updateMarkUi()
@@ -655,6 +684,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         runOnUiThread {
             val pending = marks.pending()
             markKind.isEnabled = pending == null
+            markConfirm.isEnabled = candidate != null
             val line = message?.let(::getString)
                 ?: getString(
                     R.string.mark_step_count,
@@ -671,17 +701,26 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         else -> HitKind.VERTICAL_PLANE
     }
 
-    /** GL thread: turns a tap into a floor point, or refuses it with a reason shown to the user. */
+    private fun trackedPlanes(session: Session): List<Pair<Plane, PlaneSummary>> =
+        session.getAllTrackables(Plane::class.java)
+            .filter { it.trackingState == TrackingState.TRACKING && it.subsumedBy == null }
+            .mapIndexed { index, plane ->
+                // Provisional ids: a plane only gets its stream id (and so a place in the plane-set) once a mark uses it.
+                plane to PlaneSummary("p$index", planeKind(plane), true, plane.centerPose.ty(), plane.extentX, plane.extentZ)
+            }
+
+    /** GL thread: turns a tap into a candidate floor point, or refuses it with a reason. Nothing is committed yet. */
     private fun handleMarkTap(session: Session, frame: Frame, camera: com.google.ar.core.Camera, recorder: ScanRecorder, x: Float, y: Float) {
         if (!marking) return
+        candidate = null
         if (camera.trackingState != TrackingState.TRACKING) {
             updateMarkUi(R.string.mark_not_tracking)
             return
         }
-        val planes = session.getAllTrackables(Plane::class.java)
-            .filter { it.trackingState == TrackingState.TRACKING && it.subsumedBy == null }
-            .map { plane -> PlaneSummary(recorder.planeIdFor(plane), planeKind(plane), true, plane.centerPose.ty(), plane.extentX, plane.extentZ) }
-        val candidates = frame.hitTest(x, y).map { hit ->
+        val planes = trackedPlanes(session).map { it.second }
+        val cameraY = camera.pose.ty()
+        val hits = frame.hitTest(x, y)
+        val candidates = hits.map { hit ->
             val trackable = hit.trackable
             val plane = trackable as? Plane
             val kind = when {
@@ -697,7 +736,8 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                 tracking = trackable.trackingState == TrackingState.TRACKING,
                 distanceM = hit.distance,
                 pose = FloatArray(16).also { hit.hitPose.toMatrix(it, 0) },
-                planeId = plane?.let(recorder::planeIdFor),
+                planeId = null,
+                cameraY = cameraY,
             )
         }
         val decision = BoundaryMarking.chooseFloorHit(candidates, BoundaryMarking.floorY(planes))
@@ -710,19 +750,36 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                     Refusal.OBSTRUCTED -> R.string.mark_obstructed
                     Refusal.ABOVE_FLOOR -> R.string.mark_above_floor
                     Refusal.OUT_OF_RANGE -> R.string.mark_out_of_range
+                    Refusal.TOO_SHALLOW -> R.string.mark_too_shallow
                 },
             )
             return
         }
-        val hit = (decision as HitDecision.Accepted).hit
-        val typed = BoundaryMarking.parseTypedHeight(heightText)
-        if (heightText.isNotBlank() && typed == null) {
+        val accepted = (decision as HitDecision.Accepted).hit
+        val plane = hits.getOrNull(candidates.indexOf(accepted))?.trackable as? Plane
+        candidate = BasePoint(accepted.pose, plane?.let(recorder::planeIdFor), frame.timestamp)
+        updateMarkUi(R.string.mark_confirm_prompt)
+    }
+
+    /** GL thread: commits the candidate point as a mark start or end. */
+    private fun confirmCandidate(session: Session, frame: Frame, recorder: ScanRecorder) {
+        val point = candidate ?: return
+        val tracked = trackedPlanes(session)
+        val planes = tracked.map { it.second }
+        // The typed height is read only when a mark is being finished.
+        val finishing = marks.pending() != null
+        val typed = if (finishing) BoundaryMarking.parseTypedHeight(heightText) else null
+        if (finishing && heightText.isNotBlank() && typed == null) {
             updateMarkUi(R.string.mark_bad_height)
             return
         }
-        val result = marks.tap(markKindSelected, BasePoint(hit.pose, hit.planeId, frame.timestamp), System.currentTimeMillis()) { kind, baseY ->
-            BoundaryMarking.resolveHeight(kind, typed, baseY, planes)
+        val result = marks.tap(markKindSelected, point, System.currentTimeMillis()) { kind, baseY ->
+            val choice = BoundaryMarking.resolveHeight(kind, typed, toCeiling, baseY, planes)
+            // Swap the provisional plane id for the stream id only now that the plane is used.
+            val ceilingPlane = tracked.firstOrNull { it.second.id == choice.ceilingPlaneId }?.first
+            if (ceilingPlane == null) choice else BoundaryMarking.HeightChoice(choice.metres, choice.source, recorder.planeIdFor(ceilingPlane))
         }
+        if (result is BoundaryMarkBook.Result.Started || result is BoundaryMarkBook.Result.Completed) candidate = null
         when (result) {
             is BoundaryMarkBook.Result.Started -> updateMarkUi()
             is BoundaryMarkBook.Result.Completed -> {
@@ -757,6 +814,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         markToggle.isEnabled = false
         marking = false
         pendingTap.set(null)
+        candidate = null
         markPanel.visibility = View.GONE
         sensorRecorder?.stop()
         val planes = recorder?.latestPlanes.orEmpty()

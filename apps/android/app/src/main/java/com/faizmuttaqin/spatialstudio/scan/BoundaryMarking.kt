@@ -4,14 +4,19 @@ import kotlin.math.abs
 import kotlin.math.hypot
 
 /** What a boundary is. Wire names are the contract's `kind` values. */
-enum class BoundaryKind(val wire: String, val usesCeilingHeight: Boolean) {
-    WALL("wall", true),
-    GLASS("glass", true),
-    MIRROR("mirror", true),
-    OPENING("opening", false),
+enum class BoundaryKind(val wire: String, val offersCeiling: Boolean, val ceilingByDefault: Boolean) {
+    /** A wall usually runs to the ceiling, so "to ceiling" starts on. */
+    WALL("wall", true, true),
+
+    /** A balustrade or low partition is not ceiling height, so "to ceiling" starts off and the user opts in. */
+    GLASS("glass", true, false),
+
+    /** A mirror's height is its own; the ceiling plane is never offered. */
+    MIRROR("mirror", false, false),
+    OPENING("opening", false, false),
 
     /** A door or opening is not ceiling height, so it never takes the ceiling plane. */
-    DOOR("door", false),
+    DOOR("door", false, false),
 }
 
 enum class HeightSource(val wire: String) {
@@ -33,14 +38,19 @@ class HitCandidate(
     /** Column-major hit pose. */
     val pose: FloatArray,
     val planeId: String?,
+    /** World height of the camera when the tap was resolved, for the viewing angle. */
+    val cameraY: Float = Float.NaN,
 ) {
+    /** Degrees the ray points below the horizontal; NaN when the camera height is unknown. */
+    val depressionDeg: Float get() = BoundaryMarking.depressionDeg(cameraY, y, distanceM)
+
     val y: Float get() = pose[13]
 
     /** Y axis of the hit pose (ARCore: the plane normal) pointing up in the gravity-aligned world. */
     val normalY: Float get() = pose[5]
 }
 
-enum class Refusal { NO_HIT, NOT_TRACKING, NOT_FLOOR, OBSTRUCTED, ABOVE_FLOOR, OUT_OF_RANGE }
+enum class Refusal { NO_HIT, NOT_TRACKING, NOT_FLOOR, OBSTRUCTED, ABOVE_FLOOR, OUT_OF_RANGE, TOO_SHALLOW }
 
 sealed interface HitDecision {
     class Accepted(val hit: HitCandidate) : HitDecision
@@ -64,7 +74,15 @@ object BoundaryMarking {
     const val MIN_FLOOR_PLANE_AREA_M2 = 0.25f
     const val FLOOR_TOLERANCE_M = 0.25f
     const val MIN_HIT_DISTANCE_M = 0.2f
-    const val MAX_HIT_DISTANCE_M = 8f
+
+    /**
+     * Past this the floor behind clear glass or an open doorway looks like a floor tap. The user taps the floor line
+     * at the base of the boundary from close by, so a far hit is refused.
+     */
+    const val MAX_HIT_DISTANCE_M = 4f
+
+    /** A shallow ray reaches a floor point far behind whatever the user aimed at. */
+    const val MIN_DEPRESSION_DEG = 15f
 
     /** A depth or feature point this much nearer than the floor hit is the floor's own noise, not an obstacle. */
     const val OBSTRUCTION_MARGIN_M = 0.08f
@@ -101,9 +119,15 @@ object BoundaryMarking {
         if (floor.distanceM < MIN_HIT_DISTANCE_M || floor.distanceM > MAX_HIT_DISTANCE_M) {
             return HitDecision.Refused(Refusal.OUT_OF_RANGE)
         }
+        // Unknown camera height (NaN) is not a free pass: the angle must be known and steep enough.
+        if (!(floor.depressionDeg >= MIN_DEPRESSION_DEG)) return HitDecision.Refused(Refusal.TOO_SHALLOW)
         if (floorY != null && floor.y > floorY + FLOOR_TOLERANCE_M) return HitDecision.Refused(Refusal.ABOVE_FLOOR)
         return HitDecision.Accepted(floor)
     }
+
+    /** Angle below the horizontal of the ray from the camera to the hit, in degrees. */
+    fun depressionDeg(cameraY: Float, hitY: Float, distanceM: Float): Float =
+        if (distanceM <= 0f) Float.NaN else Math.toDegrees(kotlin.math.asin(((cameraY - hitY) / distanceM).coerceIn(-1f, 1f).toDouble())).toFloat()
 
     class CeilingPick(val heightM: Double, val planeId: String)
 
@@ -125,10 +149,13 @@ object BoundaryMarking {
 
     class HeightChoice(val metres: Double?, val source: HeightSource, val ceilingPlaneId: String?)
 
-    /** A typed height wins; otherwise the ceiling plane, only for kinds that stand floor to ceiling. */
-    fun resolveHeight(kind: BoundaryKind, typedM: Double?, baseY: Double, planes: List<PlaneSummary>): HeightChoice {
+    /**
+     * A typed height wins. The ceiling plane is used only when the user asked for "to ceiling" and the kind offers
+     * it; nothing is ever defaulted silently, so a 1.1 m balustrade is not stored as 2.7 m.
+     */
+    fun resolveHeight(kind: BoundaryKind, typedM: Double?, toCeiling: Boolean, baseY: Double, planes: List<PlaneSummary>): HeightChoice {
         if (typedM != null) return HeightChoice(typedM, HeightSource.TYPED, null)
-        if (kind.usesCeilingHeight) {
+        if (toCeiling && kind.offersCeiling) {
             ceilingHeight(baseY, planes)?.let { return HeightChoice(it.heightM, HeightSource.CEILING_PLANE, it.planeId) }
         }
         return HeightChoice(null, HeightSource.UNKNOWN, null)
@@ -222,4 +249,15 @@ class BoundaryMarkBook {
         }
         return marks.removeLastOrNull() != null
     }
+}
+
+/** What the scan surface does with touches while marking. A non-clickable view only gets ACTION_UP if it took ACTION_DOWN. */
+object MarkTouch {
+    enum class Action { DOWN, UP, OTHER }
+
+    fun consumes(marking: Boolean, scanning: Boolean, action: Action): Boolean =
+        marking && scanning && (action == Action.DOWN || action == Action.UP)
+
+    fun enqueuesTap(marking: Boolean, scanning: Boolean, action: Action): Boolean =
+        marking && scanning && action == Action.UP
 }

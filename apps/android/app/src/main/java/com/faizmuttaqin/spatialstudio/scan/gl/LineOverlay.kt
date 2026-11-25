@@ -24,10 +24,12 @@ class LineOverlay {
         mvpUniform = GLES20.glGetUniformLocation(program, "u_ModelViewProjection")
     }
 
-    fun draw(marks: List<BoundaryMark>, pending: Pair<BoundaryKind, BasePoint>?, view: FloatArray, projection: FloatArray) {
+    fun draw(marks: List<BoundaryMark>, pending: Pair<BoundaryKind, BasePoint>?, candidate: BasePoint?, view: FloatArray, projection: FloatArray) {
         count = 0
         for (m in marks) addMark(m)
         pending?.let { (kind, start) -> addCross(start, color(kind)) }
+        // An unconfirmed tap: a large white cross until the user confirms or taps elsewhere.
+        candidate?.let { addCross(it, CANDIDATE, 2f) }
         if (count == 0) return
         if (buffer.capacity() < count * FLOATS) buffer = GlUtil.floatBuffer(count * FLOATS)
         buffer.clear()
@@ -65,9 +67,10 @@ class LineOverlay {
         if (m.height.metres != null) line(ax, ay + h, az, bx, by + h, bz, c)
     }
 
-    private fun addCross(p: BasePoint, c: FloatArray) {
-        line(p.x - ARM, p.y, p.z, p.x + ARM, p.y, p.z, c)
-        line(p.x, p.y, p.z - ARM, p.x, p.y, p.z + ARM, c)
+    private fun addCross(p: BasePoint, c: FloatArray, scale: Float = 1f) {
+        val arm = ARM * scale
+        line(p.x - arm, p.y, p.z, p.x + arm, p.y, p.z, c)
+        line(p.x, p.y, p.z - arm, p.x, p.y, p.z + arm, c)
         line(p.x, p.y, p.z, p.x, p.y + UNKNOWN_POST_HEIGHT_M.toFloat(), p.z, c)
     }
 
@@ -101,6 +104,7 @@ class LineOverlay {
         const val FLOATS = 7
         const val ARM = 0.12f
         const val UNKNOWN_POST_HEIGHT_M = 0.4
+        val CANDIDATE = floatArrayOf(1f, 1f, 1f, 1f)
         val WALL = floatArrayOf(1f, 1f, 1f, 1f)
         val GLASS = floatArrayOf(0.3f, 0.8f, 1f, 1f)
         val MIRROR = floatArrayOf(1f, 0.4f, 0.9f, 1f)
