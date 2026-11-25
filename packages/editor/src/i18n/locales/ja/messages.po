@@ -1494,9 +1494,9 @@ msgstr "幅 (m)"
 msgid "app.scan.measure.windowTitle"
 msgstr "窓 {number}"
 
-# English: "Attach"
 # Source-Hash: 9511a3005483b68b
 # Review: required
+# English: "Attach"
 #: apps/editor/app/scan/native-scan.tsx
 #, fuzzy
 msgid "app.scan.native.attach"
@@ -1602,9 +1602,9 @@ msgstr "スキャナーを起動中…"
 msgid "app.scan.native.upload"
 msgstr "このスキャンをアップロード"
 
-# English: "Uploaded, not attached yet"
 # Source-Hash: 3eb37861f2f38005
 # Review: required
+# English: "Uploaded, not attached yet"
 #: apps/editor/app/scan/native-scan.tsx
 #, fuzzy
 msgid "app.scan.native.uploadedList"

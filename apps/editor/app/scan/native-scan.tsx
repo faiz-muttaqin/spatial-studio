@@ -55,7 +55,7 @@ export function NativeScan({
   onUploadFailed: (sessionId: string) => void
   onDiscarded: (sessionId: string) => void
   /** Attaches an uploaded scan; resolves once attached or failed (failure is shown by the caller). */
-  onUploaded: (result: ScanUploadResult) => Promise<void>
+  onUploaded: (result: ScanUploadResult & { projectId?: string | null }) => Promise<void>
 }) {
   const i18n = usePascalI18n()
   const [sessionId, setSessionId] = useState<string | null>(null)
@@ -79,6 +79,9 @@ export function NativeScan({
   )
 
   const [listVersion, setListVersion] = useState(0)
+  /** Scans this visit uploaded or attached: never offered again, whatever a late list says. */
+  const [handled, setHandled] = useState<ReadonlySet<string>>(new Set())
+  const markHandled = (id: string) => setHandled((current) => new Set(current).add(id))
 
   // A finished upload whose reply this page never got: list again so it can be attached.
   useEffect(
@@ -92,11 +95,7 @@ export function NativeScan({
       (entries) => {
         if (!active) return
         setEarlier(entries.filter((entry) => !entry.uploaded))
-        setUploaded(
-          entries
-            .filter((entry) => entry.uploaded && entry.manifestUrl)
-            .slice(0, MAX_UPLOADED_SHOWN),
-        )
+        setUploaded(entries.filter((entry) => entry.uploaded && entry.manifestUrl))
       },
       () => {},
     )
@@ -142,6 +141,7 @@ export function NativeScan({
         throw error
       }
       // Uploaded scans leave the list whatever happens next; a failed attach keeps its result.
+      markHandled(id)
       setEarlier((entries) => entries.filter((entry) => entry.sessionId !== id))
       if (id === sessionId) setSessionId(null)
       await onUploaded(result)
@@ -153,14 +153,20 @@ export function NativeScan({
       const manifestUrl = entry.manifestUrl
       if (!manifestUrl) return
       onBeforeUpload(entry.sessionId)
-      setUploaded((entries) => entries.filter((item) => item.sessionId !== entry.sessionId))
+      markHandled(entry.sessionId)
       if (entry.sessionId === sessionId) setSessionId(null)
       await onUploaded({
         sessionId: entry.sessionId,
         manifestUrl,
         manifestSha256: manifestUrl.slice(-64),
+        projectId: entry.projectId,
       })
     })
+
+  // Scans the companion says are attached, or this visit handled, are not offered; the latest few remain.
+  const offered = uploaded
+    .filter((entry) => !entry.attached && !handled.has(entry.sessionId))
+    .slice(0, MAX_UPLOADED_SHOWN)
 
   const discard = (id: string) =>
     run('discard', async () => {
@@ -281,13 +287,13 @@ export function NativeScan({
         </div>
       ) : null}
 
-      {uploaded.length > 0 ? (
+      {offered.length > 0 ? (
         <div className="space-y-2">
           <p className="font-medium text-sm">
             {i18n._({ id: 'app.scan.native.uploadedList', message: 'Uploaded, not attached yet' })}
           </p>
           <ul className="space-y-2">
-            {uploaded.map((entry) => (
+            {offered.map((entry) => (
               <li
                 className="flex items-center justify-between gap-2 rounded-lg border border-border/60 p-2 text-sm"
                 key={entry.sessionId}

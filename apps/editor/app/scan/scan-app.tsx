@@ -214,7 +214,8 @@ export function ScanApp({ appVersion }: { appVersion: string }) {
     })
   }, [])
 
-  const attach = async (next: PendingAttachment) => {
+  /** Resolves true once the scan is attached to its project. */
+  const attach = async (next: PendingAttachment): Promise<boolean> => {
     setPending(next)
     setPhase({ kind: 'attaching' })
     try {
@@ -228,9 +229,11 @@ export function ScanApp({ appVersion }: { appVersion: string }) {
       setNativeSession(null)
       preparedRef.current = null
       setPhase({ kind: 'done', sceneId: result.sceneId, manifestUrl: attachment.manifestUrl })
+      return true
     } catch (error) {
       // The capture is stored; keep it so attaching can be retried without uploading again.
       setPhase({ kind: 'failed', reason: 'attach', detail: (error as Error).message })
+      return false
     }
   }
 
@@ -342,11 +345,25 @@ export function ScanApp({ appVersion }: { appVersion: string }) {
       current?.sessionId === sessionId && current.origin === 'upload' ? null : current,
     )
 
-  const onNativeUploaded = (result: ScanUploadResult) => {
+  const onNativeUploaded = async (result: ScanUploadResult & { projectId?: string | null }) => {
     const session = nativeSessionRef.current
-    const target =
-      session?.sessionId === result.sessionId ? session.target : resolveTarget(destination)
-    return attach({
+    let target: Target
+    if (session?.sessionId === result.sessionId) {
+      target = session.target
+    } else if (result.projectId) {
+      // The scan was started for this project id (a visit before a reload): attach there, so the manifest's
+      // projectId and the scene agree. Attaching is idempotent per capture session.
+      const existing = await fetch(`/api/scenes/${encodeURIComponent(result.projectId)}`).catch(
+        () => null,
+      )
+      target = {
+        sceneId: result.projectId,
+        create: existing?.ok ? null : { name: '' },
+      }
+    } else {
+      target = resolveTarget(destination)
+    }
+    const attached = await attach({
       attachment: {
         name: captureName(new Date()),
         sessionId: result.sessionId,
@@ -354,6 +371,8 @@ export function ScanApp({ appVersion }: { appVersion: string }) {
       },
       target,
     })
+    // Best effort: the list stops offering a scan that is attached.
+    if (attached) await client?.markAttached(result.sessionId).catch(() => {})
   }
 
   const startOver = () => {
