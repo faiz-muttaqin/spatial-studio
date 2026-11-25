@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
-  - name: 💬 Questions & Help
+  - name: 📘 Spatial Studio roadmap and status
+    url: https://github.com/faiz-muttaqin/spatial-studio/blob/main/docs/spatial-studio/README.md
+    about: Read the downstream plan before opening an issue
+  - name: 💬 Upstream Pascal questions
     url: https://github.com/pascalorg/editor/discussions/categories/q-a
-    about: Ask questions and get help from the community
-  - name: 💡 Ideas & Discussion
-    url: https://github.com/pascalorg/editor/discussions/categories/ideas
-    about: Share ideas and discuss features before opening a formal request
+    about: Questions about unmodified Pascal Editor behaviour

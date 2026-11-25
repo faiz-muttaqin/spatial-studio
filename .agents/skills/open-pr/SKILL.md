@@ -1,12 +1,12 @@
 ---
 name: open-pr
-description: Open or update a pull request on pascalorg/editor from the current branch, describing only what the branch actually did. Use when the user asks to open/create a PR, push and PR, or ship a branch in the editor repo.
+description: Open or update a pull request on faiz-muttaqin/spatial-studio (the Spatial Studio fork) from the current branch, describing only what the branch actually did. Use when the user asks to open/create a PR, push and PR, or ship a branch in the editor repo.
 metadata:
   internal: true
 allowed-tools: Bash(git *) Bash(gh *) Read Write
 ---
 
-Open (or refresh) a pull request against `pascalorg/editor` from the current branch.
+Open (or refresh) a pull request against `faiz-muttaqin/spatial-studio` `main` from the current branch. This checkout is a fork: `gh` defaults to the upstream parent unless told otherwise, so pass `--repo faiz-muttaqin/spatial-studio` to every `gh pr` command and never open a PR on `pascalorg/editor`.
 
 ## 1. What is actually on the branch
 
@@ -37,11 +37,11 @@ Title: under ~70 characters, a concrete result (not "update"/"improve"), scope-p
 
 ```bash
 git push -u origin HEAD
-gh pr view --json number,url,body 2>/dev/null     # existing PR?
+gh pr view --repo faiz-muttaqin/spatial-studio --json number,url,body 2>/dev/null     # existing PR?
 ```
 
-- None → write the description to a file, then `gh pr create --title … --body-file <file>`.
-- Exists → `gh pr edit <n> --body …`: rebuild "What" and "How to test" from the current branch, keep the media section and the reviewer's checklist ticks verbatim, keep any extra sections at the end. Change the title only if the scope changed.
+- None → write the description to a file, then `gh pr create --repo faiz-muttaqin/spatial-studio --base main --title … --body-file <file>`.
+- Exists → `gh pr edit <n> --repo faiz-muttaqin/spatial-studio --body …`: rebuild "What" and "How to test" from the current branch, keep the media section and the reviewer's checklist ticks verbatim, keep any extra sections at the end. Change the title only if the scope changed.
 
 End the body with the attribution lines the session asks for, if any.
 

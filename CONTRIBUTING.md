@@ -1,4 +1,6 @@
-# Contributing to Pascal Editor
+# Contributing to Spatial Studio
+
+Spatial Studio is a downstream fork of [Pascal Editor](https://github.com/pascalorg/editor). Open pull requests against [https://github.com/faiz-muttaqin/spatial-studio](https://github.com/faiz-muttaqin/spatial-studio); read [docs/spatial-studio/README.md](docs/spatial-studio/README.md) first. Fixes that belong upstream can also be proposed to Pascal.
 
 Thanks for your interest in contributing! We welcome all kinds of contributions — bug fixes, new features, documentation, and ideas.
 
@@ -13,8 +15,8 @@ Thanks for your interest in contributing! We welcome all kinds of contributions 
 ### Setup
 
 ```bash
-git clone https://github.com/pascalorg/editor.git
-cd editor
+git clone https://github.com/faiz-muttaqin/spatial-studio.git
+cd spatial-studio
 bun install
 bun dev
 ```
@@ -120,12 +122,12 @@ Maintainers release every `@pascal-app/*` package together from the **Release** 
 
 ## Reporting bugs
 
-Use the [Bug Report](https://github.com/pascalorg/editor/issues/new?template=bug_report.yml) template. Include steps to reproduce — this helps us fix things faster.
+Use the [Bug Report](https://github.com/faiz-muttaqin/spatial-studio/issues/new?template=bug_report.yml) template. Include steps to reproduce — this helps us fix things faster.
 
 ## Suggesting features
 
-Use the [Feature Request](https://github.com/pascalorg/editor/issues/new?template=feature_request.yml) template, or start a [Discussion](https://github.com/pascalorg/editor/discussions) if you want to brainstorm first.
+Use the [Feature Request](https://github.com/faiz-muttaqin/spatial-studio/issues/new?template=feature_request.yml) template, or start a [upstream Pascal Discussion](https://github.com/pascalorg/editor/discussions) if you want to brainstorm first.
 
 ## Questions?
 
-Head to [Discussions](https://github.com/pascalorg/editor/discussions) — we're happy to help!
+Spatial Studio questions go to [Issues](https://github.com/faiz-muttaqin/spatial-studio/issues); general Pascal questions go to the [upstream Discussions](https://github.com/pascalorg/editor/discussions) — we're happy to help!

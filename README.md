@@ -1,5 +1,7 @@
 # Pascal Editor — open-source 3D architecture software for AECO
 
+> **Spatial Studio fork.** This repository ([faiz-muttaqin/spatial-studio](https://github.com/faiz-muttaqin/spatial-studio)) is a downstream fork of [pascalorg/editor](https://github.com/pascalorg/editor) that adds phone room capture (browser and an Android companion), scan-to-editable-scene reconstruction and AI redesign on top of Pascal. Live deployment: <https://spatial-studio.faizmuttaqin.com>. Plan and status: [docs/spatial-studio](docs/spatial-studio/README.md). The rest of this README is upstream Pascal documentation: links to `editor.pascal.app`, npm `@pascal-app/*` and the Pascal Discord refer to the upstream project, not to this fork.
+
 Create and edit 3D building models in your browser, run Pascal locally with its CLI, or connect
 AI agents through the Model Context Protocol (MCP).
 

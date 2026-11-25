@@ -6,8 +6,8 @@ Please do not open a public issue, pull request, or discussion for a security pr
 
 Report it privately through either channel:
 
-- [GitHub private vulnerability reporting](https://github.com/pascalorg/editor/security/advisories/new) — preferred
-- Email **security@pascal.app**
+- [GitHub private vulnerability reporting](https://github.com/faiz-muttaqin/spatial-studio/security/advisories/new) for Spatial Studio and its deployment at spatial-studio.faizmuttaqin.com
+- Problems that also affect unmodified upstream Pascal code: report them to Pascal through [their private vulnerability reporting](https://github.com/pascalorg/editor/security/advisories/new) or **security@pascal.app**
 
 Include what you have: affected package or route, version or commit, reproduction steps, and the impact you believe it has. A proof of concept helps a lot; a rough description is still worth sending.
 
@@ -31,4 +31,4 @@ Out of scope:
 - Denial of service through a deliberately enormous local scene file
 - Automated scanner output with no demonstrated impact
 
-The hosted service at editor.pascal.app is operated separately. Vulnerabilities there are welcome at the same address.
+The hosted service at editor.pascal.app is operated by Pascal, not by this fork. Report vulnerabilities there to Pascal.

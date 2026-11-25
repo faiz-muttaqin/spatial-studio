@@ -74,7 +74,10 @@ export default async function SettingsPage() {
           )}
 
           <Section title="About">
-            <ExternalRow href="https://github.com/pascalorg/editor" label="Source code" />
+            <ExternalRow
+              href="https://github.com/faiz-muttaqin/spatial-studio"
+              label="Source code"
+            />
             <ExternalRow href="https://editor.pascal.app/docs" label="Documentation" />
           </Section>
         </div>

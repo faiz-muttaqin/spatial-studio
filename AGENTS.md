@@ -41,4 +41,4 @@ Use the Bun version in `package.json`. Run focused checks for the changed behavi
 
 ## Spatial Studio downstream
 
-For work in this fork, read [docs/spatial-studio/README.md](docs/spatial-studio/README.md), [ROADMAP.md](docs/spatial-studio/ROADMAP.md) and [STATUS.md](docs/spatial-studio/STATUS.md) before implementation. Preserve upstream invariants; record actual test evidence and target PRs to this fork. Do not publish upstream packages or MCP registry entries.
+For work in this fork, read [docs/spatial-studio/README.md](docs/spatial-studio/README.md), [ROADMAP.md](docs/spatial-studio/ROADMAP.md) and [STATUS.md](docs/spatial-studio/STATUS.md) before implementation. Preserve upstream invariants; record actual test evidence and target PRs to this fork (`gh pr create --repo faiz-muttaqin/spatial-studio --base main`; `gh` otherwise defaults to the upstream parent). Do not publish upstream packages or MCP registry entries. Deployment: `main` auto-deploys to https://spatial-studio.faizmuttaqin.com (the VM polls for new commits about every 5 minutes).
