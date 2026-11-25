@@ -23,3 +23,24 @@ export function CaptureSourceResolverProvider({
 export function useCaptureSourceResolver(): CaptureSourceResolver | null {
   return useContext(CaptureSourceResolverContext)
 }
+
+const BrushDatasetUrlContext = createContext<((scanId: string) => string) | null>(null)
+
+/**
+ * Where the host serves a scan's Brush dataset zip (`docs/spatial-studio/BRUSH_WORKFLOW.md`). The
+ * editor does not know the host's scene id, so the evidence panel asks for the link; without it
+ * the panel offers no download.
+ */
+export function BrushDatasetUrlProvider({
+  children,
+  value,
+}: {
+  children: ReactNode
+  value: ((scanId: string) => string) | null
+}) {
+  return <BrushDatasetUrlContext.Provider value={value}>{children}</BrushDatasetUrlContext.Provider>
+}
+
+export function useBrushDatasetUrl(): ((scanId: string) => string) | null {
+  return useContext(BrushDatasetUrlContext)
+}

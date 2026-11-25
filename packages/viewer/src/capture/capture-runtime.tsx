@@ -17,6 +17,7 @@ import {
 import { createPortal, useFrame } from '@react-three/fiber'
 import {
   type ComponentType,
+  lazy,
   memo,
   type ReactNode,
   Suspense,
@@ -41,11 +42,17 @@ import {
   captureModelFormat,
   isCaptureModelArtifact,
   isCapturePointCloudArtifact,
+  isCaptureSplatArtifact,
   isCaptureStreamRenderable,
   streamHydratesJsonPayload,
 } from './stream-rendering'
 import { parseDeviceTrajectoryPackets, parseDeviceTrajectoryPayload } from './trajectory'
 import { useJsonArtifactPayload } from './use-json-artifact'
+
+// Loaded on first use, so a project without a splat never downloads the splat shader and parser.
+const CaptureSplatLayer = lazy(() =>
+  import('./layers/splat-layer').then((module) => ({ default: module.CaptureSplatLayer })),
+)
 
 export type CaptureMeshPresentation = {
   dollhouse?: boolean
@@ -375,6 +382,10 @@ export function CaptureStreamLayer({
         packets={stream.availability === 'live' ? packets : []}
       />
     )
+  } else if (layerKey === 'splat') {
+    content = isCaptureSplatArtifact(stream.artifact) ? (
+      <CaptureSplatLayer artifactUrl={artifactUrl} opacity={scan.opacity / 100} />
+    ) : null
   } else if (layerKey === 'surfaceMesh') {
     content = (
       <CaptureSurfaceMeshLayer

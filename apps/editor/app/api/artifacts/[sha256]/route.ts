@@ -1,3 +1,4 @@
+import { CAPTURE_MAX_SPLAT_ARTIFACT_BYTES, describeSplatPly } from '@pascal-app/core/capture'
 import { DiskArtifactStore, resolveDefaultDatabasePath } from '@pascal-app/mcp/storage'
 import { artifactMediaType } from '@/lib/artifact-media-type'
 import { MAX_ARTIFACT_BYTES, readBodyWithin } from '@/lib/artifact-upload-limit'
@@ -10,6 +11,9 @@ import {
 import { isArtifactShared } from '@/lib/scene-sharing'
 
 export const dynamic = 'force-dynamic'
+
+const MAX_CONCURRENT_LARGE_UPLOADS = 2
+let largeUploads = 0
 
 export function OPTIONS(request: Request) {
   return sceneApiPreflight(request)
@@ -41,14 +45,37 @@ export async function PUT(request: Request, { params }: { params: Promise<{ sha2
   const { sha256 } = await params
   if (!/^[0-9a-f]{64}$/.test(sha256))
     return sceneApiJson(request, { error: 'invalid_hash' }, { status: 400 })
-  const bytes = await readBodyWithin(request, MAX_ARTIFACT_BYTES)
-  if (!bytes) {
-    return sceneApiJson(
-      request,
-      { error: 'too_large', maxBytes: MAX_ARTIFACT_BYTES },
-      { status: 413 },
-    )
+  // A trained splat is larger than any other capture artifact; it asks for its own bound.
+  const isSplat = request.headers.get('x-artifact-kind') === 'gaussian-splat'
+  const maxBytes = isSplat ? CAPTURE_MAX_SPLAT_ARTIFACT_BYTES : MAX_ARTIFACT_BYTES
+  // Large bodies are buffered whole, so only a couple may be in flight at once.
+  if (isSplat) {
+    if (largeUploads >= MAX_CONCURRENT_LARGE_UPLOADS) {
+      const busy = sceneApiJson(request, { error: 'busy' }, { status: 429 })
+      busy.headers.set('Retry-After', '10')
+      return busy
+    }
+    largeUploads += 1
   }
+  try {
+    const bytes = await readBodyWithin(request, maxBytes)
+    if (!bytes) {
+      return sceneApiJson(request, { error: 'too_large', maxBytes }, { status: 413 })
+    }
+    if (isSplat) {
+      try {
+        describeSplatPly(bytes)
+      } catch {
+        return sceneApiJson(request, { error: 'invalid_splat' }, { status: 400 })
+      }
+    }
+    return await storeArtifact(request, sha256, bytes)
+  } finally {
+    if (isSplat) largeUploads -= 1
+  }
+}
+
+async function storeArtifact(request: Request, sha256: string, bytes: Uint8Array) {
   try {
     await new DiskArtifactStore(resolveDefaultDatabasePath()).put(sha256, bytes)
   } catch (error) {
