@@ -8,7 +8,7 @@ import { sdfChecksFromEnv, setSdfChecks } from '@pascal-app/core/usage-field'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { version } from '../index'
 import { createPascalMcpServer } from '../server'
-import { createSceneStore, resolveDefaultDatabasePath } from '../storage'
+import { createSceneStore, DiskArtifactStore, resolveDefaultDatabasePath } from '../storage'
 import { localGeometryScripts } from '../tools/local-geometry-scripts'
 import { connectHttp } from '../transports/http'
 import { connectStdio } from '../transports/stdio'
@@ -57,6 +57,7 @@ async function main(): Promise<void> {
 
   setSdfChecks(sdfChecksFromEnv(process.env.PASCAL_SDF_CHECKS))
   const store = await createSceneStore()
+  const captureArtifacts = new DiskArtifactStore(resolveDefaultDatabasePath())
   const createServer = () => {
     const bridge = new SceneBridge()
     if (values.scene) bridge.loadJSON(readFileSync(values.scene, 'utf8'))
@@ -65,6 +66,7 @@ async function main(): Promise<void> {
     return createPascalMcpServer({
       bridge,
       store,
+      captureArtifacts,
       geometryScripts: localGeometryScripts(resolveDefaultDatabasePath()),
     })
   }

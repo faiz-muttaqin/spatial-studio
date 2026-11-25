@@ -289,6 +289,11 @@ describe('pascal://agent-guide', () => {
   ]
   // Hosted-only tools: the hosted server registers them beside the package's.
   const HOSTED_ONLY_TOOLS = [
+    // Offered when the host can read capture artifacts (`captureArtifacts`).
+    'list_scans',
+    'read_scan',
+    'view_scan_photos',
+    'propose_room_from_scan',
     'search_project_chats',
     'read_project_chat',
     'get_project_assets',

@@ -25,6 +25,7 @@ import { registerHostedServiceTools } from './tools/hosted-services'
 import { normalizeToolSchemaDialect } from './tools/normalize-schema-dialect'
 import { registerProjectFileTools } from './tools/project-files'
 import { answerRetiredTools } from './tools/retired-tools'
+import type { CaptureArtifactHost } from './tools/scan-tools'
 import type { PlanReadingHosts } from './tools/shared-tools'
 import type { SceneViewHost } from './tools/view-scene'
 import { registerVisionTools } from './tools/vision'
@@ -68,6 +69,8 @@ export type CreatePascalMcpServerOptions = {
   readFile?: ProjectFileReader
   /** Asks an editor open on the project for a picture (`view_scene`); without it, refused. */
   sceneViews?: SceneViewHost
+  /** Reads stored capture artifacts (scan bundles); without it the scan tools are not offered. */
+  captureArtifacts?: CaptureArtifactHost
   /** Reads catalog items' pictures and surfaces before view_assets and paint. */
   assetViews?: PlanReadingHosts['assetViews']
   /** A pause between the steps of a long call, for a host with a scene of its own per request. */
@@ -96,6 +99,7 @@ export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpSe
     objectMakers: opts.objectMakers,
     readFile: opts.readFile,
     sceneViews: opts.sceneViews,
+    captureArtifacts: opts.captureArtifacts,
     assetViews: opts.assetViews,
     betweenSteps: opts.betweenSteps,
   })
