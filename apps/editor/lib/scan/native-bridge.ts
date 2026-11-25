@@ -118,6 +118,10 @@ export type ScanStartOptions = {
   sensors?: boolean
   /** Contract v1.1: approximate location for geolocation and compass declination. Off unless set. */
   location?: boolean
+  /** P2N.3: show the live preview panel on the scan screen. Off unless set. The recording does not depend on it. */
+  livePreview?: boolean
+  /** Page language (BCP 47) for the live preview panel, so it speaks the page's language. Not saved with the scan. */
+  locale?: string
   /** Contract v1.3: the ARCore torch for the whole scan, chosen before it starts. Off unless set. */
   torch?: boolean
 }

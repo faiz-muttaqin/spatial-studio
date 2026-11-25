@@ -82,4 +82,34 @@ class ScanParamsTest {
         invalid { ScanParams.sessionId(params("{}")) }
         assertEquals("0f8fad5b-d9cb-469f-a165-70867728950e", ScanParams.sessionId(params("""{"sessionId":"0f8fad5b-d9cb-469f-a165-70867728950e"}""")))
     }
+
+    @Test
+    fun localeMustBeALanguageTag() {
+        assertNull(ScanParams.start(params("{}")).options.locale)
+        assertEquals("zh-CN", ScanParams.start(params("""{"options":{"locale":"zh-CN"}}""")).options.locale)
+        invalid { ScanParams.start(params("""{"options":{"locale":"en&x=1"}}""")) }
+        invalid { ScanParams.start(params("""{"options":{"locale":"../../"}}""")) }
+        invalid { ScanParams.start(params("""{"options":{"locale":5}}""")) }
+    }
+
+    @Test
+    fun livePreviewIsOffByDefaultAndMustBeABoolean() {
+        assertFalse(ScanParams.start(params("{}")).options.livePreview)
+        assertTrue(ScanParams.start(params("""{"options":{"livePreview":true}}""")).options.livePreview)
+        invalid { ScanParams.start(params("""{"options":{"livePreview":"yes"}}""")) }
+        invalid { ScanParams.start(params("""{"options":{"livePreview":1}}""")) }
+    }
+
+    @Test
+    fun torchLivePreviewAndLocaleSitSideBySide() {
+        val o = ScanParams.start(params("""{"options":{"torch":true,"livePreview":true,"locale":"ja"}}""")).options
+        assertTrue(o.torch)
+        assertTrue(o.livePreview)
+        assertEquals("ja", o.locale)
+        val defaults = ScanParams.start(params("{}")).options
+        assertFalse(defaults.torch)
+        assertFalse(defaults.livePreview)
+        assertNull(defaults.locale)
+        invalid { ScanParams.start(params("""{"options":{"torch":"on","livePreview":true}}""")) }
+    }
 }

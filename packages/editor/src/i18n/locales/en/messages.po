@@ -719,6 +719,38 @@ msgstr "Upload failed. Nothing was attached; you can try again."
 msgid "app.scan.intro"
 msgstr "Capture photos and measurements on this phone. They are stored with the project as a reference layer for rebuilding the room."
 
+#: apps/editor/app/scan/live/live-view.tsx
+msgid "app.scan.live.coverage"
+msgstr "Floor covered {percent}%"
+
+#: apps/editor/app/scan/live/live-view.tsx
+msgid "app.scan.live.failed"
+msgstr "The preview could not connect"
+
+#: apps/editor/app/scan/live/live-view.tsx
+msgid "app.scan.live.noApp"
+msgstr "The live preview is shown inside the companion app while scanning."
+
+#: apps/editor/app/scan/live/live-view.tsx
+msgid "app.scan.live.open"
+msgstr "Live preview"
+
+#: apps/editor/app/scan/live/live-view.tsx
+msgid "app.scan.live.outlineUnclear"
+msgstr "No room outline yet. Keep moving around the room."
+
+#: apps/editor/app/scan/live/live-view.tsx
+msgid "app.scan.live.paused"
+msgstr "Paused"
+
+#: apps/editor/app/scan/live/live-view.tsx
+msgid "app.scan.live.stats"
+msgstr "{frames} frames, {kb} KB"
+
+#: apps/editor/app/scan/live/live-view.tsx
+msgid "app.scan.live.waiting"
+msgstr "Connecting to the scan"
+
 #: apps/editor/app/scan/measurements-form.tsx
 msgid "app.scan.measure.addDoor"
 msgstr "Add door"
@@ -814,6 +846,14 @@ msgstr "The companion app records pose, planes, depth and keyframes with ARCore,
 #: apps/editor/app/scan/native-scan.tsx
 msgid "app.scan.native.inProject"
 msgstr "Already in {project}"
+
+#: apps/editor/app/scan/native-scan.tsx
+msgid "app.scan.native.livePreview"
+msgstr "Show a live map while scanning"
+
+#: apps/editor/app/scan/native-scan.tsx
+msgid "app.scan.native.livePreviewHint"
+msgstr "Off by default. A small preview of coverage and the room outline appears on the scan screen. It is only a preview; the saved scan is the same either way."
 
 #: apps/editor/app/scan/native-scan.tsx
 msgid "app.scan.native.location"

@@ -16,12 +16,23 @@
 |---|---|---|
 | P1 | Gate passed | #1 merged; MCP read/write verified on the deployment; the VM auto-deploys `main` (seen updating on 2026-11-25). Remaining: license inventory |
 | P2 | P2.1 merged (#3), live | Next: P2.2 WebXR capture session |
-| P2N | v1 merged (#4); P2N.2 merged (#5) | Real-device scans 2026-11-25 in [DEVICE_TESTS.md](DEVICE_TESTS.md); confirm the plane and true-north fixes on the device; P2N.3 telemetry spike per [SENSING_RESEARCH.md](SENSING_RESEARCH.md) |
+| P2N | v1 merged (#4); P2N.2 merged (#5); P2N.3 spike in review | Real-device scans 2026-11-25 in [DEVICE_TESTS.md](DEVICE_TESTS.md); confirm the plane and true-north fixes on the device; P2N.3: port transport and live panel built, emulator numbers in [SENSING_RESEARCH.md](SENSING_RESEARCH.md), real-phone run pending |
 | P3 | P3a merged (#7) | Next: P3b scan-to-room review in the editor; glass and mirror boundaries per [GLASS_AND_MIRRORS.md](GLASS_AND_MIRRORS.md) |
 | P4 | P4a merged (#6) | Scan tools on `/mcp` after deploy; next: P4b skills for rebuilding a room from a scan |
 | P5/P6 | Deferred | Optional after MVP |
 
 Next actionable work: see the latest dated entry below. For each session record date / phase / branch / PR / base SHA / files / commands with actual results / device evidence / blockers / next task.
+
+### 2026-11-25: P2N.3 live telemetry spike (port vs loopback WebSocket)
+
+- Branch `p2n3-live-telemetry-spike` from `5b66e565`. Decision in [SENSING_RESEARCH.md](SENSING_RESEARCH.md#spike-result-p2n3-2026-11-25): a binary `WebMessagePort`, not a loopback WebSocket.
+- Android: `live/` (frame encoder, rate and byte budget, `PortTransport`, `LoopbackSocketServer` with a hand-written RFC 6455 handshake, `LivePanel` with a two-method listener), `ScanRecorder.feedLive`, a panel in the scan layout shown only for `options.livePreview`, a debug-only `LiveBenchActivity` (benchmark and a `panel` mode that feeds the real page with synthetic frames). Web: `/scan/live` page, a Web Worker that runs `carveRoomOutline` on streamed depth, `parseLiveFrame` in `packages/core/src/capture/live-frames.ts`, a "Show a live map while scanning" option on `/scan`, strings in all catalogs.
+- Measured on the API 36 emulator (WebView 133), page on the deployed HTTPS origin: port and socket both carried 160 x 90 depth plus confidence at 5 Hz, pose, coverage and planes (about 220 KB/s) with p50 2 to 3 ms, p95 3 to 8 ms and no loss; at ten times the rate 820 to 900 KB/s, p95 6 to 7 ms, the socket dropped 4 frames. App CPU 2 to 3 % of a core nominal.
+- `ws://127.0.0.1` from the HTTPS page: opened in the debug build with `MIXED_CONTENT_NEVER_ALLOW`; failed (code 1006) when the debug network security config lost its `127.0.0.1` cleartext exception, which is what release has. So the socket would need a loopback cleartext exception in release.
+- End to end on the emulator: the real `/scan/live` page (dev server through `adb reverse`) in the real `LivePanel`, fed by the synthetic feeder, drew a growing coverage map and a moving camera marker, "Floor covered 35%" and a frame count, over the port. Found and fixed a race there: a page-requested `live.close` sent a `closed` event that overtook the following `live.open` and left the page paused.
+- Review round (PR #19): port acks and an unacked-frame cap (4 depth, 8 any); `LoopbackSocketServer` and `WebSocketFraming` moved to `src/debug` (release refuses `ws`); the preview shows localised lines, not core's English notes, and gets the page language through `options.locale` and `/scan/live?lang=`; coverage is coarsened past 8,192 cells instead of cut; depth failures log one line per 10 s; the panel shows a message when sign-in has ended; a resume reopens the stream only after a pause closed one, and the page ignores `ready` while an open is pending. `LiveBenchActivity` stays `exported=true`: `am start` is refused for a non-exported activity (SecurityException, checked). `livePreview` and `locale` are read only by the scan screen and the panel; the manifest and bundle writers never see `ScanOptions` (no reference in `ScanBundle.kt` or the writer). With acks the port bench on the emulator again delivered every frame (252 frames, p50 2 ms, p95 4 ms, 0 lost).
+- Not done: no real scan with the panel open (the emulator has no ARCore capture); the owner's phone was not used (asked first rule), so CPU and ARCore frame rate with the panel are unmeasured. Chrome local network access was not tested.
+- Checks: `./gradlew :app:testDebugUnitTest :app:assembleDebug :app:lintDebug` pass (0 lint errors); `bun test` in `packages/core` (154 pass) and `apps/editor/lib/scan` (57 pass); `bun run i18n:check` passes (new strings await human review in es, fr, ja, zh-CN); `bun run check` reports no findings in the touched files, and its 13 errors are in files this branch does not touch.
 
 ### 2026-11-25: agent-driven semantics, `plan_scan_semantics` and `lift_scan_semantics` (R5)
 

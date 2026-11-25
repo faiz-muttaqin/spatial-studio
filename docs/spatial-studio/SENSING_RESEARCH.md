@@ -35,6 +35,45 @@ The recorded bundle stays the source of truth. A live stream is for preview and 
 2. **Loopback WebSocket in the app.** Bound to `127.0.0.1` only, with a random per-session token handed to the page through the bridge, an `Origin` check and binary frames. Suits high-rate sensor batches and preview frames. Must be tested against Chrome and Android WebView local-network-access rules for an HTTPS page calling loopback. A LAN-reachable mode (for a desktop on the same Wi-Fi) stays off by default and needs authentication and TLS before it is considered.
 3. **Record, then upload** (current v1). Always available; the other two only add liveness.
 
+### Spike result (P2N.3, 2026-11-25)
+
+**Decision: use a `WebMessagePort` channel (option 1, binary), not a loopback WebSocket.** Both carry the planned load with no loss; the port needs no open socket, no token and no network-security exception.
+
+What was built (all behind `options.livePreview`, off by default; the recording does not depend on it):
+
+- Wire format: one binary frame per message, little endian, 24 byte header (`SSL1`, type, flags, `seq`, `timestampNs`, payload length), then a depth (with confidence), pose, coverage or plane payload. Encoder `apps/android/.../live/LiveFrames.kt`, decoder `packages/core/src/capture/live-frames.ts`; both check the same bounds (128 KiB payload, 40,000 depth pixels, 8,192 coverage cells, 32 planes) and the decoder drops anything malformed.
+- Rates: depth 5 Hz, pose 10 Hz, coverage 2 Hz, planes 1 Hz, and a byte budget of 400 KB/s. The scan screen builds a frame only when the stream wants one, and drops it when the transport is behind. A 160 x 90 depth frame with confidence is 43,308 bytes.
+- Transport (a): `WebViewCompat.createWebMessageChannel`, the page end sent with `postWebMessage` to the trusted origin only, frames as `WebMessageCompat(byte[])` (ArrayBuffers in the page). Needs `CREATE_WEB_MESSAGE_CHANNEL`, `POST_WEB_MESSAGE`, `WEB_MESSAGE_PORT_POST_MESSAGE`, `WEB_MESSAGE_PORT_CLOSE` and `WEB_MESSAGE_ARRAY_BUFFER`, all present in `androidx.webkit` 1.13.0 and in the emulator's WebView 133.
+- Transport (b): a hand-written RFC 6455 server on `127.0.0.1`, random port, one client, 128-bit per-session token in the query, exact `Origin` match, `Host` must be the loopback address and port (DNS rebinding), client data frames refused, writes serialised and the close frame sent off the main thread. After review it lives only in the debug source set (`src/debug`), as the benchmark's second transport; release builds contain no socket code and the panel refuses `ws`.
+- Backpressure on the port: the page's worker acknowledges the frames it has processed (`ack:<count>` on the port, every 2 frames). The sender allows 4 unacknowledged depth frames and 8 of any kind, so a worker busy with a carving pass stops the flow instead of letting frames queue inside the WebView; depth is dropped first. A page that never acks gets no more than 8 frames.
+- Coverage past the frame's 8,192-cell cap is coarsened (cell size doubled) rather than cut. The panel URL carries `?lang=` from `options.locale` so the preview uses the page's language, and it shows its own localised lines, not the carving library's English notes. An ended session (redirect to sign-in, HTTP error) shows a message instead of a blank panel.
+- Live view: when the page opts in, the scan screen shows a small WebView (220 x 300 dp, right side) loading `/scan/live` from the origin that started the scan. A Web Worker owns the stream, decodes frames and runs the existing `carveRoomOutline` on the last 24 depth frames (about one pass a second, paced at three times its own duration); the page draws a coverage map, the camera and the outline. No algorithm was ported to Kotlin.
+- The panel's only native handle is `SpatialStudioLive` with `live.open` and `live.close`; scan methods are not reachable from it. The stream is closed on pause, finish, cancel and destroy (the page is told on pause and reopens on resume).
+
+Measurements, API 36 emulator on a Mac, WebView 133, synthetic frames at the planned rates through the real stream code, page on `https://spatial-studio.faizmuttaqin.com` (the deployed origin) and latency as the page's `Date.now()` minus the sender's stamp on the same clock. The owner's phone was not used, so CPU and battery cost on real hardware are not measured.
+
+| Run | Frames | Offered | p50 / p95 / max latency | Lost |
+|---|---|---|---|---|
+| Port, nominal, 20 s | 339 | 218 KB/s | 2 / 3 / 24 ms | 0 |
+| Port with acks (after review), 15 s | 252 | 213 KB/s | 2 / 4 / 17 ms | 0 |
+| Port, nominal, 30 s | 430 | 190 KB/s | 3 / 7 / 88 ms | 0 |
+| Loopback socket, nominal, 12 s | 203 | 220 KB/s | 2 / 3 / 5 ms | 0 |
+| Loopback socket, nominal, 30 s | 448 | 197 KB/s | 3 / 8 / 36 ms | 0 |
+| Port, rates x10, 10 s | 563 | 819 KB/s | 3 / 6 / 35 ms | 0 |
+| Loopback socket, rates x10, 10 s | 629 | 900 KB/s | 3 / 7 / 63 ms | 4 (queue full) |
+
+Both are far below what the link can carry; the x10 runs were limited by the benchmark's 10 ms feeder loop, so they show headroom, not a ceiling. The app process used about 2 to 3 % of one core at nominal rates and 6 to 7 % at x10 (`top`, emulator, page worker not included). The latency numbers say nothing about a real phone's CPU under ARCore load.
+
+Can an HTTPS page open `ws://127.0.0.1`?
+
+- With `MIXED_CONTENT_NEVER_ALLOW` set, the debug build (which allows cleartext to loopback in its network security config) opened it in 20 ms. WebView treats `127.0.0.1` as potentially trustworthy, so mixed-content rules did not block it, and no local-network permission prompt appeared in WebView 133.
+- With the release network security config (cleartext not permitted, no loopback exception) the same page failed: `error`, close code 1006, no frame delivered. A loopback WebSocket in a release build therefore needs a `cleartextTrafficPermitted` exception for `127.0.0.1`, a standing weakening of the app's transport policy, for the benefit of one preview.
+- Chrome's local network access rules (permission prompt for a secure page reaching loopback) were not tested, because this app uses WebView. If the stream is ever needed from a desktop or Chrome page, that test comes first.
+
+Why the port wins: same latency and loss at the planned rates, no listening socket (any other app on the phone can connect to a loopback port; the token and Origin check are the only gate), no cleartext exception, the channel dies with the page, and it works under the existing origin allowlist. The loopback server is therefore kept out of release builds.
+
+Limits: the preview's carving ran on synthetic depth in tests (a 4 x 3 m room walked on an ellipse gives 10 to 14 m²) and took 315 ms for 24 frames and 38,880 rays on the Mac; on a phone expect more, hence the pacing. A real scan with the panel open has not been run (the emulator has no ARCore capture), so the first thing to check on the phone is frame rate with the panel and ARCore together, and whether a second WebView costs ARCore frames.
+
 ## Contract additions (v1.1)
 
 Adopted for the first five items in [CAPTURE_CONTRACT.md](CAPTURE_CONTRACT.md) (2026-11-25); `rf-observations` stays research and has no schema.
@@ -53,7 +92,7 @@ Location and radio identifiers are personal data. They are off by default, opted
 ## Research questions
 
 - Indoor heading error against a wall of known bearing, after median filtering (target 10 degrees or better).
-- Whether an HTTPS page in Android WebView and in Chrome can reach a loopback WebSocket, and its latency and CPU cost.
+- Whether an HTTPS page in Android WebView and in Chrome can reach a loopback WebSocket, and its latency and CPU cost. Android WebView answered in the spike below (yes in debug, blocked by the release cleartext policy); Chrome and CPU on a phone are open.
 - Wi-Fi RTT support on the test phone and the owner's access points.
 - Whether ARCore light estimation helps place lamps and windows.
 - Sun check: render the sun for the capture's date, time, location and north, and compare with a real shadow photographed at that moment.
@@ -85,7 +124,7 @@ Wi-Fi and Bluetooth on a standard phone measure distance to other devices (Wi-Fi
 ## Roadmap placement
 
 - P2N.2: Android capture of orientation, heading, geolocation (opt-in), light estimate and barometer into the bundle. It can be built alongside the first real-device test of P2N v1; its accuracy figures come only from that device.
-- P2N.3: live telemetry transport spike (options 1 and 2 above).
+- P2N.3: live telemetry transport spike (options 1 and 2 above). Done on the emulator 2026-11-25: binary `WebMessagePort`, preview panel and worker built, see the spike result above; real-phone run pending.
 - P2N.4 (spike): acoustic ranging, opt-in, echo profiles only, measured against a tape on several materials before any adoption.
 - P3b: set site latitude, longitude and `northRotation` from a capture, with user confirmation; sun direction then follows from the existing daylight code.
 - P5 (optional): radio-signal observations for multi-room registration and re-localisation.

@@ -9,6 +9,16 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <!-- Live preview (P2N.3): a small trusted web page, only when the page opted in. Hidden otherwise. -->
+    <FrameLayout
+        android:id="@+id/scan_live"
+        android:layout_width="220dp"
+        android:layout_height="300dp"
+        android:layout_gravity="end|center_vertical"
+        android:layout_margin="8dp"
+        android:background="@color/hud_scrim"
+        android:visibility="gone" />
+
     <LinearLayout
         android:id="@+id/scan_hud"
         android:layout_width="match_parent"
