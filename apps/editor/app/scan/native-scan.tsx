@@ -11,6 +11,7 @@ import {
   type ScanListEntry,
   type ScanUploadResult,
 } from '@/lib/scan/native-bridge'
+import { classifyUploadedScans, type UploadedScanReport } from '@/lib/scan/uploaded-scans'
 import { cn } from '@/lib/utils'
 
 /** Event payloads are the companion's to define; show them as plain key/value text. */
@@ -66,6 +67,9 @@ export function NativeScan({
   const [busy, setBusy] = useState<'start' | 'upload' | 'discard' | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
   const [location, setLocation] = useState(false)
+  const [torch, setTorch] = useState(false)
+  /** Where each uploaded scan stands on this site; null while it is being checked. */
+  const [report, setReport] = useState<UploadedScanReport | null>(null)
 
   useEffect(
     () =>
@@ -95,7 +99,13 @@ export function NativeScan({
       (entries) => {
         if (!active) return
         setEarlier(entries.filter((entry) => !entry.uploaded))
-        setUploaded(entries.filter((entry) => entry.uploaded && entry.manifestUrl))
+        const found = entries.filter((entry) => entry.uploaded && entry.manifestUrl)
+        setUploaded(found)
+        setReport(null)
+        classifyUploadedScans(found, { origin: window.location.origin }).then(
+          (result) => active && setReport(result),
+          () => active && setReport({ statuses: new Map(), projectNames: new Map() }),
+        )
       },
       () => {},
     )
@@ -121,7 +131,7 @@ export function NativeScan({
       setEvents({})
       const projectId = onBeforeStart()
       try {
-        const result = await client.startScan({ projectId, options: { depth, location } })
+        const result = await client.startScan({ projectId, options: { depth, location, torch } })
         setSessionId(result.sessionId)
         onStarted(result.sessionId)
       } catch (error) {
@@ -163,10 +173,39 @@ export function NativeScan({
       })
     })
 
-  // Scans the companion says are attached, or this visit handled, are not offered; the latest few remain.
-  const offered = uploaded
-    .filter((entry) => !entry.attached && !handled.has(entry.sessionId))
+  // Scans the companion says are attached, or this visit handled, are not offered.
+  const unhandled = uploaded.filter((entry) => !entry.attached && !handled.has(entry.sessionId))
+  const statusOf = (entry: ScanListEntry) => report?.statuses.get(entry.sessionId) ?? null
+  const attachable = unhandled
+    .filter((entry) => {
+      const status = statusOf(entry)
+      return status === null || status.kind === 'attachable'
+    })
     .slice(0, MAX_UPLOADED_SHOWN)
+  const others = unhandled.filter((entry) => {
+    const status = statusOf(entry)
+    return status !== null && status.kind !== 'attachable'
+  })
+  const offered = [...attachable, ...others]
+
+  const removeScan = (id: string) =>
+    run('discard', async () => {
+      await client.discardScan(id)
+      setUploaded((entries) => entries.filter((entry) => entry.sessionId !== id))
+    })
+
+  const describeEntry = (entry: ScanListEntry) => {
+    const created = new Date(entry.createdAt)
+    const when = Number.isNaN(created.getTime())
+      ? String(entry.createdAt)
+      : created.toLocaleString()
+    const project = entry.projectId ? report?.projectNames.get(entry.projectId) : null
+    return {
+      when,
+      size: (entry.bytes / 1_000_000).toFixed(1),
+      project: project ?? i18n._({ id: 'app.scan.native.newProject', message: 'New project' }),
+    }
+  }
 
   const discard = (id: string) =>
     run('discard', async () => {
@@ -203,6 +242,25 @@ export function NativeScan({
               id: 'app.scan.native.locationHint',
               message:
                 'Off by default. The location is saved with the scan and used to correct the compass to true north when the scan is processed. The phone asks for permission first.',
+            })}
+          </span>
+        </span>
+      </label>
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          checked={torch}
+          className="mt-1"
+          disabled={disabled || busy !== null || sessionId !== null}
+          onChange={(event) => setTorch(event.target.checked)}
+          type="checkbox"
+        />
+        <span>
+          {i18n._({ id: 'app.scan.native.torch', message: 'Use the torch (experiment)' })}
+          <span className="block text-muted-foreground text-xs">
+            {i18n._({
+              id: 'app.scan.native.torchHint',
+              message:
+                'Set before the scan and kept on throughout. Tracking may be less reliable with the torch on.',
             })}
           </span>
         </span>
@@ -293,28 +351,68 @@ export function NativeScan({
             {i18n._({ id: 'app.scan.native.uploadedList', message: 'Uploaded, not attached yet' })}
           </p>
           <ul className="space-y-2">
-            {offered.map((entry) => (
-              <li
-                className="flex items-center justify-between gap-2 rounded-lg border border-border/60 p-2 text-sm"
-                key={entry.sessionId}
-              >
-                <span className="text-muted-foreground">
-                  {i18n._({
-                    id: 'app.scan.native.entry',
-                    message: '{keyframes, plural, one {# keyframe} other {# keyframes}}, {state}',
-                    values: { keyframes: entry.keyframes, state: entry.state },
-                  })}
-                </span>
-                <button
-                  className={SECONDARY_PILL}
-                  disabled={disabled || busy !== null}
-                  onClick={() => attachUploaded(entry)}
-                  type="button"
+            {offered.map((entry) => {
+              const status = statusOf(entry)
+              const info = describeEntry(entry)
+              return (
+                <li
+                  className="flex items-center justify-between gap-2 rounded-lg border border-border/60 p-2 text-sm"
+                  key={entry.sessionId}
                 >
-                  {i18n._({ id: 'app.scan.native.attach', message: 'Attach' })}
-                </button>
-              </li>
-            ))}
+                  <span className="space-y-0.5">
+                    <span className="block">
+                      {i18n._({
+                        id: 'app.scan.native.uploadedMeta',
+                        message:
+                          '{when} · {keyframes, plural, one {# photo} other {# photos}} · {size} MB',
+                        values: { when: info.when, keyframes: entry.keyframes, size: info.size },
+                      })}
+                    </span>
+                    <span className="block text-muted-foreground text-xs">
+                      {status?.kind === 'elsewhere'
+                        ? i18n._({
+                            id: 'app.scan.native.elsewhere',
+                            message: 'Uploaded to another server. It is not on this site.',
+                          })
+                        : status?.kind === 'in-project'
+                          ? i18n._({
+                              id: 'app.scan.native.inProject',
+                              message: 'Already in {project}',
+                              values: { project: status.name },
+                            })
+                          : i18n._({
+                              id: 'app.scan.native.projectLabel',
+                              message: 'Project: {project}',
+                              values: { project: info.project },
+                            })}
+                    </span>
+                  </span>
+                  {status === null ? (
+                    <span className="text-muted-foreground text-xs">
+                      {i18n._({ id: 'app.scan.native.checking', message: 'Checking…' })}
+                    </span>
+                  ) : status.kind === 'attachable' ? (
+                    <button
+                      className={SECONDARY_PILL}
+                      disabled={disabled || busy !== null}
+                      onClick={() => attachUploaded(entry)}
+                      type="button"
+                    >
+                      {i18n._({ id: 'app.scan.native.attach', message: 'Attach' })}
+                    </button>
+                  ) : status.kind === 'elsewhere' ? (
+                    <button
+                      className={SECONDARY_PILL}
+                      disabled={disabled || busy !== null}
+                      onClick={() => removeScan(entry.sessionId)}
+                      type="button"
+                    >
+                      {i18n._({ id: 'app.scan.native.remove', message: 'Remove' })}
+                    </button>
+                  ) : null}
+                </li>
+              )
+            })}
           </ul>
         </div>
       ) : null}

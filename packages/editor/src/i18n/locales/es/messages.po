@@ -1502,6 +1502,14 @@ msgstr "Ventana {number}"
 msgid "app.scan.native.attach"
 msgstr "Adjuntar"
 
+# English: "Checking…"
+# Source-Hash: fa798a178c7c3128
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.checking"
+msgstr "Comprobando…"
+
 # Source-Hash: f89744026cb4ffb5
 # Review: required
 # AI-Provider: claude-code
@@ -1521,6 +1529,14 @@ msgstr "Descartar escaneo"
 #, fuzzy
 msgid "app.scan.native.earlier"
 msgstr "Escaneos aún no subidos"
+
+# English: "Uploaded to another server. It is not on this site."
+# Source-Hash: 5d808f2f9d15a3d7
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.elsewhere"
+msgstr "Subido a otro servidor. No está en este sitio."
 
 # Source-Hash: 81e1405f801de1e7
 # Review: required
@@ -1552,6 +1568,14 @@ msgstr "La aplicación complementaria informó de un error: {code}"
 msgid "app.scan.native.hint"
 msgstr "La aplicación complementaria registra la pose, los planos, la profundidad y los fotogramas clave con ARCore y después los sube a este sitio."
 
+# English: "Already in {project}"
+# Source-Hash: 238406df01367d8d
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.inProject"
+msgstr "Ya está en {project}"
+
 # Source-Hash: 3177d0e4a4ca7c04
 # Review: required
 # AI-Provider: claude-code
@@ -1571,6 +1595,30 @@ msgstr "Registrar la ubicación aproximada"
 #, fuzzy
 msgid "app.scan.native.locationHint"
 msgstr "Desactivado por defecto. La ubicación se guarda con el escaneo y sirve para corregir la brújula al norte verdadero cuando se procesa el escaneo. El teléfono pide permiso primero."
+
+# English: "New project"
+# Source-Hash: 008df04307a93de8
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.newProject"
+msgstr "Proyecto nuevo"
+
+# English: "Project: {project}"
+# Source-Hash: aba25fa394039e44
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.projectLabel"
+msgstr "Proyecto: {project}"
+
+# English: "Remove"
+# Source-Hash: 9469a102f04ea196
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.remove"
+msgstr "Quitar"
 
 # Source-Hash: e4e15da3db73b81d
 # Review: required
@@ -1592,6 +1640,22 @@ msgstr "Iniciar escaneo con la aplicación"
 msgid "app.scan.native.starting"
 msgstr "Abriendo el escáner…"
 
+# English: "Use the torch (experiment)"
+# Source-Hash: fc1817e763d15c74
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.torch"
+msgstr "Usar la linterna (experimento)"
+
+# English: "Set before the scan and kept on throughout. Tracking may be less reliable with the torch on."
+# Source-Hash: f21d72fefa946b08
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.torchHint"
+msgstr "Se elige antes del escaneo y se mantiene encendida. El seguimiento puede ser menos fiable con la linterna encendida."
+
 # Source-Hash: ceedca8a2b02b006
 # Review: required
 # AI-Provider: claude-code
@@ -1609,6 +1673,14 @@ msgstr "Subir este escaneo"
 #, fuzzy
 msgid "app.scan.native.uploadedList"
 msgstr "Subido, aún sin adjuntar"
+
+# English: "{when} · {keyframes, plural, one {# photo} other {# photos}} · {size} MB"
+# Source-Hash: e3bf9221d58e34e5
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.uploadedMeta"
+msgstr "{when} · {keyframes, plural, one {# foto} many {# fotos} other {# fotos}} · {size} MB"
 
 # Source-Hash: 756844bbc7a4b1cf
 # Review: required

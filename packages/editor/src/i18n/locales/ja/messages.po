@@ -1502,6 +1502,14 @@ msgstr "窓 {number}"
 msgid "app.scan.native.attach"
 msgstr "添付"
 
+# English: "Checking…"
+# Source-Hash: fa798a178c7c3128
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.checking"
+msgstr "確認中…"
+
 # Source-Hash: f89744026cb4ffb5
 # Review: required
 # AI-Provider: claude-code
@@ -1521,6 +1529,14 @@ msgstr "スキャンを破棄"
 #, fuzzy
 msgid "app.scan.native.earlier"
 msgstr "未アップロードのスキャン"
+
+# English: "Uploaded to another server. It is not on this site."
+# Source-Hash: 5d808f2f9d15a3d7
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.elsewhere"
+msgstr "別のサーバーにアップロードされました。このサイトにはありません。"
 
 # Source-Hash: 81e1405f801de1e7
 # Review: required
@@ -1552,6 +1568,14 @@ msgstr "コンパニオンアプリがエラーを報告しました: {code}"
 msgid "app.scan.native.hint"
 msgstr "コンパニオンアプリは ARCore で姿勢、平面、深度、キーフレームを記録し、このサイトにアップロードします。"
 
+# English: "Already in {project}"
+# Source-Hash: 238406df01367d8d
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.inProject"
+msgstr "{project} に追加済み"
+
 # Source-Hash: 3177d0e4a4ca7c04
 # Review: required
 # AI-Provider: claude-code
@@ -1571,6 +1595,30 @@ msgstr "おおよその位置情報を記録"
 #, fuzzy
 msgid "app.scan.native.locationHint"
 msgstr "既定ではオフです。位置情報はスキャンと一緒に保存され、スキャンの処理時にコンパスを真北に補正するために使われます。最初にスマートフォンが許可を求めます。"
+
+# English: "New project"
+# Source-Hash: 008df04307a93de8
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.newProject"
+msgstr "新しいプロジェクト"
+
+# English: "Project: {project}"
+# Source-Hash: aba25fa394039e44
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.projectLabel"
+msgstr "プロジェクト: {project}"
+
+# English: "Remove"
+# Source-Hash: 9469a102f04ea196
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.remove"
+msgstr "削除"
 
 # Source-Hash: e4e15da3db73b81d
 # Review: required
@@ -1592,6 +1640,22 @@ msgstr "コンパニオンスキャンを開始"
 msgid "app.scan.native.starting"
 msgstr "スキャナーを起動中…"
 
+# English: "Use the torch (experiment)"
+# Source-Hash: fc1817e763d15c74
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.torch"
+msgstr "トーチを使う（実験）"
+
+# English: "Set before the scan and kept on throughout. Tracking may be less reliable with the torch on."
+# Source-Hash: f21d72fefa946b08
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.torchHint"
+msgstr "スキャン前に選び、最後まで点灯したままにします。トーチを点けるとトラッキングが不安定になることがあります。"
+
 # Source-Hash: ceedca8a2b02b006
 # Review: required
 # AI-Provider: claude-code
@@ -1609,6 +1673,14 @@ msgstr "このスキャンをアップロード"
 #, fuzzy
 msgid "app.scan.native.uploadedList"
 msgstr "アップロード済み、未添付"
+
+# English: "{when} · {keyframes, plural, one {# photo} other {# photos}} · {size} MB"
+# Source-Hash: e3bf9221d58e34e5
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.uploadedMeta"
+msgstr "{when} · {keyframes, plural, other {写真 #枚}} · {size} MB"
 
 # Source-Hash: 756844bbc7a4b1cf
 # Review: required

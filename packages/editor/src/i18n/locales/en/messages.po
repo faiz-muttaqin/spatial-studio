@@ -604,12 +604,20 @@ msgid "app.scan.native.attach"
 msgstr "Attach"
 
 #: apps/editor/app/scan/native-scan.tsx
+msgid "app.scan.native.checking"
+msgstr "Checking…"
+
+#: apps/editor/app/scan/native-scan.tsx
 msgid "app.scan.native.discard"
 msgstr "Discard scan"
 
 #: apps/editor/app/scan/native-scan.tsx
 msgid "app.scan.native.earlier"
 msgstr "Scans not uploaded yet"
+
+#: apps/editor/app/scan/native-scan.tsx
+msgid "app.scan.native.elsewhere"
+msgstr "Uploaded to another server. It is not on this site."
 
 #: apps/editor/app/scan/native-scan.tsx
 msgid "app.scan.native.entry"
@@ -624,12 +632,28 @@ msgid "app.scan.native.hint"
 msgstr "The companion app records pose, planes, depth and keyframes with ARCore, then uploads them to this site."
 
 #: apps/editor/app/scan/native-scan.tsx
+msgid "app.scan.native.inProject"
+msgstr "Already in {project}"
+
+#: apps/editor/app/scan/native-scan.tsx
 msgid "app.scan.native.location"
 msgstr "Record approximate location"
 
 #: apps/editor/app/scan/native-scan.tsx
 msgid "app.scan.native.locationHint"
 msgstr "Off by default. The location is saved with the scan and used to correct the compass to true north when the scan is processed. The phone asks for permission first."
+
+#: apps/editor/app/scan/native-scan.tsx
+msgid "app.scan.native.newProject"
+msgstr "New project"
+
+#: apps/editor/app/scan/native-scan.tsx
+msgid "app.scan.native.projectLabel"
+msgstr "Project: {project}"
+
+#: apps/editor/app/scan/native-scan.tsx
+msgid "app.scan.native.remove"
+msgstr "Remove"
 
 #: apps/editor/app/scan/native-scan.tsx
 msgid "app.scan.native.start"
@@ -640,12 +664,24 @@ msgid "app.scan.native.starting"
 msgstr "Opening the scanner…"
 
 #: apps/editor/app/scan/native-scan.tsx
+msgid "app.scan.native.torch"
+msgstr "Use the torch (experiment)"
+
+#: apps/editor/app/scan/native-scan.tsx
+msgid "app.scan.native.torchHint"
+msgstr "Set before the scan and kept on throughout. Tracking may be less reliable with the torch on."
+
+#: apps/editor/app/scan/native-scan.tsx
 msgid "app.scan.native.upload"
 msgstr "Upload this scan"
 
 #: apps/editor/app/scan/native-scan.tsx
 msgid "app.scan.native.uploadedList"
 msgstr "Uploaded, not attached yet"
+
+#: apps/editor/app/scan/native-scan.tsx
+msgid "app.scan.native.uploadedMeta"
+msgstr "{when} · {keyframes, plural, one {# photo} other {# photos}} · {size} MB"
 
 #: apps/editor/app/scan/native-scan.tsx
 msgid "app.scan.native.uploading"

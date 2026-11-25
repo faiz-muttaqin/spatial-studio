@@ -1502,6 +1502,14 @@ msgstr "窗 {number}"
 msgid "app.scan.native.attach"
 msgstr "附加"
 
+# English: "Checking…"
+# Source-Hash: fa798a178c7c3128
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.checking"
+msgstr "正在检查…"
+
 # Source-Hash: f89744026cb4ffb5
 # Review: required
 # AI-Provider: claude-code
@@ -1521,6 +1529,14 @@ msgstr "丢弃扫描"
 #, fuzzy
 msgid "app.scan.native.earlier"
 msgstr "尚未上传的扫描"
+
+# English: "Uploaded to another server. It is not on this site."
+# Source-Hash: 5d808f2f9d15a3d7
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.elsewhere"
+msgstr "已上传到其他服务器，不在此站点上。"
 
 # Source-Hash: 81e1405f801de1e7
 # Review: required
@@ -1552,6 +1568,14 @@ msgstr "配套应用报告了错误：{code}"
 msgid "app.scan.native.hint"
 msgstr "配套应用使用 ARCore 记录位姿、平面、深度和关键帧，然后将其上传到本站。"
 
+# English: "Already in {project}"
+# Source-Hash: 238406df01367d8d
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.inProject"
+msgstr "已在 {project} 中"
+
 # Source-Hash: 3177d0e4a4ca7c04
 # Review: required
 # AI-Provider: claude-code
@@ -1571,6 +1595,30 @@ msgstr "记录大致位置"
 #, fuzzy
 msgid "app.scan.native.locationHint"
 msgstr "默认关闭。位置信息会与扫描一起保存，并在处理扫描时用于将指南针校正为真北。手机会先请求权限。"
+
+# English: "New project"
+# Source-Hash: 008df04307a93de8
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.newProject"
+msgstr "新项目"
+
+# English: "Project: {project}"
+# Source-Hash: aba25fa394039e44
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.projectLabel"
+msgstr "项目：{project}"
+
+# English: "Remove"
+# Source-Hash: 9469a102f04ea196
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.remove"
+msgstr "移除"
 
 # Source-Hash: e4e15da3db73b81d
 # Review: required
@@ -1592,6 +1640,22 @@ msgstr "开始配套应用扫描"
 msgid "app.scan.native.starting"
 msgstr "正在打开扫描器…"
 
+# English: "Use the torch (experiment)"
+# Source-Hash: fc1817e763d15c74
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.torch"
+msgstr "使用手电筒（实验）"
+
+# English: "Set before the scan and kept on throughout. Tracking may be less reliable with the torch on."
+# Source-Hash: f21d72fefa946b08
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.torchHint"
+msgstr "在扫描前选择，并全程保持开启。开启手电筒时跟踪可能不够稳定。"
+
 # Source-Hash: ceedca8a2b02b006
 # Review: required
 # AI-Provider: claude-code
@@ -1609,6 +1673,14 @@ msgstr "上传此扫描"
 #, fuzzy
 msgid "app.scan.native.uploadedList"
 msgstr "已上传，尚未附加"
+
+# English: "{when} · {keyframes, plural, one {# photo} other {# photos}} · {size} MB"
+# Source-Hash: e3bf9221d58e34e5
+# Review: required
+#: apps/editor/app/scan/native-scan.tsx
+#, fuzzy
+msgid "app.scan.native.uploadedMeta"
+msgstr "{when} · {keyframes, plural, other {# 张照片}} · {size} MB"
 
 # Source-Hash: 756844bbc7a4b1cf
 # Review: required

@@ -81,6 +81,8 @@ const ScanListResultSchema = z.array(
       uploaded: z.boolean(),
       /** The page confirmed the scan was attached to a project (`scan.markAttached`). */
       attached: z.boolean().optional(),
+      /** The site the manifest was uploaded to; absent on records from before it was kept. */
+      uploadedOrigin: z.string().optional(),
       /** The project id the scan was started for; the attach target after a reload. */
       projectId: z.string().nullable().optional(),
       /** Present once the scan is uploaded; the page can attach it without uploading again. */
@@ -116,6 +118,8 @@ export type ScanStartOptions = {
   sensors?: boolean
   /** Contract v1.1: approximate location for geolocation and compass declination. Off unless set. */
   location?: boolean
+  /** Contract v1.3: the ARCore torch for the whole scan, chosen before it starts. Off unless set. */
+  torch?: boolean
 }
 
 const ReplySchema = z.union([
