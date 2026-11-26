@@ -295,6 +295,16 @@ function median(values: number[]): number {
   return sorted.length % 2 ? sorted[middle]! : (sorted[middle - 1]! + sorted[middle]!) / 2
 }
 
+/** A plane that may cover part of a wall's height, for `confirmPartialWalls` to check. */
+export type PartialWallCandidate = WallSegment & {
+  /**
+   * Metres its bottom floats above the floor when that is over 0.5 m (it reaches the ceiling
+   * instead), else null. Such a plane used to be a mirror or ghost and still is unless a wall plane,
+   * the carved boundary or a floor-plane edge agrees with it.
+   */
+  floating: number | null
+}
+
 /**
  * The vertical planes that can be room walls. Tall planes standing on the floor are `walls`. Planes
  * that cover only part of the height but stand on the floor or reach the ceiling, and are wide and
@@ -304,13 +314,13 @@ function median(values: number[]): number {
  */
 export function selectRoomWalls(analysis: PlaneAnalysis): {
   walls: WallSegment[]
-  partial: WallSegment[]
+  partial: PartialWallCandidate[]
   rejected: Array<{ planeId: string; reason: string }>
 } {
   const floor = analysis.floor?.y ?? analysis.wallFloorY
   const ceiling = analysis.ceiling?.y ?? null
   const walls: WallSegment[] = []
-  const partial: WallSegment[] = []
+  const partial: PartialWallCandidate[] = []
   const rejected: Array<{ planeId: string; reason: string }> = []
   for (const wall of analysis.walls) {
     const height = wall.top - wall.bottom
@@ -340,7 +350,7 @@ export function selectRoomWalls(analysis: PlaneAnalysis): {
       reject(
         `a ${round(wall.length, 2)} m wide, ${round(height, 2)} m tall vertical plane: too narrow to be part of a wall, furniture`,
       )
-    } else partial.push(wall)
+    } else partial.push({ ...wall, floating: floating ? round(aboveFloor, 2) : null })
   }
   return { walls, partial, rejected }
 }

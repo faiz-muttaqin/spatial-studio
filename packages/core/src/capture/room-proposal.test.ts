@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { analysePlanes, type Vec2 } from './plane-analysis'
-import { proposeRoom } from './room-proposal'
+import { proposeRoom, proposeRoomFromPlanes } from './room-proposal'
 import type { CapturePlane, ManualMeasurements } from './streams'
 import { loop, polygonWalls, type World, walk } from './synthetic-depth.test-helpers'
 
@@ -709,8 +709,9 @@ describe('wall planes that cover only part of the wall height', () => {
       walkedPath: dense(path),
     })
     const cabinet = proposal.planesIgnored.find((item) => item.planeId === 'cabinet')
-    expect(cabinet?.reason).toContain('behind it')
-    expect(cabinet?.reason).toContain('furniture')
+    expect(cabinet?.reason).toBe(
+      'a 0.9 m tall vertical plane with free space the depth rays crossed behind it and the line fitted to depth points depth-fit:1 0.6 m behind it: furniture, not a room wall',
+    )
     expect(proposal.planesUsed).not.toContain('cabinet')
     expect(proposal.polygon).toHaveLength(4)
     const [minZ, maxZ] = extent(proposal.polygon!, 1)
@@ -744,7 +745,105 @@ describe('wall planes that cover only part of the wall height', () => {
     expect(cabinet?.reason).toContain('walked-path points behind it')
     expect(cabinet?.reason).toContain('furniture')
     expect(proposal.planesUsed.toSorted()).toEqual(['w0', 'w1', 'w2', 'w3'])
-    expect(sorted(proposal.polygon!)).toEqual(sorted(corners))
+    expect(proposal.polygon).toHaveLength(4)
+    expect(extent(proposal.polygon!, 0).map((value) => Math.round(value * 10) / 10)).toEqual([0, 5])
+    expect(extent(proposal.polygon!, 1).map((value) => Math.round(value * 10) / 10)).toEqual([0, 4])
+  })
+
+  test('a depth line behind part of a front that closed the outline replaces it', () => {
+    // A 4.5 m wide room. A full-height shelf (x 1 to 2.4) and a low cabinet (x 2.4 to 3.2), both
+    // 0.5 m deep, with one plane on their lower front. Depth sees the wall above the cabinet behind
+    // 36% of the front, too little to reject the plane outright. With planes alone the front closes
+    // the outline; depth still contests it there.
+    const narrow: Array<[number, number]> = [
+      [0, 0],
+      [4.5, 0],
+      [4.5, 4],
+      [0, 4],
+    ]
+    const scene: World = {
+      walls: polygonWalls(narrow),
+      height: 2.6,
+      boxes: [
+        { min: [1, 0], max: [2.4, 0.5], top: 2.6 },
+        { min: [2.4, 0], max: [3.2, 0.5], top: 0.9 },
+      ],
+    }
+    const { frames, path } = walk(scene, loop(0.9, 1.3, 3.6, 3.1))
+    const planes = [
+      ...room(narrow, [0], 1),
+      panel('front', [1, 0.5], [3.2, 0.5], 0, 0.9),
+      horizontal('floor', 'horizontal-up', 0, [2.15, 1.65], [2.25, 2.25]),
+      horizontal('ceiling', 'horizontal-down', 2.6, [2.25, 2], [2.25, 2]),
+    ]
+    const planesAlone = proposeRoom({ planes, measurements: null, walkedPath: dense(path) })
+    expect(planesAlone.planesUsed).toContain('front')
+    expect(planesAlone.edges.every((edge) => edge.basis === 'plane-estimate')).toBe(true)
+    const proposal = proposeRoom({
+      planes,
+      measurements: null,
+      depthFrames: frames,
+      walkedPath: dense(path),
+    })
+    expect(proposal.planesIgnored.find((item) => item.planeId === 'front')?.reason).toMatch(
+      /^a line fitted to depth points \(depth-fit:\d+\) runs 0\.5 m behind it, and it rests only on planes covering part of the wall height: furniture in front of the wall$/,
+    )
+    expect(proposal.planesUsed).not.toContain('front')
+    // Behind the low cabinet and beyond it the outline reaches the wall at z 0.
+    const right = proposal.polygon!.filter(([x]) => x > 2.3)
+    expect(Math.min(...right.map(([, z]) => z))).toBeLessThan(0.1)
+  })
+
+  test('a plane that floats and reaches the ceiling joins a full-height plane on its wall', () => {
+    // The lower part of wall z = 0 was seen full height for x < 1.8 and only near the ceiling beyond.
+    const planes = [
+      ...rect45().filter((plane) => plane.id !== 'w0'),
+      wall('w0a', [0.05, 0], [1.8, 0], 2.8),
+      panel('upper', [2.3, 0], [3.95, 0], 1.6, 2.8),
+      ...roomFlats,
+    ]
+    const proposal = proposeRoom({ planes, measurements: null })
+    expect(sorted(proposal.polygon!)).toEqual([
+      [0, 0],
+      [0, 5],
+      [4, 0],
+      [4, 5],
+    ])
+    const edge = proposal.edges.find((item) => item.evidencePlaneIds.includes('upper'))
+    expect(edge?.evidencePlaneIds.toSorted()).toEqual(['upper', 'w0a'])
+    // Alone, the same plane is a mirror or ghost, as before partial planes were read.
+    const alone = proposeRoom({
+      planes: [...rect45(), panel('upper', [1, 2.5], [3, 2.5], 1.6, 2.8), ...roomFlats],
+      measurements: null,
+    })
+    expect(alone.planesIgnored.find((item) => item.planeId === 'upper')?.reason).toContain(
+      'a mirror, shelf or ghost',
+    )
+  })
+
+  test('proposeRoomFromPlanes uses partial planes a floor edge agrees with, and never lone ones', () => {
+    const seen = proposeRoomFromPlanes([
+      ...room(corners, [], 1),
+      horizontal('floor', 'horizontal-up', 0, [2.4, 1.9], [2.5, 2]),
+      ceiling,
+    ])
+    expect(sorted(seen.polygon!)).toEqual(sorted(corners))
+    expect(seen.edges.every((edge) => edge.confidence === 'medium')).toBe(true)
+    const lone = proposeRoomFromPlanes([
+      ...room(corners, [], 1),
+      horizontal('floor', 'horizontal-up', 0, [1, 0.6], [2.5, 2.6]),
+      ceiling,
+    ])
+    expect(lone.polygon).toBeNull()
+    expect(lone.planesIgnored.map((item) => item.planeId).toSorted()).toEqual([
+      'w0',
+      'w1',
+      'w2',
+      'w3',
+    ])
+    for (const item of lone.planesIgnored) {
+      expect(item.reason).toContain('no walked path shows it lies outside the walked area')
+    }
   })
 
   test('a bed side in front of a wall is furniture; lone wide planes outside the walked area are low', () => {

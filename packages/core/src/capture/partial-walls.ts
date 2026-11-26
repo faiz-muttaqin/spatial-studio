@@ -1,6 +1,6 @@
 import { type DepthWallEvidence, floorSeenAlongEdge, pointInPolygon } from './depth-walls'
 import type { CarvedOutline } from './free-space-carving'
-import type { Vec2, WallSegment } from './plane-analysis'
+import type { PartialWallCandidate, Vec2, WallSegment } from './plane-analysis'
 
 /**
  * Which vertical planes that cover only part of a wall's height are wall evidence.
@@ -11,11 +11,17 @@ import type { Vec2, WallSegment } from './plane-analysis'
  * shows space or a wall behind it: walked-path points, floor seen by depth or a floor plane, free
  * space the depth rays crossed, or a wall plane or depth line 0.25 to 1.5 m behind it (a cabinet
  * or bed in front of the wall). Otherwise it is wall evidence when another source agrees with its
- * position and direction: a full-height wall plane or a line fitted to depth points on the same
- * line (within 0.15 m and 10 degrees), the carved outline's boundary, or a floor plane's edge
- * (within 0.3 m). With no other source it counts only when it is at least 1.5 m wide and outside
- * the walked area. An edge resting only on partial planes is rated medium at most when another
- * source agreed, and low when none did.
+ * position and direction (within 0.15 m and 10 degrees, or 0.3 m for a floor plane's edge):
+ *
+ * - a full-height wall plane on the same line, the carved outline's boundary (traced from the wall
+ *   band 1.5 m above the floor) or a floor plane's edge: independent of the plane, so an edge
+ *   resting on it is rated medium at most;
+ * - only a line fitted to depth points: it may be fitted to the same furniture face as the plane,
+ *   so the edge is rated low;
+ * - nothing: it counts, rated low, only when it is at least 1.5 m wide and outside the walked area.
+ *
+ * A plane that floats more than 0.5 m above the floor and reaches the ceiling was a mirror or ghost
+ * under the full-height rule and stays one unless an independent source agrees.
  *
  * "Behind" is the side away from the room: the side with fewer walked-path points along the
  * plane, else the side without floor, else the side away from the centre of the vertical planes.
@@ -26,6 +32,8 @@ export type PartialWall = WallSegment & {
   cap: 'medium' | 'low'
   /** Why it was taken as wall evidence, worded for the person. */
   reason: string
+  /** Unit normal towards the room, or null when no side could be told. */
+  front: Vec2 | null
 }
 
 export type PartialWallSources = {
@@ -47,7 +55,10 @@ const AGREE_OFFSET = 0.15
 const AGREE_GAP = 0.75
 /**
  * A wall this far behind a plane makes the plane furniture standing in front of it. The gap above
- * `AGREE_OFFSET` leaves room for depth noise; the far end covers a bed side.
+ * `AGREE_OFFSET` leaves room for depth noise. 1.5 m reaches past wardrobes, kitchen runs, sofas and
+ * a double bed's side; a king bed or deeper piece is caught by the free space carved over it
+ * instead. Reaching further would start to take a plane of the next room, seen through a doorway,
+ * as a wall behind a real wall.
  */
 const BEHIND_MIN = 0.25
 const BEHIND_MAX = 1.5
@@ -80,7 +91,7 @@ type Frame = {
 }
 
 export function confirmPartialWalls(
-  candidates: readonly WallSegment[],
+  candidates: readonly PartialWallCandidate[],
   sources: PartialWallSources,
 ): { partial: PartialWall[]; rejected: Array<{ planeId: string; reason: string }> } {
   const partial: PartialWall[] = []
@@ -145,30 +156,51 @@ export function confirmPartialWalls(
       })
       continue
     }
-    const agreement = agreeing.filter((line) => onSameWall(frame, line)).map((line) => line.label)
+    const agree = agreeing.filter((line) => onSameWall(frame, line))
+    const independent = agree
+      .filter((line) => !line.id.startsWith('depth-fit:'))
+      .map((line) => line.label)
+    const depthLines = agree
+      .filter((line) => line.id.startsWith('depth-fit:'))
+      .map((line) => line.label)
     if (
       frame.front &&
       share(frame.samples, (sample) => floorEndsAt(sample, frame.front!, inFloor)) >= SAMPLE_SHARE
     ) {
-      agreement.push('the edge of the floor plane')
+      independent.push('the edge of the floor plane')
     }
-    if (agreement.length > 0) {
-      partial.push({
-        ...plane,
-        cap: 'medium',
-        reason: `${plane.planeId}, ${height} m tall: ${list(agreement)} ${agreement.length === 1 ? 'agrees' : 'agree'} with it`,
+    const accept = (cap: PartialWall['cap'], reason: string) =>
+      partial.push({ ...withoutFloating(plane), cap, reason, front: frame.front })
+    if (independent.length > 0) {
+      const all = [...independent, ...depthLines]
+      accept(
+        'medium',
+        `${plane.planeId}, ${height} m tall: ${list(all)} ${all.length === 1 ? 'agrees' : 'agree'} with it`,
+      )
+      continue
+    }
+    if (plane.floating !== null) {
+      rejected.push({
+        planeId: plane.planeId,
+        reason: `a vertical plane ${plane.floating} m above the floor: a mirror, shelf or ghost; it reaches the ceiling, but no wall plane, carved boundary or floor-plane edge agrees with it`,
       })
+      continue
+    }
+    if (depthLines.length > 0) {
+      accept(
+        'low',
+        `${plane.planeId}, ${height} m tall: only ${list(depthLines)} ${depthLines.length === 1 ? 'agrees' : 'agree'} with it, and a depth line may be fitted to the same furniture face`,
+      )
       continue
     }
     const width = round(plane.length)
     const outside =
       hull !== null && share(frame.samples, (sample) => pointInPolygon(sample, hull)) < SAMPLE_SHARE
     if (width >= MIN_LONE_PARTIAL_WIDTH && outside) {
-      partial.push({
-        ...plane,
-        cap: 'low',
-        reason: `${plane.planeId}, ${height} m tall: no other source agrees with it, but it is ${width} m wide and outside the walked area`,
-      })
+      accept(
+        'low',
+        `${plane.planeId}, ${height} m tall: no other source agrees with it, but it is ${width} m wide and outside the walked area`,
+      )
       continue
     }
     const why =
@@ -306,6 +338,10 @@ function relate(frame: Frame, line: Line): { offset: number; overlap: number } |
 /** True where the floor reaches the plane from the front and stops before reaching behind it. */
 function floorEndsAt(sample: Vec2, front: Vec2, inFloor: (point: Vec2) => boolean): boolean {
   return inFloor(offset(sample, front, EDGE_REACH)) && !inFloor(offset(sample, front, -EDGE_REACH))
+}
+
+function withoutFloating({ floating: _, ...wall }: PartialWallCandidate): WallSegment {
+  return wall
 }
 
 function list(items: readonly string[]): string {

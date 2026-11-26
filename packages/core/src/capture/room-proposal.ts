@@ -173,7 +173,13 @@ type Line = {
    * Set when the line's only planes cover part of the wall height: the highest confidence its edge
    * may get and why the planes were used. Null when a full-height plane backs it, or no plane does.
    */
-  partial: { cap: 'medium' | 'low'; ids: string[]; reasons: string[] } | null
+  partial: {
+    cap: 'medium' | 'low'
+    ids: string[]
+    reasons: string[]
+    /** Unit normal towards the room, from the planes; null when they could not tell. */
+    front: Vec2 | null
+  } | null
 }
 
 /** The vertical planes taken as walls, and the rest with the reason. */
@@ -295,7 +301,12 @@ export function proposeRoom(input: RoomProposalInput): RoomProposal {
     : null
   const planesOnly =
     analysis && chosen && selected!.partial.length > 0 ? fromAnalysis(analysis, chosen) : fullPlanes
-  const planesClosed = closes(planesOnly)
+  // Planes on part of the wall height may be furniture fronts, so an outline that needs one of them
+  // to close still lets depth lines in to contest those edges.
+  const partialIds = new Set(chosen?.partial.map((wall) => wall.planeId))
+  const planesClosed =
+    closes(planesOnly) &&
+    planesOnly!.edges.every((edge) => !edge.evidencePlaneIds.every((id) => partialIds.has(id)))
   const combined = evidence && !planesClosed ? fromAnalysis(analysis, chosen, evidence, path) : null
   const fromLines =
     combined && (combined.polygon || !planesOnly?.polygon) ? combined : (planesOnly ?? null)
@@ -932,11 +943,28 @@ function dropCompetingLines(lines: Line[]): {
   const dropped: Array<Array<{ planeId: string; reason: string }>> = []
   for (const index of order) {
     const line = lines[index]!
-    const rival = kept.find((other) => competes(lines[other]!, line))
-    if (rival === undefined) {
+    const rivals = kept.filter((other) => competes(lines[other]!, line))
+    if (rivals.length === 0) {
       kept.push(index)
       continue
     }
+    // A depth line behind planes that cover only part of the wall height is the wall, and the
+    // planes are a furniture front, even where they outrank it.
+    const behind = rivals.map((other) => depthBehindPartial(lines[other]!, line))
+    if (behind.every((gap) => gap !== null)) {
+      rivals.forEach((other, k) => {
+        dropped.push(
+          lines[other]!.planeIds.map((planeId) => ({
+            planeId,
+            reason: `a line fitted to depth points (${line.planeIds.join(', ')}) runs ${round(behind[k]!, 2)} m behind it, and it rests only on planes covering part of the wall height: furniture in front of the wall`,
+          })),
+        )
+        kept.splice(kept.indexOf(other), 1)
+      })
+      kept.push(index)
+      continue
+    }
+    const rival = rivals[0]!
     const gap = Math.abs(
       (line.q[0] - lines[rival]!.q[0]) * -lines[rival]!.d[1] +
         (line.q[1] - lines[rival]!.q[1]) * lines[rival]!.d[0],
@@ -949,6 +977,14 @@ function dropCompetingLines(lines: Line[]): {
     )
   }
   return { lines: kept.sort((i, j) => i - j).map((index) => lines[index]!), dropped }
+}
+
+/** How far a depth-fit line runs behind a line resting only on partial planes; null otherwise. */
+function depthBehindPartial(partial: Line, depth: Line): number | null {
+  const front = partial.basis === 'plane-estimate' ? partial.partial?.front : null
+  if (!front || depth.basis !== 'depth-fit') return null
+  const offset = (depth.q[0] - partial.q[0]) * front[0] + (depth.q[1] - partial.q[1]) * front[1]
+  return offset < 0 ? -offset : null
 }
 
 function competes(a: Line, b: Line): boolean {
@@ -1056,6 +1092,7 @@ function mergeWalls(
               cap: partials.some((wall) => wall.cap === 'medium') ? 'medium' : 'low',
               ids: partials.map((wall) => wall.planeId),
               reasons: partials.map((wall) => wall.reason),
+              front: partials.find((wall) => wall.front)?.front ?? null,
             }
           : null,
     }
