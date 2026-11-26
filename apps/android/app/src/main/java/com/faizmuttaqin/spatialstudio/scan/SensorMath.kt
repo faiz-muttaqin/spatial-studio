@@ -348,23 +348,12 @@ object NorthEstimator {
  * Checks that a clock reported by a callback (ARCore frame timestamps, sensor events) is the boot-time
  * clock, by comparing each reading with `SystemClock.elapsedRealtimeNanos()` taken as it arrives. On the
  * same clock the difference is the delivery delay: small, non-negative and steady.
- *
- * With [rolling] the check goes on after the first verdict, because a camera reconfigure can shift the
- * frame timestamps' base mid-scan:
- * - one late reading (a GC pause, a stall) is ignored: a shift needs [shiftReadings] consecutive readings
- *   more than [shiftToleranceNs] away from the verified delay;
- * - after a shift the state is [State.MISMATCH] (consumers do not pair) until [required] consecutive
- *   readings share a steady delay again; that delay is then adopted as the new base and [offsetNs] says
- *   how far it is from the first one, so frame times can be mapped back onto the boot clock.
  */
 class ClockCalibrator(
     private val required: Int = 30,
     private val minDeltaNs: Long = -5_000_000L,
     private val maxDeltaNs: Long = 250_000_000L,
     private val maxSpreadNs: Long = 100_000_000L,
-    private val rolling: Boolean = false,
-    private val shiftReadings: Int = 5,
-    private val shiftToleranceNs: Long = 250_000_000L,
 ) {
     enum class State { PENDING, COMPARABLE, MISMATCH }
 
@@ -376,81 +365,102 @@ class ClockCalibrator(
     private var lowest = Long.MAX_VALUE
     private var highest = Long.MIN_VALUE
 
-    /** The verified delivery delay of the current base (median of the window that passed). */
-    private var baseDeltaNs = 0L
-    private var firstBaseDeltaNs = 0L
-    private var consecutiveBad = 0
-    private val recent = ArrayDeque<Long>()
+    /** [readingNs] is the callback's timestamp, [elapsedNs] the boot-time clock on arrival. */
+    fun add(readingNs: Long, elapsedNs: Long) {
+        if (state != State.PENDING || readingNs <= 0L) return
+        val delta = elapsedNs - readingNs
+        if (delta < minDeltaNs || delta > maxDeltaNs) {
+            state = State.MISMATCH
+            return
+        }
+        lowest = min(lowest, delta)
+        highest = max(highest, delta)
+        count++
+        if (count >= required) state = if (highest - lowest <= maxSpreadNs) State.COMPARABLE else State.MISMATCH
+    }
+}
 
-    /** True once a window passed, even if the clock shifted later. */
-    @Volatile
-    var everComparable = false
-        private set
+/**
+ * Estimates how far ARCore's frame timestamps are from the boot-time clock the sensors use, continuously.
+ *
+ * Each frame gives `elapsedRealtimeNanos()` at delivery minus `frame.timestamp`: the delivery latency (always
+ * positive, with spikes) plus the clock base difference. A low percentile of a sliding window ignores the
+ * spikes. With the torch on, device scans showed frame timestamps that were not on the sensors' base from the
+ * start, so a check that only accepts the boot clock paired no headings at all.
+ *
+ * - A low percentile within [bootClockMaxNs] means the frame clock is the boot clock: [offsetNs] is 0.
+ * - Otherwise [offsetNs] is the percentile minus a nominal delivery latency, and frame times are mapped
+ *   onto the sensor clock with it ([method] `low-percentile`). The error is about the spread of the latency.
+ */
+class FrameClockEstimator(
+    private val window: Int = 60,
+    private val minSamples: Int = 20,
+    private val percentile: Double = 0.1,
+    private val nominalLatencyNs: Long = 30_000_000L,
+    private val bootClockMaxNs: Long = 100_000_000L,
+    private val bootClockMinNs: Long = -5_000_000L,
+) {
+    private val deltas = ArrayDeque<Long>()
 
-    /** How many real base shifts were detected (not single late readings). */
-    @Volatile
-    var resets = 0
-        private set
-
-    /** Add this to a frame timestamp to put it on the clock that was first verified. Zero until a shift is adopted. */
+    /** Add to a frame timestamp to get the sensor clock's time of the same instant. Valid once [ready]. */
     @Volatile
     var offsetNs = 0L
         private set
 
-    /** [readingNs] is the callback's timestamp, [elapsedNs] the boot-time clock on arrival. */
-    fun add(readingNs: Long, elapsedNs: Long) {
-        if (readingNs <= 0L) return
-        val delta = elapsedNs - readingNs
-        if (!everComparable) {
-            if (state != State.PENDING) return
-            if (delta < minDeltaNs || delta > maxDeltaNs) {
-                state = State.MISMATCH
-                return
-            }
-            recent.addLast(delta)
-            lowest = min(lowest, delta)
-            highest = max(highest, delta)
-            count++
-            if (count >= required) {
-                if (highest - lowest <= maxSpreadNs) {
-                    baseDeltaNs = median(recent)
-                    firstBaseDeltaNs = baseDeltaNs
-                    everComparable = true
-                    state = State.COMPARABLE
-                    recent.clear()
-                } else {
-                    state = State.MISMATCH
-                }
-            }
-            return
+    @Volatile
+    var ready = false
+        private set
+
+    /** `boot-clock` or `low-percentile`. */
+    @Volatile
+    var method = METHOD_BOOT_CLOCK
+        private set
+
+    /** The extremes of [offsetNs] over the scan, and how many frames went into the estimate. */
+    @Volatile
+    var minOffsetNs = 0L
+        private set
+
+    @Volatile
+    var maxOffsetNs = 0L
+        private set
+
+    @Volatile
+    var frames = 0
+        private set
+
+    /** True once any frame needed an offset, so frame and sensor timestamps are not directly comparable. */
+    @Volatile
+    var offsetApplied = false
+        private set
+
+    /** [frameNs] is `frame.timestamp`, [elapsedNs] the boot-time clock as the frame was delivered. */
+    fun add(frameNs: Long, elapsedNs: Long) {
+        if (frameNs <= 0L) return
+        deltas.addLast(elapsedNs - frameNs)
+        if (deltas.size > window) deltas.removeFirst()
+        frames++
+        if (deltas.size < minSamples) return
+        val sorted = deltas.sorted()
+        val low = sorted[((sorted.size - 1) * percentile).toInt()]
+        val onBootClock = low in bootClockMinNs..bootClockMaxNs
+        offsetNs = if (onBootClock) 0L else low - nominalLatencyNs
+        method = if (onBootClock) METHOD_BOOT_CLOCK else METHOD_LOW_PERCENTILE
+        if (!ready) {
+            minOffsetNs = offsetNs
+            maxOffsetNs = offsetNs
+        } else {
+            minOffsetNs = min(minOffsetNs, offsetNs)
+            maxOffsetNs = max(maxOffsetNs, offsetNs)
         }
-        if (!rolling) return
-        if (state == State.COMPARABLE) {
-            if (abs(delta - baseDeltaNs) <= shiftToleranceNs) {
-                consecutiveBad = 0
-                return
-            }
-            consecutiveBad++
-            if (consecutiveBad >= shiftReadings) {
-                state = State.MISMATCH
-                resets++
-                recent.clear()
-            }
-            return
-        }
-        // Shifted: wait for a steady delay, then adopt it as the new base.
-        recent.addLast(delta)
-        if (recent.size > required) recent.removeFirst()
-        if (recent.size == required && recent.max() - recent.min() <= maxSpreadNs) {
-            baseDeltaNs = median(recent)
-            offsetNs = baseDeltaNs - firstBaseDeltaNs
-            consecutiveBad = 0
-            recent.clear()
-            state = State.COMPARABLE
-        }
+        if (!onBootClock) offsetApplied = true
+        ready = true
     }
 
-    private fun median(values: Collection<Long>): Long = values.sorted()[values.size / 2]
+    companion object {
+        const val METHOD_BOOT_CLOCK = "boot-clock"
+        const val METHOD_LOW_PERCENTILE = "low-percentile"
+    }
 }
 
 /**

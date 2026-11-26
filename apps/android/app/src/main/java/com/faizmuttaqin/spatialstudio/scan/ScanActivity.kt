@@ -960,7 +960,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             // Declination is applied here from the retained fixes, never while recording: no fixes, no declination.
             val declination = rawCapture?.let { Declination.fromFixes(it.fixes, AndroidDeclination) }
             val sensorCapture = rawCapture?.let {
-                SensorCapture(it.orientation, Declination.apply(it.heading, declination), it.fixes, it.pressure, it.timestampSource, it.warnings, it.diagnostics)
+                SensorCapture(it.orientation, Declination.apply(it.heading, declination), it.fixes, it.pressure, it.timestampSource, it.warnings, it.diagnostics, it.frameClock)
             }
             if (sensors != null) {
                 if (sensors.sensorsEnabled && !sensors.hasRotationVector) recorder.warnings.add("rotation-vector-unavailable")
@@ -1010,6 +1010,17 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                     put("maxKeyframes", scan.options.maxKeyframes)
                     // v1.3: torch state counts and the motion and pose-jump guard events.
                     recorder.guardMetadata().forEach { (key, value) -> put(key, value) }
+                    // v1.3: how frame timestamps were mapped onto the sensor clock for heading pairing.
+                    sensorCapture?.frameClock?.let { clock ->
+                        put("frameClock", buildJsonObject {
+                            put("method", clock.method)
+                            put("offsetNs", clock.offsetNs)
+                            put("minOffsetNs", clock.minOffsetNs)
+                            put("maxOffsetNs", clock.maxOffsetNs)
+                            put("frames", clock.frames)
+                            put("source", "elapsedRealtimeNanos at frame delivery minus frame.timestamp, 10th percentile of the last 60 frames")
+                        })
+                    }
                 },
                 // A group the user switched off is empty, so only what was recorded is written.
                 sensors = sensorCapture,

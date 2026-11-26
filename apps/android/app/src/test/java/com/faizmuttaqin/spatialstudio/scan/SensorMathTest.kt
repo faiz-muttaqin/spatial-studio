@@ -390,57 +390,74 @@ class SensorTrustTest {
         assertEquals(run(0.0, 40, 20.0).last().timestampNs, result.segmentEndNs)
     }
 
-    private class Feed(val c: ClockCalibrator) {
-        var frame = 1_000_000_000L
-        fun feed(n: Int, delayNs: Long) = repeat(n) { frame += 33_000_000L; c.add(frame, frame + delayNs) }
+    /** Frames delivered every 33 ms whose timestamps sit [baseNs] behind the boot clock, with latency jitter and spikes. */
+    private fun frames(estimator: FrameClockEstimator, count: Int, baseNs: Long, startFrame: Long = 100_000_000_000L): Long {
+        var frame = startFrame
+        val random = java.util.Random(7)
+        repeat(count) { i ->
+            frame += 33_000_000L
+            // Latency 20 to 70 ms, and a 400 ms stall every 17th frame (a GC pause or a busy GL thread).
+            val latency = 20_000_000L + random.nextInt(50_000_000) + if (i % 17 == 0) 400_000_000L else 0L
+            estimator.add(frame, frame + baseNs + latency)
+        }
+        return frame
     }
 
     @Test
-    fun aSingleLateReadingDoesNotResetTheRollingClock() {
-        val f = Feed(ClockCalibrator(rolling = true))
-        f.feed(30, 40_000_000L)
-        assertEquals(ClockCalibrator.State.COMPARABLE, f.c.state)
-        // A GC pause: one reading 600 ms late, then normal again.
-        f.feed(1, 640_000_000L)
-        f.feed(10, 40_000_000L)
-        assertEquals(ClockCalibrator.State.COMPARABLE, f.c.state)
-        assertEquals(0, f.c.resets)
-        // Four late readings in a row are still not a shift; the fifth consecutive one is.
-        f.feed(4, 640_000_000L)
-        f.feed(1, 40_000_000L)
-        assertEquals(ClockCalibrator.State.COMPARABLE, f.c.state)
-        assertEquals(0, f.c.resets)
+    fun frameClockOnTheBootClockNeedsNoOffsetDespiteJitterAndStalls() {
+        val e = FrameClockEstimator()
+        frames(e, 10, 0L)
+        assertFalse(e.ready)
+        frames(e, 100, 0L)
+        assertTrue(e.ready)
+        assertEquals(0L, e.offsetNs)
+        assertEquals(FrameClockEstimator.METHOD_BOOT_CLOCK, e.method)
+        assertFalse(e.offsetApplied)
     }
 
     @Test
-    fun aSustainedBaseShiftIsAdoptedWithItsOffset() {
-        val f = Feed(ClockCalibrator(rolling = true))
-        f.feed(30, 40_000_000L)
-        // A reconfigure shifts the frame timestamps' base by 3 s and it stays shifted.
-        f.feed(5, 3_040_000_000L)
-        assertEquals(ClockCalibrator.State.MISMATCH, f.c.state)
-        assertEquals(1, f.c.resets)
-        // Until 30 steady readings arrive at the new delay, headings are not paired.
-        f.feed(28, 3_040_000_000L)
-        assertEquals(ClockCalibrator.State.MISMATCH, f.c.state)
-        f.feed(3, 3_040_000_000L)
-        assertEquals(ClockCalibrator.State.COMPARABLE, f.c.state)
-        assertEquals(3_000_000_000L, f.c.offsetNs)
-        assertEquals(1, f.c.resets)
-        // Staying on the new base is steady.
-        f.feed(50, 3_040_000_000L)
-        assertEquals(ClockCalibrator.State.COMPARABLE, f.c.state)
-        assertTrue(f.c.everComparable)
+    fun frameClockWithAnotherBaseGetsTheOffsetWithinTheLatencySpread() {
+        // The torch scans: frame timestamps 5.2 s behind the sensors' clock from the very first frame.
+        val e = FrameClockEstimator()
+        frames(e, 120, 5_200_000_000L)
+        assertTrue(e.ready)
+        assertEquals(FrameClockEstimator.METHOD_LOW_PERCENTILE, e.method)
+        assertTrue(e.offsetApplied)
+        // The true shift is 5.2 s; the estimate is off by the latency left over, under 50 ms.
+        assertEquals(5_200_000_000.0, e.offsetNs.toDouble(), 50_000_000.0)
     }
 
     @Test
-    fun aJitteryShiftWaitsForASteadyWindow() {
-        val f = Feed(ClockCalibrator(rolling = true))
-        f.feed(30, 40_000_000L)
-        f.feed(5, 3_040_000_000L)
-        // Alternating delays 300 ms apart never form a steady window.
-        repeat(40) { f.feed(1, if (it % 2 == 0) 3_040_000_000L else 3_340_000_000L) }
-        assertEquals(ClockCalibrator.State.MISMATCH, f.c.state)
+    fun frameClockAheadOfTheBootClockGetsANegativeOffset() {
+        val e = FrameClockEstimator()
+        frames(e, 120, -2_000_000_000L)
+        assertEquals(-2_000_000_000.0, e.offsetNs.toDouble(), 50_000_000.0)
+    }
+
+    @Test
+    fun frameClockFollowsABaseShiftMidScan() {
+        val e = FrameClockEstimator()
+        val last = frames(e, 120, 0L)
+        assertEquals(0L, e.offsetNs)
+        // A reconfigure moves the base by 3 s; once the window has turned over the offset follows.
+        frames(e, 120, 3_000_000_000L, startFrame = last)
+        assertEquals(3_000_000_000.0, e.offsetNs.toDouble(), 50_000_000.0)
+        assertEquals(0L, e.minOffsetNs)
+        assertTrue(e.maxOffsetNs > 2_900_000_000L)
+    }
+
+    @Test
+    fun anEstimatedOffsetPairsFramesWithTheSensorReadingOfTheSameInstant() {
+        // A frame stamped 5 s early on the frame clock was captured when the sensors read t; the history holds that reading.
+        val e = FrameClockEstimator()
+        val last = frames(e, 120, 5_000_000_000L)
+        val captureOnSensorClock = last + 5_000_000_000L
+        val history = OrientationHistory()
+        history.add(OrientationReading(captureOnSensorClock - 10_000_000L, Quaternion(0.0, 0.0, 0.0, 1.0), null))
+        history.add(OrientationReading(captureOnSensorClock + 10_000_000L, Quaternion(0.0, 0.0, 0.0, 1.0), null))
+        history.add(OrientationReading(last, Quaternion(0.0, 0.0, 0.0, 1.0), null))
+        val paired = history.nearest(last + e.offsetNs)
+        assertTrue(kotlin.math.abs(paired!!.timestampNs - captureOnSensorClock) <= 30_000_000L)
     }
 
     @Test
@@ -449,7 +466,6 @@ class SensorTrustTest {
         for (i in 0 until 30) c.add(1_000_000_000L + i * 33_000_000L, 1_000_000_000L + i * 33_000_000L + 40_000_000L)
         c.add(2_000_000_000L, 9_000_000_000L)
         assertEquals(ClockCalibrator.State.COMPARABLE, c.state)
-        assertEquals(0, c.resets)
     }
 
     @Test

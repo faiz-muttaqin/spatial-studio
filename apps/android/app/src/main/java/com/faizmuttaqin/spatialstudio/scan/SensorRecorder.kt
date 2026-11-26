@@ -41,6 +41,18 @@ class SensorCapture(
     val warnings: List<String>,
     /** Heading frame counts by outcome and the clock states, for explaining an empty or weak heading stream. */
     val diagnostics: String = "",
+    /** How frame timestamps were mapped onto the sensor clock for pairing (contract v1.3). */
+    val frameClock: FrameClockReport? = null,
+)
+
+/** The frame-to-sensor clock estimate of a scan, kept in `metadata.arcore.frameClock`. */
+class FrameClockReport(
+    val method: String,
+    /** The offset in force at the end of the scan, and its extremes. */
+    val offsetNs: Long,
+    val minOffsetNs: Long,
+    val maxOffsetNs: Long,
+    val frames: Int,
 )
 
 /**
@@ -69,9 +81,15 @@ class SensorRecorder(
     private val history = OrientationHistory()
     private val diagnostics = HeadingDiagnostics()
     @Volatile private var magnetometerAccuracy = 0
-    // Rolling: a camera reconfigure can shift the frame clock's base mid-scan; headings pair only while it checks out.
-    private val frameClock = ClockCalibrator(rolling = true)
+    // The frame clock is estimated continuously against the sensors' boot clock; headings pair through the offset.
+    private val frameClock = FrameClockEstimator()
     private val sensorClock = ClockCalibrator()
+
+    /**
+     * False in the ready state before recording: sensors run (history and clocks warm up) but no series keeps a
+     * sample. [beginRecording] clears the series and starts keeping them.
+     */
+    @Volatile private var recording = false
 
     /** Most recent camera-direction reading for the HUD; null until the phone is held upright. */
     @Volatile var live: HeadingData? = null
@@ -101,6 +119,15 @@ class SensorRecorder(
         running = true
         thread = HandlerThread("scan-sensors").also { it.start() }
         applyRegistrations()
+    }
+
+    /** Main thread. Starts keeping samples; anything gathered while only getting ready is dropped. */
+    fun beginRecording() {
+        orientation.clear()
+        heading.clear()
+        pressure.clear()
+        diagnostics.clear()
+        recording = true
     }
 
     /** Main thread. Closes every listener and the sensor thread. */
@@ -150,8 +177,8 @@ class SensorRecorder(
     fun onFrame(frameTimestampNs: Long, pose: FloatArray, elapsedNs: Long = SystemClock.elapsedRealtimeNanos()) {
         if (!sensorsOn) return
         frameClock.add(frameTimestampNs, elapsedNs)
-        if (frameClock.state != ClockCalibrator.State.COMPARABLE || sensorClock.state != ClockCalibrator.State.COMPARABLE) return
-        if (!heading.accepts(frameTimestampNs)) return
+        if (!frameClock.ready || sensorClock.state != ClockCalibrator.State.COMPARABLE) return
+        if (!recording || !heading.accepts(frameTimestampNs)) return
         // The reading nearest the frame's capture time, not the newest: the camera image is older than the latest sensor event.
         // After an adopted clock shift the frame time is mapped back onto the clock the sensors share.
         val pairingNs = frameTimestampNs + frameClock.offsetNs
@@ -184,13 +211,12 @@ class SensorRecorder(
         heading.offerIf(frameTimestampNs, sample) { sensorsOn }
     }
 
-    /** Verified boot-time clocks for both sources, so sensor and camera timestamps can be compared. */
+    /** Both clocks on the boot clock throughout, so sensor and camera timestamps can be compared directly. */
     val clocksVerified: Boolean
-        get() = frameClock.everComparable && sensorClock.everComparable
+        get() = frameClock.ready && !frameClock.offsetApplied && sensorClock.state == ClockCalibrator.State.COMPARABLE
 
     private val clockMismatch: Boolean
-        get() = (!frameClock.everComparable && frameClock.state == ClockCalibrator.State.MISMATCH) ||
-            (!sensorClock.everComparable && sensorClock.state == ClockCalibrator.State.MISMATCH)
+        get() = sensorClock.state == ClockCalibrator.State.MISMATCH
 
     fun captured(): SensorCapture {
         val warnings = ArrayList<String>()
@@ -199,7 +225,7 @@ class SensorRecorder(
         if (pressure.truncated) warnings += "barometer-truncated"
         if (fixes.truncated) warnings += "geolocation-truncated"
         if (sensorsOn && clockMismatch) warnings += "sensor-clock-not-comparable"
-        if (sensorsOn && frameClock.resets > 0) warnings += "frame-clock-reset"
+        if (sensorsOn && frameClock.offsetApplied) warnings += "frame-clock-offset-applied"
         return SensorCapture(
             orientation = orientation.snapshot(),
             heading = heading.snapshot(),
@@ -207,7 +233,12 @@ class SensorRecorder(
             pressure = pressure.snapshot(),
             timestampSource = if (clocksVerified) "realtime" else "unknown",
             warnings = warnings,
-            diagnostics = "clocks=frame:${frameClock.state},sensor:${sensorClock.state} ${diagnostics.summary()}".trim(),
+            diagnostics = "clocks=frame:${frameClock.method}${if (frameClock.ready) "" else "(pending)"},sensor:${sensorClock.state} ${diagnostics.summary()}".trim(),
+            frameClock = if (frameClock.ready) {
+                FrameClockReport(frameClock.method, frameClock.offsetNs, frameClock.minOffsetNs, frameClock.maxOffsetNs, frameClock.frames)
+            } else {
+                null
+            },
         )
     }
 
@@ -234,12 +265,12 @@ class SensorRecorder(
         if (!sensorsOn) return
         sensorClock.add(event.timestamp, SystemClock.elapsedRealtimeNanos())
         history.add(OrientationReading(event.timestamp, q, accuracyDeg))
-        orientation.offerIf(event.timestamp, DeviceOrientationData(event.timestamp, q, accuracyDeg)) { sensorsOn }
+        if (recording) orientation.offerIf(event.timestamp, DeviceOrientationData(event.timestamp, q, accuracyDeg)) { sensorsOn }
     }
 
     private fun onPressure(event: SensorEvent) {
         val hPa = event.values.firstOrNull()?.toDouble() ?: return
-        if (hPa.isFinite() && hPa in MIN_HPA..MAX_HPA) pressure.offerIf(event.timestamp, PressureSample(event.timestamp, hPa)) { sensorsOn }
+        if (recording && hPa.isFinite() && hPa in MIN_HPA..MAX_HPA) pressure.offerIf(event.timestamp, PressureSample(event.timestamp, hPa)) { sensorsOn }
     }
 
     private fun registerSensors() {
