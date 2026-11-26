@@ -9,12 +9,15 @@ export type World = {
   walls: Segment[]
   /** Clear glass: rays pass through it. */
   glass?: Segment[]
+  /** Furniture: solid axis-aligned boxes standing on the floor, `top` metres high. */
+  boxes?: Box[]
   height: number
   /** Floor and ceiling return depth only up to this x, like ground and sky outside a glass wall. */
   indoorUntilX?: number
   /** Sensor noise: range error as a share of distance plus a fixed term, dropout, low-confidence pixels, hand wander. */
   noise?: Noise
 }
+export type Box = { min: Vec2; max: Vec2; top: number }
 export type Noise = {
   /** Gaussian range error as a share of distance, for example 0.04. */
   relative: number
@@ -67,6 +70,27 @@ export function raySegment(origin: Vec2, direction: Vec2, segment: Segment): num
   return t > 1e-6 && u >= 0 && u <= 1 ? t : null
 }
 
+/** Where a ray enters a box (slab method), as a multiple of `direction`; null when it misses. */
+function rayBox(origin: number[], direction: number[], box: Box): number | null {
+  const lo = [box.min[0], 0, box.min[1]]
+  const hi = [box.max[0], box.top, box.max[1]]
+  let near = Number.NEGATIVE_INFINITY
+  let far = Number.POSITIVE_INFINITY
+  for (let axis = 0; axis < 3; axis += 1) {
+    const o = origin[axis]!
+    const d = direction[axis]!
+    if (Math.abs(d) < 1e-12) {
+      if (o < lo[axis]! || o > hi[axis]!) return null
+      continue
+    }
+    const t1 = (lo[axis]! - o) / d
+    const t2 = (hi[axis]! - o) / d
+    near = Math.max(near, Math.min(t1, t2))
+    far = Math.min(far, Math.max(t1, t2))
+  }
+  return near <= far && near > 1e-6 ? near : null
+}
+
 export function renderFrame(
   id: string,
   world: World,
@@ -96,6 +120,10 @@ export function renderFrame(
         if (t === null) continue
         const y = CAMERA_HEIGHT + dir[1]! * t
         if (y >= 0 && y <= world.height) best = Math.min(best, t)
+      }
+      for (const box of world.boxes ?? []) {
+        const t = rayBox([camera.x, CAMERA_HEIGHT, camera.z], dir, box)
+        if (t !== null) best = Math.min(best, t)
       }
       const flat = dir[1]! < 0 ? -CAMERA_HEIGHT / dir[1]! : (world.height - CAMERA_HEIGHT) / dir[1]!
       if (
