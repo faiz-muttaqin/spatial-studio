@@ -435,6 +435,60 @@ class SensorTrustTest {
     }
 
     @Test
+    fun resetAfterAReconfigureDropsTheOldBaseAtOnce() {
+        val e = FrameClockEstimator()
+        val last = frames(e, 120, 0L)
+        assertTrue(e.ready)
+        assertEquals(0L, e.offsetNs)
+        e.reset()
+        assertFalse(e.ready)
+        // The base moved by 3 s with the reconfigure. Without the reset the old frames would outvote the new ones
+        // for most of a window; now 25 frames are enough.
+        frames(e, 25, 3_000_000_000L, startFrame = last)
+        assertTrue(e.ready)
+        assertEquals(3_000_000_000.0, e.offsetNs.toDouble(), 50_000_000.0)
+        // The scan's offset range still records both bases.
+        assertEquals(0L, e.minOffsetNs)
+    }
+
+    @Test
+    fun withoutAResetAShiftTakesAboutAWindowToWinThePercentile() {
+        val e = FrameClockEstimator()
+        val last = frames(e, 120, 0L)
+        frames(e, 25, 3_000_000_000L, startFrame = last)
+        // 25 of the last 60 frames are on the new base: the 10th percentile is still the old one.
+        assertEquals(0L, e.offsetNs)
+    }
+
+    @Test
+    fun highDeliveryLatencyOnTheBootClockIsNotAnOffset() {
+        // A busy GL thread: every frame is delivered 150 to 400 ms late, with 700 ms stalls. Still the boot clock.
+        val e = FrameClockEstimator()
+        var frame = 100_000_000_000L
+        val random = java.util.Random(3)
+        repeat(150) { i ->
+            frame += 33_000_000L
+            val latency = 150_000_000L + random.nextInt(250_000_000) + if (i % 11 == 0) 700_000_000L else 0L
+            e.add(frame, frame + latency)
+        }
+        assertTrue(e.ready)
+        assertEquals(0L, e.offsetNs)
+        assertFalse(e.offsetApplied)
+        assertTrue(e.deltaP90Ns > e.deltaP10Ns)
+    }
+
+    @Test
+    fun theEstimateIsNotRecomputedOnEveryFrame() {
+        val e = FrameClockEstimator(refreshEvery = 10)
+        val last = frames(e, 60, 0L)
+        val before = e.deltaP50Ns
+        // Four frames with a very different delta do not move the cached percentiles yet.
+        var frame = last
+        repeat(4) { frame += 33_000_000L; e.add(frame, frame + 900_000_000L) }
+        assertEquals(before, e.deltaP50Ns)
+    }
+
+    @Test
     fun frameClockFollowsABaseShiftMidScan() {
         val e = FrameClockEstimator()
         val last = frames(e, 120, 0L)

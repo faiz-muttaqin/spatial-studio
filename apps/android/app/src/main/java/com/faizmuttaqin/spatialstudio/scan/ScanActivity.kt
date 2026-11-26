@@ -147,6 +147,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
     @Volatile private var trackingNow = false
     private var everTracked = false
     private val torchRequest = AtomicReference<Boolean?>(null)
+    private val lightRequest = AtomicReference<Boolean?>(null)
 
     // Torch experiment (v1.3): decided at session configure from options.torch; never changed mid-scan, because
     // a reconfigure disturbs tracking and shifts the frame clock (device finding of 2026-11-25).
@@ -184,6 +185,9 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         if (!granted) {
             locationDenied = true
             Toast.makeText(this, R.string.scan_location_denied, Toast.LENGTH_LONG).show()
+        } else {
+            locationDenied = false
+            locationDeclined = false
         }
         // Before the session exists, createSession reads the permission state on the next resume.
         sensorRecorder?.let { recorder ->
@@ -246,8 +250,9 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         val bottom = ActivityCompat.requireViewById<View>(this, R.id.scan_bottom)
         ViewCompat.setOnApplyWindowInsetsListener(ActivityCompat.requireViewById(this, R.id.scan_root)) { _, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
-            top.setPadding(top.paddingLeft, bars.top + INSET_PADDING_PX, top.paddingRight, top.paddingBottom)
-            bottom.setPadding(bottom.paddingLeft, bottom.paddingTop, bottom.paddingRight, bars.bottom + INSET_PADDING_PX)
+            val inset = (INSET_PADDING_DP * resources.displayMetrics.density).toInt()
+            top.setPadding(top.paddingLeft, bars.top + inset, top.paddingRight, top.paddingBottom)
+            bottom.setPadding(bottom.paddingLeft, bottom.paddingTop, bottom.paddingRight, bars.bottom + inset)
             insets
         }
 
@@ -402,12 +407,9 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         val scanRecorder = ScanRecorder(dir, scan.options, depthKind)
         scanRecorder.lightMode = lightMode
         scanRecorder.live = liveStream
-        if (scan.options.torch) {
-            torchProbe?.let(scanRecorder::torchProbed)
-            if (torchConfigureFailed) scanRecorder.torchConfigureFailed()
-            if (torchLightDegraded) scanRecorder.warnings.add("light-estimation-degraded-for-torch")
-            scanRecorder.setTorch(torchOn)
-            if (!torchOn) runOnUiThread { Toast.makeText(this, R.string.scan_torch_unsupported, Toast.LENGTH_LONG).show() }
+        scanRecorder.setTorchState(torchOn, torchProbe, torchConfigureFailed, torchLightDegraded)
+        if (scan.options.torch && !torchOn) {
+            runOnUiThread { Toast.makeText(this, R.string.scan_torch_unsupported, Toast.LENGTH_LONG).show() }
         }
         recorder = scanRecorder
         val sensors = SensorRecorder(
@@ -504,6 +506,8 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
      */
     @Suppress("DEPRECATION") // isSupported is the probe the reference uses; the replacement is not in ARCore 1.57.
     private fun applyTorch(session: Session, config: Config): Boolean {
+        torchConfigureFailed = false
+        torchLightDegraded = false
         val originalLight = config.lightEstimationMode
         config.flashMode = Config.FlashMode.TORCH
         var supported = session.isSupported(config)
@@ -540,25 +544,67 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         try {
             if (want) {
                 on = applyTorch(session, config)
-                torchProbe?.let(recorder::torchProbed)
-                if (torchConfigureFailed) recorder.torchConfigureFailed()
-                if (torchLightDegraded) recorder.warnings.add("light-estimation-degraded-for-torch")
             } else {
                 config.flashMode = Config.FlashMode.OFF
-                session.configure(config)
+                if (torchLightDegraded) {
+                    // The torch had cost the light estimation its HDR mode; with the torch off, try to give it back.
+                    config.lightEstimationMode = Config.LightEstimationMode.ENVIRONMENTAL_HDR
+                    try {
+                        session.configure(config)
+                    } catch (e: UnsupportedConfigurationException) {
+                        config.lightEstimationMode = Config.LightEstimationMode.AMBIENT_INTENSITY
+                        session.configure(config)
+                    }
+                    torchLightDegraded = false
+                } else {
+                    session.configure(config)
+                }
+                torchConfigureFailed = false
             }
         } catch (e: Exception) {
             Log.w(TAG, "Could not change the torch", e)
             on = false
         }
         torchOn = on
-        recorder.setTorch(on)
-        lightMode = session.config.lightEstimationMode
-        recorder.lightMode = if (sensorRecorder?.sensorsEnabled == true) lightMode else Config.LightEstimationMode.DISABLED
+        recorder.setTorchState(on, torchProbe, torchConfigureFailed, torchLightDegraded)
+        afterReadyReconfigure(session, recorder)
         runOnUiThread {
             updateControls()
             if (want && !on) Toast.makeText(this, R.string.scan_torch_unsupported, Toast.LENGTH_LONG).show()
         }
+    }
+
+    /**
+     * GL thread, ready state only. Sensors on or off also switches ARCore's light estimation, which needs a
+     * reconfigure that is only allowed before recording.
+     */
+    private fun applyLightWhileReady(session: Session, recorder: ScanRecorder, on: Boolean) {
+        val config = session.config
+        try {
+            config.lightEstimationMode = if (on) Config.LightEstimationMode.ENVIRONMENTAL_HDR else Config.LightEstimationMode.DISABLED
+            try {
+                session.configure(config)
+            } catch (e: UnsupportedConfigurationException) {
+                if (!on) throw e
+                config.lightEstimationMode = Config.LightEstimationMode.AMBIENT_INTENSITY
+                session.configure(config)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not change light estimation", e)
+        }
+        lightMode = session.config.lightEstimationMode
+        // A light mode set for the sensors being on is not "degraded for the torch".
+        if (on) torchLightDegraded = false
+        recorder.setLightEnabled(on, lightMode)
+        recorder.setTorchState(torchOn, torchProbe, torchConfigureFailed, torchLightDegraded)
+        afterReadyReconfigure(session, recorder)
+    }
+
+    /** A reconfigure can move the frame clock's base: the estimate starts again and Record waits for it. */
+    @Suppress("UNUSED_PARAMETER")
+    private fun afterReadyReconfigure(session: Session, recorder: ScanRecorder) {
+        sensorRecorder?.resetFrameClock()
+        runOnUiThread { updateControls() }
     }
 
     private fun setToggles(sensors: SensorRecorder) {
@@ -581,7 +627,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         primaryButton.setImageResource(if (scanning) R.drawable.ic_check_dark else R.drawable.ic_record)
         primaryButton.contentDescription = getString(if (scanning) R.string.scan_finish_description else R.string.scan_record_description)
         primaryButton.isEnabled = !busy && phase != Phase.STARTING
-        primaryButton.alpha = if (ready && !trackingNow) 0.5f else 1f
+        primaryButton.alpha = if (ready && !canRecord()) 0.5f else 1f
         toolsButton.isEnabled = !busy
         counterText.visibility = if (scanning) View.VISIBLE else View.INVISIBLE
     }
@@ -613,8 +659,13 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             val sensors = sensorRecorder ?: return@explainable
             val on = !sensors.sensorsEnabled
             sensors.setSensorsEnabled(on)
-            recorder?.setLightEnabled(on, lightMode)
-            // Recording only: the ARCore configuration stays fixed (a reconfigure disturbs tracking).
+            if (phase == Phase.READY) {
+                // Light estimation follows the sensors: a reconfigure, which is only allowed before recording.
+                lightRequest.set(on)
+            } else {
+                // Recording only: the ARCore configuration stays fixed (a reconfigure disturbs tracking).
+                recorder?.setLightEnabled(on, lightMode)
+            }
             if (!on) sensorsText.setText(R.string.scan_sensors_off)
             updateControls(sensors)
         }
@@ -624,6 +675,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             if (on && !sensors.hasLocationPermission()) {
                 locationPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
             } else {
+                if (on) locationDeclined = false
                 sensors.setLocationEnabled(on)
                 updateControls(sensors)
             }
@@ -673,13 +725,18 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
     }
 
     /** The ready state ends: recording begins, with the ARCore configuration (torch included) as it is now. */
+    /** Tracking, no reconfigure waiting, and the frame clock estimated again after the last one. */
+    private fun canRecord(): Boolean =
+        trackingNow && torchRequest.get() == null && lightRequest.get() == null && sensorRecorder?.clockReady != false
+
     private fun startRecording() {
         if (phase != Phase.READY) return
-        if (!trackingNow) {
+        if (!canRecord()) {
             Toast.makeText(this, R.string.scan_wait_tracking, Toast.LENGTH_SHORT).show()
             return
         }
         torchRequest.set(null)
+        lightRequest.set(null)
         phase = Phase.SCANNING
         startedAtElapsed = SystemClock.elapsedRealtime()
         sensorRecorder?.beginRecording()
@@ -750,6 +807,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         if (phase == Phase.READY) {
             // Getting ready: tracking and the sensor clocks warm up, nothing is recorded.
             torchRequest.getAndSet(null)?.let { want -> applyTorchWhileReady(session, recorder, want) }
+            lightRequest.getAndSet(null)?.let { on -> applyLightWhileReady(session, recorder, on) }
             if (trackingNow) {
                 camera.pose.toMatrix(headingPose, 0)
                 sensorRecorder?.onFrame(frame.timestamp, headingPose)
@@ -859,7 +917,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                 statsText.text = getString(R.string.scan_info_stats, keyframes, recorder.selector.maxKeyframes, planes, points, losses)
                 sensorRecorder?.let { updateSensorsText(it) }
             }
-            primaryButton.alpha = if (phase == Phase.READY && !trackingNow) 0.5f else 1f
+            primaryButton.alpha = if (phase == Phase.READY && !canRecord()) 0.5f else 1f
         }
     }
 
@@ -1005,7 +1063,6 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                 plane to PlaneSummary("p$index", planeKind(plane), true, plane.centerPose.ty(), plane.extentX, plane.extentZ)
             }
 
-    /** GL thread: turns a tap into a candidate floor point, or refuses it with a reason. Nothing is committed yet. */
     /**
      * A tap marks the tapped point; when nothing is there to hit, the crosshair at the centre is used instead.
      * One mark per tap: the point is committed at once, and Undo takes the last mark back.
@@ -1166,7 +1223,8 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                         recorder.warnings.add("true-north-from-segment")
                     }
                 }
-                if (locationDeclined) recorder.warnings.add("location-declined")
+                // Declined at the page's question, and still off: a user who switched it on later has not declined.
+                if (locationDeclined && !sensors.locationEnabled) recorder.warnings.add("location-declined")
                 if (!locationDeclined && (scan.options.location || sensors.locationEnabled)) {
                     if (!sensors.locationEnabled && locationDenied) recorder.warnings.add("location-permission-denied")
                     else if (sensors.locationEnabled && sensorCapture?.fixes.isNullOrEmpty()) recorder.warnings.add("location-unavailable")
@@ -1207,6 +1265,9 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                             put("minOffsetNs", clock.minOffsetNs)
                             put("maxOffsetNs", clock.maxOffsetNs)
                             put("frames", clock.frames)
+                            put("deltaP10Ns", clock.deltaP10Ns)
+                            put("deltaP50Ns", clock.deltaP50Ns)
+                            put("deltaP90Ns", clock.deltaP90Ns)
                             put("source", "elapsedRealtimeNanos at frame delivery minus frame.timestamp, 10th percentile of the last 60 frames")
                         })
                     }
@@ -1304,7 +1365,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         private const val TAG = "ScanActivity"
         private const val EXTRA_SESSION_ID = "sessionId"
         private const val PROGRESS_INTERVAL_NS = 500_000_000L
-        private const val INSET_PADDING_PX = 16
+        private const val INSET_PADDING_DP = 8
         private const val MENU_MARK = 1
         private const val MENU_MODEL = 2
 

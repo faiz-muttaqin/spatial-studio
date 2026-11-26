@@ -30,6 +30,8 @@
 
         <LinearLayout
             android:id="@+id/scan_bar"
+            android:clickable="true"
+            android:focusable="false"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:background="@drawable/bg_bar"
@@ -95,6 +97,8 @@
 
                 <TextView
                     android:id="@+id/scan_floor_chip"
+                    android:clickable="true"
+                    android:focusable="true"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:background="@drawable/bg_chip"
@@ -109,6 +113,8 @@
                 <!-- Minimap (the live preview page), small and semi-transparent; sized in code to a third of the width. -->
                 <FrameLayout
                     android:id="@+id/scan_live"
+                    android:clickable="true"
+                    android:focusable="false"
                     android:layout_width="120dp"
                     android:layout_height="160dp"
                     android:layout_marginTop="6dp"
@@ -124,6 +130,8 @@
 
             <LinearLayout
                 android:id="@+id/scan_info_card"
+                android:clickable="true"
+                android:focusable="false"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:background="@drawable/bg_card"
@@ -163,6 +171,8 @@
 
         <LinearLayout
             android:id="@+id/scan_mark_panel"
+            android:clickable="true"
+            android:focusable="false"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="8dp"
@@ -209,6 +219,7 @@
 
                 <Button
                     android:id="@+id/scan_mark_undo"
+                    android:minHeight="48dp"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"
@@ -217,6 +228,7 @@
 
             <CheckBox
                 android:id="@+id/scan_mark_ceiling"
+                android:minHeight="48dp"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:checked="true"
@@ -227,6 +239,8 @@
 
         <LinearLayout
             android:id="@+id/scan_resume_card"
+            android:clickable="true"
+            android:focusable="false"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="8dp"
@@ -247,6 +261,7 @@
 
             <Button
                 android:id="@+id/scan_resume"
+                android:minHeight="48dp"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
@@ -255,6 +270,8 @@
 
         <TextView
             android:id="@+id/scan_guidance"
+            android:clickable="true"
+            android:focusable="false"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
@@ -283,6 +300,8 @@
 
                 <TextView
                     android:id="@+id/scan_counter"
+                    android:clickable="true"
+                    android:focusable="false"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_gravity="start|center_vertical"

@@ -397,10 +397,17 @@ class FrameClockEstimator(
     private val minSamples: Int = 20,
     private val percentile: Double = 0.1,
     private val nominalLatencyNs: Long = 30_000_000L,
-    private val bootClockMaxNs: Long = 100_000_000L,
+    /**
+     * A low percentile up to this is taken as delivery latency on the boot clock. Real latency on a busy GL thread
+     * can pass 100 ms, and an offset smaller than this cannot be told from latency: it is left unapplied.
+     */
+    private val bootClockMaxNs: Long = 500_000_000L,
     private val bootClockMinNs: Long = -5_000_000L,
+    /** The percentiles are recomputed every this many frames, not on every frame. */
+    private val refreshEvery: Int = 5,
 ) {
     private val deltas = ArrayDeque<Long>()
+    private var sinceRefresh = 0
 
     /** Add to a frame timestamp to get the sensor clock's time of the same instant. Valid once [ready]. */
     @Volatile
@@ -434,6 +441,29 @@ class FrameClockEstimator(
     var offsetApplied = false
         private set
 
+    /** The 10th, 50th and 90th percentile of delivery delta in the window at the last refresh, for offline diagnosis. */
+    @Volatile
+    var deltaP10Ns = 0L
+        private set
+
+    @Volatile
+    var deltaP50Ns = 0L
+        private set
+
+    @Volatile
+    var deltaP90Ns = 0L
+        private set
+
+    /**
+     * Forgets the window: call after anything that can move the frame clock's base (a session reconfigure), so the
+     * old base cannot outvote the new one. Not [ready] again until [minSamples] frames have arrived.
+     */
+    fun reset() {
+        deltas.clear()
+        sinceRefresh = 0
+        ready = false
+    }
+
     /** [frameNs] is `frame.timestamp`, [elapsedNs] the boot-time clock as the frame was delivered. */
     fun add(frameNs: Long, elapsedNs: Long) {
         if (frameNs <= 0L) return
@@ -441,12 +471,18 @@ class FrameClockEstimator(
         if (deltas.size > window) deltas.removeFirst()
         frames++
         if (deltas.size < minSamples) return
+        // The first estimate comes as soon as the window is big enough, then every few frames.
+        if (ready && ++sinceRefresh < refreshEvery) return
+        sinceRefresh = 0
         val sorted = deltas.sorted()
         val low = sorted[((sorted.size - 1) * percentile).toInt()]
+        deltaP10Ns = low
+        deltaP50Ns = sorted[(sorted.size - 1) / 2]
+        deltaP90Ns = sorted[((sorted.size - 1) * 0.9).toInt()]
         val onBootClock = low in bootClockMinNs..bootClockMaxNs
         offsetNs = if (onBootClock) 0L else low - nominalLatencyNs
         method = if (onBootClock) METHOD_BOOT_CLOCK else METHOD_LOW_PERCENTILE
-        if (!ready) {
+        if (!ready && frames <= deltas.size) {
             minOffsetNs = offsetNs
             maxOffsetNs = offsetNs
         } else {

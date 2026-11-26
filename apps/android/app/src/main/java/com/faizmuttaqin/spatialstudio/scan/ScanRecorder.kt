@@ -103,20 +103,18 @@ class ScanRecorder(
     /** The user says the pose is fine: resume recording from here. Handled on the next GL frame. */
     fun requestResume() = resumeRequested.set(true)
 
-    /** GL thread, after ARCore accepted (or the user switched off) the torch configuration. */
-    fun setTorch(active: Boolean) {
+    /**
+     * The torch as the session is configured now (ready state, or session creation). The three torch warnings are
+     * recomputed from this state, so toggling in the ready state leaves no stale or duplicate warning.
+     * [supported] is what `session.isSupported` said, null when the torch was never asked for.
+     */
+    fun setTorchState(active: Boolean, supported: Boolean?, configureFailed: Boolean, lightDegraded: Boolean) {
         torchActive = active
-    }
-
-    /** What `session.isSupported` said; false adds `torch-unsupported`. */
-    fun torchProbed(supported: Boolean) {
         torchSupported = supported
-        if (!supported) warnings.add(WARNING_TORCH_UNSUPPORTED)
-    }
-
-    fun torchConfigureFailed() {
-        torchActive = false
-        warnings.add(WARNING_TORCH_CONFIGURE_FAILED)
+        for (warning in TORCH_WARNINGS) warnings.remove(warning)
+        if (supported == false) warnings.add(WARNING_TORCH_UNSUPPORTED)
+        if (configureFailed) warnings.add(WARNING_TORCH_CONFIGURE_FAILED)
+        if (lightDegraded) warnings.add(WARNING_LIGHT_DEGRADED_FOR_TORCH)
     }
 
 
@@ -713,6 +711,8 @@ class ScanRecorder(
         const val WARNING_SKIPPED_FAST = "keyframes-skipped-fast"
         const val WARNING_TORCH_UNSUPPORTED = "torch-unsupported"
         const val WARNING_TORCH_CONFIGURE_FAILED = "torch-configure-failed"
+        const val WARNING_LIGHT_DEGRADED_FOR_TORCH = "light-estimation-degraded-for-torch"
+        private val TORCH_WARNINGS = listOf(WARNING_TORCH_UNSUPPORTED, WARNING_TORCH_CONFIGURE_FAILED, WARNING_LIGHT_DEGRADED_FOR_TORCH)
         private const val MAX_POSE_JUMPS = 50
         private const val COVERAGE_DEPTH_INTERVAL_NS = 250_000_000L
         private const val EDGE_INTERVAL_NS = 333_000_000L

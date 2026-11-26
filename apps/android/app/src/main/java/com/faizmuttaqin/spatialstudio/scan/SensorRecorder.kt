@@ -53,6 +53,10 @@ class FrameClockReport(
     val minOffsetNs: Long,
     val maxOffsetNs: Long,
     val frames: Int,
+    /** The 10th, 50th and 90th percentile of delivery delta at the last refresh, so a base shift can be told from latency offline. */
+    val deltaP10Ns: Long,
+    val deltaP50Ns: Long,
+    val deltaP90Ns: Long,
 )
 
 /**
@@ -127,8 +131,20 @@ class SensorRecorder(
         heading.clear()
         pressure.clear()
         diagnostics.clear()
+        fixes.clear()
         recording = true
+        // A very recent last-known fix (the place, for the declination) is offered again, now that fixes are kept.
+        if (locationOn && locationRegistered) offerLastKnown()
     }
+
+    /**
+     * The ARCore session was reconfigured: the frame clock's base may have moved. The estimate starts again, and
+     * [clockReady] says when pairing can be trusted. Safe from the GL thread.
+     */
+    fun resetFrameClock() = frameClock.reset()
+
+    /** True when headings would pair correctly now: sensors off (nothing to pair) or the frame clock estimated. */
+    val clockReady: Boolean get() = !sensorsOn || frameClock.ready
 
     /** Main thread. Closes every listener and the sensor thread. */
     fun stop() {
@@ -235,7 +251,10 @@ class SensorRecorder(
             warnings = warnings,
             diagnostics = "clocks=frame:${frameClock.method}${if (frameClock.ready) "" else "(pending)"},sensor:${sensorClock.state} ${diagnostics.summary()}".trim(),
             frameClock = if (frameClock.ready) {
-                FrameClockReport(frameClock.method, frameClock.offsetNs, frameClock.minOffsetNs, frameClock.maxOffsetNs, frameClock.frames)
+                FrameClockReport(
+                    frameClock.method, frameClock.offsetNs, frameClock.minOffsetNs, frameClock.maxOffsetNs, frameClock.frames,
+                    frameClock.deltaP10Ns, frameClock.deltaP50Ns, frameClock.deltaP90Ns,
+                )
             } else {
                 null
             },
@@ -308,7 +327,7 @@ class SensorRecorder(
     }
 
     private fun onFix(location: Location) {
-        if (!locationOn || !location.hasAccuracy()) return
+        if (!recording || !locationOn || !location.hasAccuracy()) return
         val lat = location.latitude
         val lng = location.longitude
         if (!(lat.isFinite() && lng.isFinite() && lat in -90.0..90.0 && lng in -180.0..180.0)) return
@@ -333,10 +352,6 @@ class SensorRecorder(
                 if (provider != LocationManager.PASSIVE_PROVIDER && !manager.isProviderEnabled(provider)) continue
                 manager.requestLocationUpdates(provider, LOCATION_INTERVAL_MS, 0f, locationListener, looper)
                 any = true
-                // A very recent last-known fix gives the declination at once; an old one is not the capture place.
-                manager.getLastKnownLocation(provider)
-                    ?.takeIf { System.currentTimeMillis() - it.time <= MAX_LAST_KNOWN_AGE_MS }
-                    ?.let(::onFix)
             } catch (e: SecurityException) {
                 Log.w(TAG, "Location provider $provider refused: permission", e)
             } catch (e: IllegalArgumentException) {
@@ -344,6 +359,29 @@ class SensorRecorder(
             }
         }
         locationRegistered = any
+        // Only counts once recording has begun (see onFix); this covers location switched on during recording.
+        if (any && recording) offerLastKnown()
+    }
+
+    /** A very recent last-known fix gives the declination at once; an old one is not the capture place. */
+    private fun offerLastKnown() {
+        val manager = locationManager ?: return
+        val providers = buildList {
+            add(LocationManager.NETWORK_PROVIDER)
+            if (Build.VERSION.SDK_INT >= 31) add(LocationManager.FUSED_PROVIDER)
+            add(LocationManager.PASSIVE_PROVIDER)
+        }
+        for (provider in providers) {
+            try {
+                manager.getLastKnownLocation(provider)
+                    ?.takeIf { System.currentTimeMillis() - it.time <= MAX_LAST_KNOWN_AGE_MS }
+                    ?.let(::onFix)
+            } catch (e: SecurityException) {
+                Log.w(TAG, "Last known location refused: permission", e)
+            } catch (e: IllegalArgumentException) {
+                // The provider is not there on this phone.
+            }
+        }
     }
 
     private fun unregisterLocation() {
