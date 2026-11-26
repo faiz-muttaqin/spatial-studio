@@ -75,6 +75,11 @@ export const MAX_CEILING_HEIGHT = 6
 export const MIN_WALL_HEIGHT = 1.2
 /** A wall whose bottom floats this far above the floor is a mirror, shelf or ghost. */
 const MAX_WALL_BOTTOM_ABOVE_FLOOR = 0.5
+/** A shorter plane may be part of a wall when its bottom or top is this close to the floor or ceiling. */
+const PARTIAL_ANCHOR = 0.25
+/** Below these a shorter plane is furniture whatever agrees with it. */
+const MIN_PARTIAL_WALL_HEIGHT = 0.5
+const MIN_PARTIAL_WALL_WIDTH = 0.6
 /** A floor plane must sit this close to where the walls stand. */
 const FLOOR_WALL_TOLERANCE = 0.25
 const SMALL_FLOOR_AREA = 2
@@ -291,31 +296,53 @@ function median(values: number[]): number {
 }
 
 /**
- * The vertical planes that can be room walls: tall enough and standing on the floor. Furniture
- * fronts, mirror ghosts and floating panels come back in `rejected` with the reason.
+ * The vertical planes that can be room walls. Tall planes standing on the floor are `walls`. Planes
+ * that cover only part of the height but stand on the floor or reach the ceiling, and are wide and
+ * tall enough, are `partial`: ARCore often sees only the lower part of a plain wall, but a cabinet
+ * front looks the same, so they count only once another source agrees (`confirmPartialWalls`).
+ * Furniture fronts, mirror ghosts and floating panels come back in `rejected` with the reason.
  */
 export function selectRoomWalls(analysis: PlaneAnalysis): {
   walls: WallSegment[]
+  partial: WallSegment[]
   rejected: Array<{ planeId: string; reason: string }>
 } {
-  const reference = analysis.floor?.y ?? analysis.wallFloorY
+  const floor = analysis.floor?.y ?? analysis.wallFloorY
+  const ceiling = analysis.ceiling?.y ?? null
   const walls: WallSegment[] = []
+  const partial: WallSegment[] = []
   const rejected: Array<{ planeId: string; reason: string }> = []
   for (const wall of analysis.walls) {
     const height = wall.top - wall.bottom
-    if (height < MIN_WALL_HEIGHT) {
-      rejected.push({
-        planeId: wall.planeId,
-        reason: `a ${round(height, 2)} m tall vertical plane: furniture, not a room wall`,
-      })
-    } else if (reference !== null && wall.bottom - reference > MAX_WALL_BOTTOM_ABOVE_FLOOR) {
-      rejected.push({
-        planeId: wall.planeId,
-        reason: `a vertical plane ${round(wall.bottom - reference, 2)} m above the floor: a mirror, shelf or ghost`,
-      })
-    } else walls.push(wall)
+    const aboveFloor = floor === null ? null : wall.bottom - floor
+    const floating = aboveFloor !== null && aboveFloor > MAX_WALL_BOTTOM_ABOVE_FLOOR
+    if (height >= MIN_WALL_HEIGHT && !floating) {
+      walls.push(wall)
+      continue
+    }
+    const anchored =
+      (aboveFloor !== null && Math.abs(aboveFloor) <= PARTIAL_ANCHOR) ||
+      (ceiling !== null && Math.abs(ceiling - wall.top) <= PARTIAL_ANCHOR)
+    const reject = (reason: string) => rejected.push({ planeId: wall.planeId, reason })
+    if (!anchored && floating) {
+      reject(
+        `a vertical plane ${round(aboveFloor, 2)} m above the floor that does not reach the ceiling: a mirror, shelf or ghost`,
+      )
+    } else if (!anchored) {
+      reject(
+        floor === null && ceiling === null
+          ? `a ${round(height, 2)} m tall vertical plane, with no floor or ceiling level to check it against: furniture, not a room wall`
+          : `a ${round(height, 2)} m tall vertical plane that neither stands on the floor nor reaches the ceiling: furniture, not a room wall`,
+      )
+    } else if (height < MIN_PARTIAL_WALL_HEIGHT) {
+      reject(`a ${round(height, 2)} m tall vertical plane: furniture, not a room wall`)
+    } else if (wall.length < MIN_PARTIAL_WALL_WIDTH) {
+      reject(
+        `a ${round(wall.length, 2)} m wide, ${round(height, 2)} m tall vertical plane: too narrow to be part of a wall, furniture`,
+      )
+    } else partial.push(wall)
   }
-  return { walls, rejected }
+  return { walls, partial, rejected }
 }
 
 function wallSegment(

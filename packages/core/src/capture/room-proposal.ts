@@ -11,6 +11,7 @@ import {
   pointInPolygon,
 } from './depth-walls'
 import { type CarvedOutline, carveRoomOutline } from './free-space-carving'
+import { confirmPartialWalls, type PartialWall, type PartialWallSources } from './partial-walls'
 import {
   analysePlanes,
   captureToLevel,
@@ -168,6 +169,18 @@ type Line = {
   basis: LineBasis
   /** The members that are real plane ids; the others are depth or floor-boundary candidates. */
   realPlaneIds: string[]
+  /**
+   * Set when the line's only planes cover part of the wall height: the highest confidence its edge
+   * may get and why the planes were used. Null when a full-height plane backs it, or no plane does.
+   */
+  partial: { cap: 'medium' | 'low'; ids: string[]; reasons: string[] } | null
+}
+
+/** The vertical planes taken as walls, and the rest with the reason. */
+type ChosenWalls = {
+  walls: WallSegment[]
+  partial: PartialWall[]
+  rejected: Array<{ planeId: string; reason: string }>
 }
 
 /** Planes must cover this much of a merged line before it counts as plane-based. */
@@ -191,7 +204,35 @@ export function proposeRoomFromPlanes(
   transform: ScanTransform = IDENTITY_SCAN_TRANSFORM,
 ): RoomProposal {
   const analysis = analysePlanes(planes, transform)
-  return fromAnalysis(analysis)
+  return fromAnalysis(
+    analysis,
+    confirmWalls(selectRoomWalls(analysis), {
+      depth: null,
+      carved: null,
+      floorPolygons: analysis.floor
+        ? floorPolygonsFromPlanes(planes, transform, analysis.floor.y)
+        : [],
+      path: new Float32Array(0),
+    }),
+  )
+}
+
+/** Full-height planes as walls, plus the partial planes `confirmPartialWalls` takes as wall evidence. */
+function confirmWalls(
+  selected: ReturnType<typeof selectRoomWalls>,
+  sources: Omit<PartialWallSources, 'walls'>,
+): ChosenWalls {
+  const confirmed = confirmPartialWalls(selected.partial, { ...sources, walls: selected.walls })
+  return {
+    walls: selected.walls,
+    partial: confirmed.partial,
+    rejected: [...selected.rejected, ...confirmed.rejected],
+  }
+}
+
+/** True when the proposal has an outline with no assumed edge. */
+function closes(proposal: RoomProposal | null): boolean {
+  return Boolean(proposal?.polygon) && proposal!.edges.every((edge) => edge.basis !== 'assumed')
 }
 
 /**
@@ -209,10 +250,19 @@ export function proposeRoom(input: RoomProposalInput): RoomProposal {
   const manual = input.measurements
   const unknowns: string[] = []
   const path = walkedPathToLevel(input.walkedPath ?? null, transform)
+  const floorPolygons =
+    analysis?.floor && input.planes
+      ? floorPolygonsFromPlanes(input.planes, transform, analysis.floor.y)
+      : []
 
-  // Planes alone first. Depth is read as well, for glass and path checks, but it only supplies walls
-  // when the planes leave the outline open or missing.
-  const planesOnly = analysis ? fromAnalysis(analysis) : null
+  // Planes alone first. Depth is read as well, for glass and path checks and to confirm planes that
+  // cover part of a wall's height, but it only supplies walls when the planes leave the outline open
+  // or missing.
+  const selected = analysis ? selectRoomWalls(analysis) : null
+  const fullPlanes =
+    analysis && selected
+      ? fromAnalysis(analysis, { walls: selected.walls, partial: [], rejected: selected.rejected })
+      : null
   const depthFrames = input.depthFrames ?? []
   const evidence =
     depthFrames.length > 0
@@ -222,34 +272,33 @@ export function proposeRoom(input: RoomProposalInput): RoomProposal {
           ceilingY: analysis?.ceiling?.y ?? null,
           typedHeight: manual?.room.height ?? null,
           path,
-          floorPolygons:
-            analysis?.floor && input.planes
-              ? floorPolygonsFromPlanes(input.planes, transform, analysis.floor.y)
-              : [],
+          floorPolygons,
         })
       : null
-  const planesClosed =
-    Boolean(planesOnly?.polygon) && planesOnly!.edges.every((edge) => edge.basis !== 'assumed')
-  const combined = evidence && !planesClosed ? fromAnalysis(analysis, evidence, path) : null
-  const fromLines =
-    combined && (combined.polygon || !planesOnly?.polygon) ? combined : (planesOnly ?? null)
 
-  // Free-space carving is a third evidence source for the outline. It runs when planes did not close
-  // the outline and is chosen by `chooseOutline`.
+  // Free-space carving is a third evidence source for the outline, and tells a partial plane from
+  // furniture standing in the room. It runs when full-height planes did not close the outline and
+  // is chosen by `chooseOutline`.
   const carved =
-    depthFrames.length > 0 && !planesClosed
+    depthFrames.length > 0 && !closes(fullPlanes)
       ? carveRoomOutline(depthFrames, {
           transform,
           floorY: analysis?.floor?.y ?? null,
           ceilingY: analysis?.ceiling?.y ?? null,
           typedHeight: manual?.room.height ?? null,
           path,
-          floorPolygons:
-            analysis?.floor && input.planes
-              ? floorPolygonsFromPlanes(input.planes, transform, analysis.floor.y)
-              : [],
+          floorPolygons,
         })
       : null
+  const chosen = selected
+    ? confirmWalls(selected, { depth: evidence, carved, floorPolygons, path })
+    : null
+  const planesOnly =
+    analysis && chosen && selected!.partial.length > 0 ? fromAnalysis(analysis, chosen) : fullPlanes
+  const planesClosed = closes(planesOnly)
+  const combined = evidence && !planesClosed ? fromAnalysis(analysis, chosen, evidence, path) : null
+  const fromLines =
+    combined && (combined.polygon || !planesOnly?.polygon) ? combined : (planesOnly ?? null)
   const choice = chooseOutline(fromLines, carved, path)
   const fromPlanes =
     choice.useCarved && carved ? proposalFromCarved(carved, fromLines, evidence, path) : fromLines
@@ -722,6 +771,7 @@ function summariseDepth(
 
 function fromAnalysis(
   analysis: PlaneAnalysis | null,
+  chosen: ChosenWalls | null,
   depth: DepthWallEvidence | null = null,
   path: Float32Array = new Float32Array(0),
 ): RoomProposal {
@@ -741,10 +791,11 @@ function fromAnalysis(
         ? { value: round(depthHeight, 2), basis: 'depth-estimate' as const }
         : null
 
-  const selected = analysis ? selectRoomWalls(analysis) : { walls: [], rejected: [] }
+  const selected = chosen ?? { walls: [], partial: [], rejected: [] }
   planesIgnored.push(...selected.rejected)
   const sources = new Map<string, LineBasis>()
-  const segments: WallSegment[] = [...selected.walls]
+  const partialById = new Map(selected.partial.map((wall) => [wall.planeId, wall]))
+  const segments: WallSegment[] = [...selected.walls, ...selected.partial]
   if (depth) {
     const floorY = analysis?.floor?.y ?? depth.vertical.floorY ?? 0
     const top = depth.vertical.ceilingY ?? floorY + 2.4
@@ -763,7 +814,7 @@ function fromAnalysis(
       planesIgnored.push({ planeId: rejected.id, reason: rejected.reason })
     }
   }
-  const competing = dropCompetingLines(mergeWalls(segments, sources))
+  const competing = dropCompetingLines(mergeWalls(segments, sources, partialById))
   const lines = competing.lines
   for (const dropped of competing.dropped) planesIgnored.push(...dropped)
   const base = {
@@ -835,6 +886,12 @@ function fromAnalysis(
     unknowns.push('The outline crosses itself; treat it as a rough guide and check the corners.')
   }
   const usedIds = new Set(order.flatMap((index) => lines[index]!.planeIds))
+  const partialUsed = [...usedIds].filter((id) => partialById.has(id))
+  if (partialUsed.length > 0) {
+    unknowns.push(
+      `Wall plane${partialUsed.length === 1 ? '' : 's'} ${partialUsed.join(', ')} cover${partialUsed.length === 1 ? 's' : ''} only part of the wall height (ARCore often sees only the lower part of a plain wall). ${partialUsed.length === 1 ? 'It was' : 'They were'} used because another source agrees or ${partialUsed.length === 1 ? 'it is' : 'they are'} wide and outside the walked area, but a cabinet or bed front can look the same, so edges resting on them are rated medium at most. Check them on site.`,
+    )
+  }
   if (depth && [...usedIds].some((id) => sources.has(id))) {
     unknowns.push(
       'Some edges are lines fitted to depth points or floor-plane edges. They are inferences from points the camera saw, not measured walls; check them on site.',
@@ -864,14 +921,13 @@ function dropCompetingLines(lines: Line[]): {
   lines: Line[]
   dropped: Array<Array<{ planeId: string; reason: string }>>
 } {
-  // Planes outrank depth fits, which outrank floor boundaries; within a rank the longer line wins.
+  // Planes outrank depth fits, which outrank floor boundaries; full-height planes outrank planes on
+  // part of the wall height; within a rank the longer line wins.
+  const rank = (line: Line) =>
+    BASIS_RANK[line.basis] * 2 + (line.basis === 'plane-estimate' && line.partial ? 0 : 1)
   const order = lines
     .map((_, index) => index)
-    .sort(
-      (i, j) =>
-        BASIS_RANK[lines[j]!.basis] - BASIS_RANK[lines[i]!.basis] ||
-        lines[j]!.length - lines[i]!.length,
-    )
+    .sort((i, j) => rank(lines[j]!) - rank(lines[i]!) || lines[j]!.length - lines[i]!.length)
   const kept: number[] = []
   const dropped: Array<Array<{ planeId: string; reason: string }>> = []
   for (const index of order) {
@@ -908,7 +964,11 @@ function competes(a: Line, b: Line): boolean {
   return Math.min(a.tMax, hi) - Math.max(a.tMin, lo) >= COMPETE_OVERLAP
 }
 
-function mergeWalls(walls: readonly WallSegment[], sources: SegmentSources): Line[] {
+function mergeWalls(
+  walls: readonly WallSegment[],
+  sources: SegmentSources,
+  partialById: ReadonlyMap<string, PartialWall>,
+): Line[] {
   const parent = walls.map((_, index) => index)
   const find = (index: number): number => {
     while (parent[index] !== index) index = parent[index] = parent[parent[index]!]!
@@ -979,6 +1039,8 @@ function mergeWalls(walls: readonly WallSegment[], sources: SegmentSources): Lin
           : others.length > 0
             ? 'floor-boundary'
             : 'plane-estimate'
+    const realPlaneIds = group.filter(isPlane).map((wall) => wall.planeId)
+    const partials = realPlaneIds.flatMap((id) => partialById.get(id) ?? [])
     return {
       q,
       d,
@@ -987,7 +1049,15 @@ function mergeWalls(walls: readonly WallSegment[], sources: SegmentSources): Lin
       length: tMax - tMin,
       planeIds: group.map((wall) => wall.planeId),
       basis,
-      realPlaneIds: group.filter(isPlane).map((wall) => wall.planeId),
+      realPlaneIds,
+      partial:
+        partials.length > 0 && partials.length === realPlaneIds.length
+          ? {
+              cap: partials.some((wall) => wall.cap === 'medium') ? 'medium' : 'low',
+              ids: partials.map((wall) => wall.planeId),
+              reasons: partials.map((wall) => wall.reason),
+            }
+          : null,
     }
   })
 }
@@ -1288,7 +1358,7 @@ function buildOutline(
     const startGap = i === 0 && !closed ? null : cornerGap(step)
     const endGap =
       i + 1 < steps.length ? cornerGap(steps[i + 1]!) : closed ? cornerGap(steps[0]!) : null
-    const { confidence, reason } = rateEdge(length, line.length, startGap, endGap, line.basis)
+    const { confidence, reason } = rateEdge(length, line, startGap, endGap)
     edges.push({
       index: i,
       from: roundPoint(from),
@@ -1312,10 +1382,24 @@ function cornerGap(step: Step): number {
 
 function rateEdge(
   edgeLength: number,
-  observedLength: number,
+  line: Line,
   startGap: number | null,
   endGap: number | null,
-  basis: LineBasis,
+): { confidence: EdgeConfidence; reason: string } {
+  const rated = rateBasis(edgeLength, line, startGap, endGap)
+  if (!line.partial) return rated
+  // A plane on part of the wall height may be a furniture front, so it never makes an edge high.
+  return {
+    confidence: line.partial.cap === 'low' || rated.confidence === 'low' ? 'low' : 'medium',
+    reason: `Planes on part of the wall height: ${line.partial.reasons.join('; ')}. ${rated.reason}`,
+  }
+}
+
+function rateBasis(
+  edgeLength: number,
+  { basis, length: observedLength }: Line,
+  startGap: number | null,
+  endGap: number | null,
 ): { confidence: EdgeConfidence; reason: string } {
   const rated = rateGeometry(edgeLength, observedLength, startGap, endGap)
   if (basis === 'floor-boundary') {
