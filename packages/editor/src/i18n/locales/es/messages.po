@@ -2613,13 +2613,13 @@ msgstr "Abriendo el escáner…"
 msgid "app.scan.native.torch"
 msgstr "Usar la linterna (experimento)"
 
-# Source-Hash: f21d72fefa946b08
+# English: "The starting choice: you can change it on the phone before recording. It is locked once recording starts. Tracking may be less reliable with the torch on."
+# Source-Hash: 430eeaba447b99e8
 # Review: required
-# English: "Set before the scan and kept on throughout. Tracking may be less reliable with the torch on."
 #: apps/editor/app/scan/native-scan.tsx
 #, fuzzy
-msgid "app.scan.native.torchHint"
-msgstr "Se elige antes del escaneo y se mantiene encendida. El seguimiento puede ser menos fiable con la linterna encendida."
+msgid "app.scan.native.torchHintStart"
+msgstr "Elección inicial: puedes cambiarla en el teléfono antes de grabar. Se bloquea cuando empieza la grabación. El seguimiento puede ser menos fiable con la linterna encendida."
 
 # Source-Hash: 7b4c9586b0ee1fe3
 # Review: required

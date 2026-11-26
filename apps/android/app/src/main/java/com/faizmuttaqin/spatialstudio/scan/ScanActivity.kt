@@ -23,6 +23,8 @@ import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.CheckBox
+import android.widget.ImageButton
+import android.widget.PopupMenu
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.Spinner
@@ -79,28 +81,38 @@ import javax.microedition.khronos.opengles.GL10
  */
 class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
 
-    private enum class Phase { STARTING, SCANNING, FINALIZING, DONE }
+    /**
+     * STARTING: the camera is coming up. READY: camera and tracking run, nothing is recorded, and the torch, sensors
+     * and location can change. SCANNING: recording; the ARCore configuration is fixed from here on.
+     */
+    private enum class Phase { STARTING, READY, SCANNING, FINALIZING, DONE }
 
     private lateinit var scan: ScanCoordinator.ActiveScan
     private lateinit var store: ScanStore
     private lateinit var surface: GLSurfaceView
     private lateinit var statusText: TextView
     private lateinit var statsText: TextView
-    private lateinit var hintText: TextView
-    private lateinit var finishButton: Button
-    private lateinit var cancelButton: Button
     private lateinit var sensorsText: TextView
-    private lateinit var sensorsToggle: CheckBox
-    private lateinit var locationToggle: CheckBox
     private lateinit var guidanceText: TextView
+    private lateinit var counterText: TextView
+    private lateinit var floorChip: TextView
+    private lateinit var infoCard: View
+    private lateinit var crosshair: View
+    private lateinit var backButton: ImageButton
+    private lateinit var primaryButton: ImageButton
+    private lateinit var toolsButton: ImageButton
+    private lateinit var torchButton: ImageButton
+    private lateinit var sensorsButton: ImageButton
+    private lateinit var locationButton: ImageButton
+    private lateinit var infoButton: ImageButton
+    private lateinit var resumeCard: View
+    private lateinit var resumeText: TextView
     private lateinit var resumeButton: Button
-    private lateinit var markToggle: Button
     private lateinit var markPanel: View
     private lateinit var markStatus: TextView
     private lateinit var markKind: Spinner
     private lateinit var markHeight: EditText
     private lateinit var markUndo: Button
-    private lateinit var markConfirm: Button
     private lateinit var markCeiling: CheckBox
     private lateinit var liveContainer: FrameLayout
     private var livePanel: LivePanel? = null
@@ -113,7 +125,6 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
     @Volatile private var heightText = ""
     @Volatile private var toCeiling = true
     private val pendingTap = AtomicReference<FloatArray?>(null)
-    private val confirmRequested = java.util.concurrent.atomic.AtomicBoolean(false)
 
     /** A tapped floor point waiting for Confirm; shown in the camera view. */
     @Volatile private var candidate: BasePoint? = null
@@ -132,7 +143,11 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
     private var lightMode = Config.LightEstimationMode.DISABLED
     private var locationRequested = false
     private var locationDenied = false
-    private var updatingToggles = false
+    private val explained = HashSet<Int>()
+    @Volatile private var trackingNow = false
+    private var everTracked = false
+    private val torchRequest = AtomicReference<Boolean?>(null)
+    private val lightRequest = AtomicReference<Boolean?>(null)
 
     // Torch experiment (v1.3): decided at session configure from options.torch; never changed mid-scan, because
     // a reconfigure disturbs tracking and shifts the frame clock (device finding of 2026-11-25).
@@ -153,7 +168,6 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
     private val edgeOverlay = EdgeOverlay()
     private val edgePose = FloatArray(16)
     @Volatile private var showModel = true
-    private lateinit var modelToggle: Button
     private var textureBound = false
     private var viewportWidth = 0
     private var viewportHeight = 0
@@ -171,6 +185,9 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         if (!granted) {
             locationDenied = true
             Toast.makeText(this, R.string.scan_location_denied, Toast.LENGTH_LONG).show()
+        } else {
+            locationDenied = false
+            locationDeclined = false
         }
         // Before the session exists, createSession reads the permission state on the next resume.
         sensorRecorder?.let { recorder ->
@@ -198,57 +215,44 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         surface = ActivityCompat.requireViewById(this, R.id.scan_surface)
         statusText = ActivityCompat.requireViewById(this, R.id.scan_status)
         statsText = ActivityCompat.requireViewById(this, R.id.scan_stats)
-        hintText = ActivityCompat.requireViewById(this, R.id.scan_hint)
-        finishButton = ActivityCompat.requireViewById(this, R.id.scan_finish)
-        cancelButton = ActivityCompat.requireViewById(this, R.id.scan_cancel)
         sensorsText = ActivityCompat.requireViewById(this, R.id.scan_sensors)
-        sensorsToggle = ActivityCompat.requireViewById(this, R.id.scan_toggle_sensors)
-        locationToggle = ActivityCompat.requireViewById(this, R.id.scan_toggle_location)
         guidanceText = ActivityCompat.requireViewById(this, R.id.scan_guidance)
+        counterText = ActivityCompat.requireViewById(this, R.id.scan_counter)
+        floorChip = ActivityCompat.requireViewById(this, R.id.scan_floor_chip)
+        infoCard = ActivityCompat.requireViewById(this, R.id.scan_info_card)
+        crosshair = ActivityCompat.requireViewById(this, R.id.scan_crosshair)
+        backButton = ActivityCompat.requireViewById(this, R.id.scan_back)
+        primaryButton = ActivityCompat.requireViewById(this, R.id.scan_primary)
+        toolsButton = ActivityCompat.requireViewById(this, R.id.scan_tools)
+        torchButton = ActivityCompat.requireViewById(this, R.id.scan_btn_torch)
+        sensorsButton = ActivityCompat.requireViewById(this, R.id.scan_btn_sensors)
+        locationButton = ActivityCompat.requireViewById(this, R.id.scan_btn_location)
+        infoButton = ActivityCompat.requireViewById(this, R.id.scan_btn_info)
+        resumeCard = ActivityCompat.requireViewById(this, R.id.scan_resume_card)
+        resumeText = ActivityCompat.requireViewById(this, R.id.scan_resume_text)
         resumeButton = ActivityCompat.requireViewById(this, R.id.scan_resume)
         resumeButton.setOnClickListener {
             recorder?.requestResume()
-            resumeButton.visibility = View.GONE
-        }
-        markToggle = ActivityCompat.requireViewById(this, R.id.scan_mark_toggle)
-        modelToggle = ActivityCompat.requireViewById(this, R.id.scan_model_toggle)
-        modelToggle.setOnClickListener {
-            showModel = !showModel
-            modelToggle.setText(if (showModel) R.string.scan_model_hide else R.string.scan_model_show)
+            resumeCard.visibility = View.GONE
         }
         markPanel = ActivityCompat.requireViewById(this, R.id.scan_mark_panel)
         markStatus = ActivityCompat.requireViewById(this, R.id.scan_mark_status)
         markKind = ActivityCompat.requireViewById(this, R.id.scan_mark_kind)
         markHeight = ActivityCompat.requireViewById(this, R.id.scan_mark_height)
         markUndo = ActivityCompat.requireViewById(this, R.id.scan_mark_undo)
-        markConfirm = ActivityCompat.requireViewById(this, R.id.scan_mark_confirm)
         markCeiling = ActivityCompat.requireViewById(this, R.id.scan_mark_ceiling)
         setUpMarking()
         liveContainer = ActivityCompat.requireViewById(this, R.id.scan_live)
         setUpLivePreview()
-        sensorsToggle.setOnCheckedChangeListener { _, checked ->
-            if (updatingToggles) return@setOnCheckedChangeListener
-            sensorRecorder?.setSensorsEnabled(checked)
-            recorder?.setLightEnabled(checked, lightMode)
-            // Recording only: the ARCore configuration stays fixed once the scan runs (a reconfigure disturbs tracking).
-            if (!checked) sensorsText.setText(R.string.scan_sensors_off)
-        }
-        locationToggle.setOnCheckedChangeListener { _, checked ->
-            if (updatingToggles) return@setOnCheckedChangeListener
-            val sensors = sensorRecorder ?: return@setOnCheckedChangeListener
-            if (checked && !sensors.hasLocationPermission()) {
-                locationPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
-            } else {
-                sensors.setLocationEnabled(checked)
-            }
-        }
+        setUpControls()
 
-        val hud = ActivityCompat.requireViewById<View>(this, R.id.scan_hud)
-        val controls = ActivityCompat.requireViewById<View>(this, R.id.scan_controls)
+        val top = ActivityCompat.requireViewById<View>(this, R.id.scan_top)
+        val bottom = ActivityCompat.requireViewById<View>(this, R.id.scan_bottom)
         ViewCompat.setOnApplyWindowInsetsListener(ActivityCompat.requireViewById(this, R.id.scan_root)) { _, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
-            hud.setPadding(hud.paddingLeft, bars.top + PADDING_PX, hud.paddingRight, hud.paddingBottom)
-            controls.setPadding(controls.paddingLeft, controls.paddingTop, controls.paddingRight, bars.bottom + PADDING_PX)
+            val inset = (INSET_PADDING_DP * resources.displayMetrics.density).toInt()
+            top.setPadding(top.paddingLeft, bars.top + inset, top.paddingRight, top.paddingBottom)
+            bottom.setPadding(bottom.paddingLeft, bottom.paddingTop, bottom.paddingRight, bars.bottom + inset)
             insets
         }
 
@@ -259,12 +263,10 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         surface.renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
         surface.setWillNotDraw(false)
 
-        finishButton.setOnClickListener { finishScan() }
-        cancelButton.setOnClickListener { cancelScan() }
         onBackPressedDispatcher.addCallback(
             this,
             object : OnBackPressedCallback(true) {
-                override fun handleOnBackPressed() = cancelScan()
+                override fun handleOnBackPressed() = confirmCancel()
             },
         )
         ScanCoordinator.state(scan.sessionId, "starting")
@@ -289,15 +291,14 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         }
         surface.onResume()
         displayGeometryDirty = true
+        // The camera and tracking run in the ready state; nothing is recorded until the user taps Record.
         if (phase == Phase.STARTING) {
-            phase = Phase.SCANNING
-            startedAtElapsed = SystemClock.elapsedRealtime()
-            finishButton.isEnabled = true
-            markToggle.isEnabled = true
+            phase = Phase.READY
+            updateControls()
         }
         sensorRecorder?.start()
         livePanel?.onResume()
-        ScanCoordinator.state(scan.sessionId, "scanning")
+        if (phase == Phase.SCANNING) ScanCoordinator.state(scan.sessionId, "scanning")
     }
 
     override fun onPause() {
@@ -406,12 +407,9 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         val scanRecorder = ScanRecorder(dir, scan.options, depthKind)
         scanRecorder.lightMode = lightMode
         scanRecorder.live = liveStream
-        if (scan.options.torch) {
-            torchProbe?.let(scanRecorder::torchProbed)
-            if (torchConfigureFailed) scanRecorder.torchConfigureFailed()
-            if (torchLightDegraded) scanRecorder.warnings.add("light-estimation-degraded-for-torch")
-            scanRecorder.setTorch(torchOn)
-            if (!torchOn) runOnUiThread { Toast.makeText(this, R.string.scan_torch_unsupported, Toast.LENGTH_LONG).show() }
+        scanRecorder.setTorchState(torchOn, torchProbe, torchConfigureFailed, torchLightDegraded)
+        if (scan.options.torch && !torchOn) {
+            runOnUiThread { Toast.makeText(this, R.string.scan_torch_unsupported, Toast.LENGTH_LONG).show() }
         }
         recorder = scanRecorder
         val sensors = SensorRecorder(
@@ -508,6 +506,8 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
      */
     @Suppress("DEPRECATION") // isSupported is the probe the reference uses; the replacement is not in ARCore 1.57.
     private fun applyTorch(session: Session, config: Config): Boolean {
+        torchConfigureFailed = false
+        torchLightDegraded = false
         val originalLight = config.lightEstimationMode
         config.flashMode = Config.FlashMode.TORCH
         var supported = session.isSupported(config)
@@ -534,13 +534,229 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         return false
     }
 
-    private fun setToggles(sensors: SensorRecorder) {
-        runOnUiThread {
-            updatingToggles = true
-            sensorsToggle.isChecked = sensors.sensorsEnabled
-            locationToggle.isChecked = sensors.locationEnabled
-            updatingToggles = false
+    /**
+     * GL thread, ready state only. Changes the torch with the camera running and nothing recorded; tracking may
+     * take a moment to settle, which is why recording waits for the user's tap. Never reached once recording starts.
+     */
+    private fun applyTorchWhileReady(session: Session, recorder: ScanRecorder, want: Boolean) {
+        val config = session.config
+        var on = false
+        try {
+            if (want) {
+                on = applyTorch(session, config)
+            } else {
+                config.flashMode = Config.FlashMode.OFF
+                if (torchLightDegraded) {
+                    // The torch had cost the light estimation its HDR mode; with the torch off, try to give it back.
+                    config.lightEstimationMode = Config.LightEstimationMode.ENVIRONMENTAL_HDR
+                    try {
+                        session.configure(config)
+                    } catch (e: UnsupportedConfigurationException) {
+                        config.lightEstimationMode = Config.LightEstimationMode.AMBIENT_INTENSITY
+                        session.configure(config)
+                    }
+                    torchLightDegraded = false
+                } else {
+                    session.configure(config)
+                }
+                torchConfigureFailed = false
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not change the torch", e)
+            on = false
         }
+        torchOn = on
+        recorder.setTorchState(on, torchProbe, torchConfigureFailed, torchLightDegraded)
+        afterReadyReconfigure(session, recorder)
+        runOnUiThread {
+            updateControls()
+            if (want && !on) Toast.makeText(this, R.string.scan_torch_unsupported, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /**
+     * GL thread, ready state only. Sensors on or off also switches ARCore's light estimation, which needs a
+     * reconfigure that is only allowed before recording.
+     */
+    private fun applyLightWhileReady(session: Session, recorder: ScanRecorder, on: Boolean) {
+        val config = session.config
+        try {
+            config.lightEstimationMode = if (on) Config.LightEstimationMode.ENVIRONMENTAL_HDR else Config.LightEstimationMode.DISABLED
+            try {
+                session.configure(config)
+            } catch (e: UnsupportedConfigurationException) {
+                if (!on) throw e
+                config.lightEstimationMode = Config.LightEstimationMode.AMBIENT_INTENSITY
+                session.configure(config)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not change light estimation", e)
+        }
+        lightMode = session.config.lightEstimationMode
+        // A light mode set for the sensors being on is not "degraded for the torch".
+        if (on) torchLightDegraded = false
+        recorder.setLightEnabled(on, lightMode)
+        recorder.setTorchState(torchOn, torchProbe, torchConfigureFailed, torchLightDegraded)
+        afterReadyReconfigure(session, recorder)
+    }
+
+    /** A reconfigure can move the frame clock's base: the estimate starts again and Record waits for it. */
+    @Suppress("UNUSED_PARAMETER")
+    private fun afterReadyReconfigure(session: Session, recorder: ScanRecorder) {
+        sensorRecorder?.resetFrameClock()
+        runOnUiThread { updateControls() }
+    }
+
+    private fun setToggles(sensors: SensorRecorder) {
+        runOnUiThread { updateControls(sensors) }
+    }
+
+    /** Shows each toggle's state, the primary button's job, and what may still change. UI thread. */
+    private fun updateControls(sensors: SensorRecorder? = sensorRecorder) {
+        val ready = phase == Phase.READY
+        val scanning = phase == Phase.SCANNING
+        val busy = phase == Phase.FINALIZING || phase == Phase.DONE
+        setToggleState(torchButton, torchOn)
+        // Locked once recording starts: still tappable, to read why.
+        torchButton.alpha = if (scanning) 0.5f else 1f
+        sensors?.let {
+            setToggleState(sensorsButton, it.sensorsEnabled)
+            setToggleState(locationButton, it.locationEnabled)
+        }
+        infoButton.isSelected = infoCard.visibility == View.VISIBLE
+        primaryButton.setImageResource(if (scanning) R.drawable.ic_check_dark else R.drawable.ic_record)
+        primaryButton.contentDescription = getString(if (scanning) R.string.scan_finish_description else R.string.scan_record_description)
+        primaryButton.isEnabled = !busy && phase != Phase.STARTING
+        primaryButton.alpha = if (ready && !canRecord()) 0.5f else 1f
+        toolsButton.isEnabled = !busy
+        counterText.visibility = if (scanning) View.VISIBLE else View.INVISIBLE
+    }
+
+    private fun setToggleState(button: ImageButton, on: Boolean) {
+        button.isSelected = on
+        ViewCompat.setStateDescription(button, getString(if (on) R.string.state_on else R.string.state_off))
+    }
+
+    /** Wires the top bar, the round button and the tools menu. */
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    private fun setUpControls() {
+        backButton.setOnClickListener { confirmCancel() }
+        primaryButton.setOnClickListener {
+            when (phase) {
+                Phase.READY -> startRecording()
+                Phase.SCANNING -> finishScan()
+                else -> Unit
+            }
+        }
+        explainable(torchButton, R.string.explain_torch) {
+            if (phase != Phase.READY) {
+                Toast.makeText(this, R.string.torch_locked, Toast.LENGTH_SHORT).show()
+            } else {
+                torchRequest.set(!torchOn)
+            }
+        }
+        explainable(sensorsButton, R.string.explain_sensors) {
+            val sensors = sensorRecorder ?: return@explainable
+            val on = !sensors.sensorsEnabled
+            sensors.setSensorsEnabled(on)
+            if (phase == Phase.READY) {
+                // Light estimation follows the sensors: a reconfigure, which is only allowed before recording.
+                lightRequest.set(on)
+            } else {
+                // Recording only: the ARCore configuration stays fixed (a reconfigure disturbs tracking).
+                recorder?.setLightEnabled(on, lightMode)
+            }
+            if (!on) sensorsText.setText(R.string.scan_sensors_off)
+            updateControls(sensors)
+        }
+        explainable(locationButton, R.string.explain_location) {
+            val sensors = sensorRecorder ?: return@explainable
+            val on = !sensors.locationEnabled
+            if (on && !sensors.hasLocationPermission()) {
+                locationPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+            } else {
+                if (on) locationDeclined = false
+                sensors.setLocationEnabled(on)
+                updateControls(sensors)
+            }
+        }
+        explainable(infoButton, R.string.explain_info) {
+            infoCard.visibility = if (infoCard.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+            updateControls()
+        }
+        toolsButton.setOnClickListener { showTools() }
+        floorChip.setOnClickListener {
+            if (livePanel != null) {
+                liveContainer.visibility = if (liveContainer.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+            }
+        }
+    }
+
+    /** A click that does [action] and, the first time, says what the control is for; a long press always does. */
+    private fun explainable(button: ImageButton, explanation: Int, action: () -> Unit) {
+        button.setOnClickListener {
+            if (explained.add(button.id)) Toast.makeText(this, explanation, Toast.LENGTH_LONG).show()
+            action()
+        }
+        button.setOnLongClickListener {
+            Toast.makeText(this, explanation, Toast.LENGTH_LONG).show()
+            true
+        }
+    }
+
+    private fun showTools() {
+        val menu = PopupMenu(this, toolsButton)
+        menu.menu.add(0, MENU_MARK, 0, if (marking) R.string.tools_mark_stop else R.string.tools_mark)
+        menu.menu.add(0, MENU_MODEL, 1, if (showModel) R.string.scan_model_hide else R.string.scan_model_show)
+        menu.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                MENU_MARK -> {
+                    if (phase != Phase.SCANNING) {
+                        Toast.makeText(this, R.string.tools_mark_need_recording, Toast.LENGTH_SHORT).show()
+                    } else {
+                        setMarking(!marking)
+                    }
+                }
+                MENU_MODEL -> showModel = !showModel
+            }
+            true
+        }
+        menu.show()
+    }
+
+    /** The ready state ends: recording begins, with the ARCore configuration (torch included) as it is now. */
+    /** Tracking, no reconfigure waiting, and the frame clock estimated again after the last one. */
+    private fun canRecord(): Boolean =
+        trackingNow && torchRequest.get() == null && lightRequest.get() == null && sensorRecorder?.clockReady != false
+
+    private fun startRecording() {
+        if (phase != Phase.READY) return
+        if (!canRecord()) {
+            Toast.makeText(this, R.string.scan_wait_tracking, Toast.LENGTH_SHORT).show()
+            return
+        }
+        torchRequest.set(null)
+        lightRequest.set(null)
+        phase = Phase.SCANNING
+        startedAtElapsed = SystemClock.elapsedRealtime()
+        sensorRecorder?.beginRecording()
+        ScanCoordinator.state(scan.sessionId, "scanning")
+        updateControls()
+    }
+
+    /** Back and the arrow ask first when something was recorded. */
+    private fun confirmCancel() {
+        val recorded = phase == Phase.SCANNING && ((recorder?.selector?.count ?: 0) > 0 || marks.count() > 0)
+        if (!recorded) {
+            cancelScan()
+            return
+        }
+        android.app.AlertDialog.Builder(this)
+            .setTitle(R.string.scan_discard_title)
+            .setMessage(R.string.scan_discard_message)
+            .setPositiveButton(R.string.scan_discard_confirm) { _, _ -> cancelScan() }
+            .setNegativeButton(R.string.scan_discard_keep, null)
+            .show()
     }
 
     // --- GL thread ---
@@ -587,6 +803,16 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         }
         background.draw(frame)
         val camera = frame.camera
+        trackingNow = camera.trackingState == TrackingState.TRACKING
+        if (phase == Phase.READY) {
+            // Getting ready: tracking and the sensor clocks warm up, nothing is recorded.
+            torchRequest.getAndSet(null)?.let { want -> applyTorchWhileReady(session, recorder, want) }
+            lightRequest.getAndSet(null)?.let { on -> applyLightWhileReady(session, recorder, on) }
+            if (trackingNow) {
+                camera.pose.toMatrix(headingPose, 0)
+                sensorRecorder?.onFrame(frame.timestamp, headingPose)
+            }
+        }
         if (phase == Phase.SCANNING) {
             try {
                 recorder.onFrame(session, frame, camera)
@@ -594,8 +820,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                     camera.pose.toMatrix(headingPose, 0)
                     sensorRecorder?.onFrame(frame.timestamp, headingPose)
                 }
-                pendingTap.getAndSet(null)?.let { tap -> handleMarkTap(session, frame, camera, recorder, tap[0], tap[1]) }
-                if (confirmRequested.getAndSet(false)) confirmCandidate(session, frame, recorder)
+                pendingTap.getAndSet(null)?.let { tap -> markAt(session, frame, camera, recorder, tap[0], tap[1]) }
             } catch (e: Exception) {
                 Log.w(TAG, "Frame processing failed", e)
             }
@@ -603,7 +828,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         if (camera.trackingState == TrackingState.TRACKING) {
             camera.getViewMatrix(view, 0)
             camera.getProjectionMatrix(projection, 0, 0.1f, 100f)
-            if (recorder.guidance.jumpHeld.not()) coverageOverlay.draw(recorder.coverage, view, projection)
+            if (phase == Phase.SCANNING && recorder.guidance.jumpHeld.not()) coverageOverlay.draw(recorder.coverage, view, projection)
             overlay.draw(recorder.overlayPoints, recorder.overlayCount, view, projection)
             camera.pose.toMatrix(edgePose, 0)
             edgeOverlay.draw(recorder.edges.snapshot, showModel, edgePose, view, projection)
@@ -614,68 +839,100 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         }
     }
 
-    private fun guidanceLines(g: ScanRecorder.Guidance): String {
-        val torchNote = if (recorder?.torchActive == true) getString(R.string.scan_torch_on) else null
-        val floor = g.floorPercent?.let { getString(R.string.scan_floor_covered, it) } ?: getString(R.string.scan_floor_waiting)
-        val alert = when {
-            g.jumpStuck -> getString(R.string.scan_jump_stuck)
-            g.jumpHeld -> getString(R.string.scan_jump_held)
-            g.tooFast -> getString(R.string.scan_slow_down)
-            else -> g.wallSide?.let {
-                getString(
-                    when (it) {
-                        WallSide.AHEAD -> R.string.scan_wall_ahead
-                        WallSide.LEFT -> R.string.scan_wall_left
-                        WallSide.RIGHT -> R.string.scan_wall_right
-                        WallSide.BEHIND -> R.string.scan_wall_behind
-                    },
-                )
+    /** The one short line for the pill above the bottom controls, or null when there is nothing to say. */
+    private fun guidanceLine(g: ScanRecorder.Guidance, state: TrackingState, failure: TrackingFailureReason): Int? = when {
+        phase == Phase.SCANNING && recorder?.selector?.limitReached == true -> R.string.scan_keyframe_limit
+        state != TrackingState.TRACKING -> when (failure) {
+            TrackingFailureReason.INSUFFICIENT_FEATURES -> R.string.guide_features
+            TrackingFailureReason.INSUFFICIENT_LIGHT -> R.string.guide_dark
+            TrackingFailureReason.EXCESSIVE_MOTION -> R.string.guide_slow
+            TrackingFailureReason.CAMERA_UNAVAILABLE -> null
+            else -> R.string.guide_start
+        }
+        phase != Phase.SCANNING -> null
+        g.tooFast -> R.string.guide_slow
+        else -> g.wallSide?.let {
+            when (it) {
+                WallSide.AHEAD -> R.string.scan_wall_ahead
+                WallSide.LEFT -> R.string.scan_wall_left
+                WallSide.RIGHT -> R.string.scan_wall_right
+                WallSide.BEHIND -> R.string.scan_wall_behind
             }
         }
-        val text = if (alert == null) floor else getString(R.string.scan_guidance_lines, floor, alert)
-        return if (torchNote == null) text else getString(R.string.scan_guidance_lines, text, torchNote)
+    }
+
+    /** The short status chip in the top bar. */
+    private fun statusLabel(g: ScanRecorder.Guidance, state: TrackingState, failure: TrackingFailureReason): Int = when {
+        phase == Phase.FINALIZING -> R.string.scan_saving
+        state == TrackingState.TRACKING -> when {
+            phase == Phase.READY -> R.string.scan_status_ready
+            g.jumpHeld -> R.string.scan_status_lost
+            g.tooFast -> R.string.scan_status_move_slower
+            else -> R.string.scan_status_tracking
+        }
+        failure == TrackingFailureReason.INSUFFICIENT_LIGHT -> R.string.scan_status_dark
+        failure == TrackingFailureReason.CAMERA_UNAVAILABLE -> R.string.scan_status_camera
+        failure == TrackingFailureReason.EXCESSIVE_MOTION -> R.string.scan_status_move_slower
+        everTracked -> R.string.scan_status_lost
+        else -> R.string.scan_status_point_start
     }
 
     private fun reportProgress(recorder: ScanRecorder, state: TrackingState, failure: TrackingFailureReason) {
-        val elapsedMs = if (startedAtElapsed == 0L) 0L else SystemClock.elapsedRealtime() - startedAtElapsed
+        if (state == TrackingState.TRACKING) everTracked = true
+        val scanning = phase == Phase.SCANNING
+        val elapsedMs = if (!scanning || startedAtElapsed == 0L) 0L else SystemClock.elapsedRealtime() - startedAtElapsed
         val keyframes = recorder.selector.count
         val planes = recorder.planeCount
         val points = recorder.voxels.size
         val losses = recorder.trajectory.trackingLossCount
-        ScanCoordinator.progress(
-            buildJsonObject {
-                put("sessionId", scan.sessionId)
-                put("trackingState", state.name.lowercase())
-                put("trackingFailure", failure.takeIf { it != TrackingFailureReason.NONE }?.name?.lowercase())
-                put("keyframes", keyframes)
-                put("maxKeyframes", recorder.selector.maxKeyframes)
-                put("planes", planes)
-                put("points", points)
-                put("trackingLossCount", losses)
-                put("elapsedMs", elapsedMs)
-            },
-        )
-        runOnUiThread {
-            if (phase != Phase.SCANNING) return@runOnUiThread
-            statusText.text = trackingLabel(state, failure)
-            val seconds = elapsedMs / 1000
-            statsText.text = getString(
-                R.string.scan_stats,
-                keyframes, recorder.selector.maxKeyframes, planes, points, seconds / 60, seconds % 60,
+        if (scanning) {
+            ScanCoordinator.progress(
+                buildJsonObject {
+                    put("sessionId", scan.sessionId)
+                    put("trackingState", state.name.lowercase())
+                    put("trackingFailure", failure.takeIf { it != TrackingFailureReason.NONE }?.name?.lowercase())
+                    put("keyframes", keyframes)
+                    put("maxKeyframes", recorder.selector.maxKeyframes)
+                    put("planes", planes)
+                    put("points", points)
+                    put("trackingLossCount", losses)
+                    put("elapsedMs", elapsedMs)
+                },
             )
-            guidanceText.text = guidanceLines(recorder.guidance)
-            resumeButton.visibility = if (recorder.guidance.jumpHeld) View.VISIBLE else View.GONE
-            if (recorder.selector.limitReached) hintText.setText(R.string.scan_keyframe_limit)
-            sensorRecorder?.let { updateSensorsText(it) }
+        }
+        runOnUiThread {
+            if (phase != Phase.SCANNING && phase != Phase.READY) return@runOnUiThread
+            val g = recorder.guidance
+            statusText.setText(statusLabel(g, state, failure))
+            floorChip.text = g.floorPercent?.let { getString(R.string.scan_floor_chip, it) } ?: getString(R.string.scan_floor_waiting)
+            val seconds = elapsedMs / 1000
+            counterText.text = resources.getQuantityString(R.plurals.scan_counter, keyframes, keyframes, seconds / 60, seconds % 60)
+            val line = guidanceLine(g, state, failure)
+            guidanceText.visibility = if (line == null) View.GONE else View.VISIBLE
+            line?.let(guidanceText::setText)
+            val held = scanning && g.jumpHeld
+            resumeCard.visibility = if (held) View.VISIBLE else View.GONE
+            if (held) resumeText.setText(if (g.jumpStuck) R.string.scan_jump_stuck else R.string.scan_jump_held)
+            if (infoCard.visibility == View.VISIBLE) {
+                statsText.text = getString(R.string.scan_info_stats, keyframes, recorder.selector.maxKeyframes, planes, points, losses)
+                sensorRecorder?.let { updateSensorsText(it) }
+            }
+            primaryButton.alpha = if (phase == Phase.READY && !canRecord()) 0.5f else 1f
         }
     }
 
     /** The preview panel exists only when the page opted in (options.livePreview) and named a trusted origin. */
     private fun setUpLivePreview() {
+        // About a third of the width at most, small and semi-transparent; collapsed until the floor chip is tapped.
+        val width = resources.displayMetrics.widthPixels / 3
+        liveContainer.layoutParams = liveContainer.layoutParams.apply {
+            this.width = width
+            height = width * 4 / 3
+        }
+        liveContainer.clipToOutline = true
         if (!scan.options.livePreview) return
         val origin = AppConfig.allowlist.match(scan.liveOrigin) ?: return
         livePanel = LivePanel(liveContainer, AppConfig.allowlist, origin, liveStream, scan.options.locale).also {
-            liveContainer.visibility = View.VISIBLE
             it.show(this)
         }
     }
@@ -713,21 +970,6 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         else -> R.string.compass_unreliable
     }
 
-    private fun trackingLabel(state: TrackingState, failure: TrackingFailureReason): String = getString(
-        when (state) {
-            TrackingState.TRACKING -> R.string.tracking_ok
-            TrackingState.PAUSED -> when (failure) {
-                TrackingFailureReason.INSUFFICIENT_LIGHT -> R.string.tracking_dark
-                TrackingFailureReason.EXCESSIVE_MOTION -> R.string.tracking_fast
-                TrackingFailureReason.INSUFFICIENT_FEATURES -> R.string.tracking_features
-                TrackingFailureReason.CAMERA_UNAVAILABLE -> R.string.tracking_camera
-                else -> R.string.tracking_searching
-            }
-            TrackingState.STOPPED -> R.string.tracking_stopped
-        },
-    )
-
-
     // --- Assisted boundary marking ---
 
     // The surface only forwards the lifted finger as a tap for marking; it has no click action of its own.
@@ -757,13 +999,8 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             }
         })
         markCeiling.setOnCheckedChangeListener { _, checked -> toCeiling = checked && markKindSelected.offersCeiling }
-        markToggle.setOnClickListener { setMarking(!marking) }
-        markConfirm.setOnClickListener {
-            if (candidate != null) confirmRequested.set(true)
-        }
         markUndo.setOnClickListener {
             pendingTap.set(null)
-            confirmRequested.set(false)
             candidate = null
             // A typed height belongs to the mark being finished; dropping its start drops the height too.
             if (marks.pending() != null) markHeight.text = null
@@ -791,11 +1028,10 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         if (on && phase != Phase.SCANNING) return
         marking = on
         pendingTap.set(null)
-        confirmRequested.set(false)
         candidate = null
         markPanel.visibility = if (on) View.VISIBLE else View.GONE
-        markToggle.setText(if (on) R.string.mark_stop else R.string.mark_start)
-        updateMarkUi()
+        crosshair.visibility = if (on) View.VISIBLE else View.GONE
+        updateMarkUi(if (on) R.string.mark_explain else null)
     }
 
     /** Shows [message], or the next step and the mark count; [detail] goes on a second line. */
@@ -803,7 +1039,6 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         runOnUiThread {
             val pending = marks.pending()
             markKind.isEnabled = pending == null
-            markConfirm.isEnabled = candidate != null
             val line = message?.let(::getString)
                 ?: getString(
                     R.string.mark_step_count,
@@ -828,13 +1063,26 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                 plane to PlaneSummary("p$index", planeKind(plane), true, plane.centerPose.ty(), plane.extentX, plane.extentZ)
             }
 
-    /** GL thread: turns a tap into a candidate floor point, or refuses it with a reason. Nothing is committed yet. */
-    private fun handleMarkTap(session: Session, frame: Frame, camera: com.google.ar.core.Camera, recorder: ScanRecorder, x: Float, y: Float) {
+    /**
+     * A tap marks the tapped point; when nothing is there to hit, the crosshair at the centre is used instead.
+     * One mark per tap: the point is committed at once, and Undo takes the last mark back.
+     */
+    private fun markAt(session: Session, frame: Frame, camera: com.google.ar.core.Camera, recorder: ScanRecorder, x: Float, y: Float) {
         if (!marking) return
+        var refusal = handleMarkTap(session, frame, camera, recorder, x, y)
+        if (refusal == Refusal.NO_HIT && viewportWidth > 0) {
+            refusal = handleMarkTap(session, frame, camera, recorder, viewportWidth / 2f, viewportHeight / 2f)
+        }
+        if (refusal == null && candidate != null) confirmCandidate(session, frame, recorder)
+    }
+
+    /** GL thread: turns a point on screen into a candidate floor point. Returns why it was refused, or null. */
+    private fun handleMarkTap(session: Session, frame: Frame, camera: com.google.ar.core.Camera, recorder: ScanRecorder, x: Float, y: Float): Refusal? {
+        if (!marking) return null
         candidate = null
         if (camera.trackingState != TrackingState.TRACKING) {
             updateMarkUi(R.string.mark_not_tracking)
-            return
+            return Refusal.NOT_TRACKING
         }
         val planes = trackedPlanes(session).map { it.second }
         val cameraY = camera.pose.ty()
@@ -872,12 +1120,12 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                     Refusal.TOO_SHALLOW -> R.string.mark_too_shallow
                 },
             )
-            return
+            return decision.reason
         }
         val accepted = (decision as HitDecision.Accepted).hit
         val plane = hits.getOrNull(candidates.indexOf(accepted))?.trackable as? Plane
         candidate = BasePoint(accepted.pose, plane?.let(recorder::planeIdFor), frame.timestamp)
-        updateMarkUi(R.string.mark_confirm_prompt)
+        return null
     }
 
     /** GL thread: commits the candidate point as a mark start or end. */
@@ -926,14 +1174,12 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         phase = Phase.FINALIZING
         livePanel?.destroy()
         livePanel = null
-        finishButton.isEnabled = false
-        cancelButton.isEnabled = false
         statusText.setText(R.string.scan_saving)
         ScanCoordinator.state(scan.sessionId, "finalizing")
-        sensorsToggle.isEnabled = false
-        locationToggle.isEnabled = false
-        resumeButton.visibility = View.GONE
-        markToggle.isEnabled = false
+        for (button in listOf(primaryButton, backButton, torchButton, sensorsButton, locationButton, toolsButton)) button.isEnabled = false
+        resumeCard.visibility = View.GONE
+        guidanceText.visibility = View.GONE
+        crosshair.visibility = View.GONE
         marking = false
         pendingTap.set(null)
         candidate = null
@@ -960,7 +1206,7 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             // Declination is applied here from the retained fixes, never while recording: no fixes, no declination.
             val declination = rawCapture?.let { Declination.fromFixes(it.fixes, AndroidDeclination) }
             val sensorCapture = rawCapture?.let {
-                SensorCapture(it.orientation, Declination.apply(it.heading, declination), it.fixes, it.pressure, it.timestampSource, it.warnings, it.diagnostics)
+                SensorCapture(it.orientation, Declination.apply(it.heading, declination), it.fixes, it.pressure, it.timestampSource, it.warnings, it.diagnostics, it.frameClock)
             }
             if (sensors != null) {
                 if (sensors.sensorsEnabled && !sensors.hasRotationVector) recorder.warnings.add("rotation-vector-unavailable")
@@ -977,7 +1223,8 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                         recorder.warnings.add("true-north-from-segment")
                     }
                 }
-                if (locationDeclined) recorder.warnings.add("location-declined")
+                // Declined at the page's question, and still off: a user who switched it on later has not declined.
+                if (locationDeclined && !sensors.locationEnabled) recorder.warnings.add("location-declined")
                 if (!locationDeclined && (scan.options.location || sensors.locationEnabled)) {
                     if (!sensors.locationEnabled && locationDenied) recorder.warnings.add("location-permission-denied")
                     else if (sensors.locationEnabled && sensorCapture?.fixes.isNullOrEmpty()) recorder.warnings.add("location-unavailable")
@@ -1010,6 +1257,20 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
                     put("maxKeyframes", scan.options.maxKeyframes)
                     // v1.3: torch state counts and the motion and pose-jump guard events.
                     recorder.guardMetadata().forEach { (key, value) -> put(key, value) }
+                    // v1.3: how frame timestamps were mapped onto the sensor clock for heading pairing.
+                    sensorCapture?.frameClock?.let { clock ->
+                        put("frameClock", buildJsonObject {
+                            put("method", clock.method)
+                            put("offsetNs", clock.offsetNs)
+                            put("minOffsetNs", clock.minOffsetNs)
+                            put("maxOffsetNs", clock.maxOffsetNs)
+                            put("frames", clock.frames)
+                            put("deltaP10Ns", clock.deltaP10Ns)
+                            put("deltaP50Ns", clock.deltaP50Ns)
+                            put("deltaP90Ns", clock.deltaP90Ns)
+                            put("source", "elapsedRealtimeNanos at frame delivery minus frame.timestamp, 10th percentile of the last 60 frames")
+                        })
+                    }
                 },
                 // A group the user switched off is empty, so only what was recorded is written.
                 sensors = sensorCapture,
@@ -1104,7 +1365,9 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         private const val TAG = "ScanActivity"
         private const val EXTRA_SESSION_ID = "sessionId"
         private const val PROGRESS_INTERVAL_NS = 500_000_000L
-        private const val PADDING_PX = 32
+        private const val INSET_PADDING_DP = 8
+        private const val MENU_MARK = 1
+        private const val MENU_MODEL = 2
 
         fun intent(context: Context, sessionId: String): Intent =
             Intent(context, ScanActivity::class.java).putExtra(EXTRA_SESSION_ID, sessionId)
