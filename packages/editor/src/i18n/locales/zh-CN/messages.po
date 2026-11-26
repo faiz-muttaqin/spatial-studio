@@ -2613,13 +2613,13 @@ msgstr "正在打开扫描器…"
 msgid "app.scan.native.torch"
 msgstr "使用手电筒（实验）"
 
-# Source-Hash: f21d72fefa946b08
+# English: "The starting choice: you can change it on the phone before recording. It is locked once recording starts. Tracking may be less reliable with the torch on."
+# Source-Hash: 430eeaba447b99e8
 # Review: required
-# English: "Set before the scan and kept on throughout. Tracking may be less reliable with the torch on."
 #: apps/editor/app/scan/native-scan.tsx
 #, fuzzy
-msgid "app.scan.native.torchHint"
-msgstr "在扫描前选择，并全程保持开启。开启手电筒时跟踪可能不够稳定。"
+msgid "app.scan.native.torchHintStart"
+msgstr "初始选择：开始录制前可在手机上更改，录制开始后即锁定。开启手电筒时跟踪可能不够稳定。"
 
 # Source-Hash: 7b4c9586b0ee1fe3
 # Review: required

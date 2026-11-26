@@ -9,121 +9,166 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- Live preview (P2N.3): a small trusted web page, only when the page opted in. Hidden otherwise. -->
-    <FrameLayout
-        android:id="@+id/scan_live"
-        android:layout_width="220dp"
-        android:layout_height="300dp"
-        android:layout_gravity="end|center_vertical"
-        android:layout_margin="8dp"
-        android:background="@color/hud_scrim"
+    <!-- Aim point while marking a boundary. -->
+    <ImageView
+        android:id="@+id/scan_crosshair"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="center"
+        android:importantForAccessibility="no"
+        android:src="@drawable/ic_crosshair"
         android:visibility="gone" />
 
-    <Button
-        android:id="@+id/scan_model_toggle"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="start|center_vertical"
-        android:layout_margin="8dp"
-        android:minHeight="0dp"
-        android:text="@string/scan_model_hide" />
-
+    <!-- Top: one slim bar, then the floor chip with the minimap and the details card. The camera stays clear. -->
     <LinearLayout
-        android:id="@+id/scan_hud"
+        android:id="@+id/scan_top"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="top"
-        android:background="@color/hud_scrim"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:padding="8dp">
 
-        <TextView
-            android:id="@+id/scan_status"
+        <LinearLayout
+            android:id="@+id/scan_bar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/scan_starting"
-            android:textColor="@color/brand_foreground"
-            android:textSize="18sp"
-            android:textStyle="bold" />
+            android:background="@drawable/bg_bar"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="4dp">
 
-        <TextView
-            android:id="@+id/scan_stats"
+            <ImageButton
+                android:id="@+id/scan_back"
+                style="@style/ScanIconButton"
+                android:contentDescription="@string/scan_back_description"
+                android:src="@drawable/ic_arrow_back" />
+
+            <TextView
+                android:id="@+id/scan_status"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="2"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:text="@string/scan_starting"
+                android:textColor="@color/brand_foreground"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <ImageButton
+                android:id="@+id/scan_btn_torch"
+                style="@style/ScanIconButton"
+                android:contentDescription="@string/scan_torch_description"
+                android:src="@drawable/ic_torch" />
+
+            <ImageButton
+                android:id="@+id/scan_btn_sensors"
+                style="@style/ScanIconButton"
+                android:contentDescription="@string/scan_sensors_description"
+                android:src="@drawable/ic_compass" />
+
+            <ImageButton
+                android:id="@+id/scan_btn_location"
+                style="@style/ScanIconButton"
+                android:contentDescription="@string/scan_location_description"
+                android:src="@drawable/ic_location" />
+
+            <ImageButton
+                android:id="@+id/scan_btn_info"
+                style="@style/ScanIconButton"
+                android:contentDescription="@string/scan_info_description"
+                android:src="@drawable/ic_info" />
+        </LinearLayout>
+
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:fontFamily="monospace"
-            android:textColor="@color/brand_foreground"
-            android:textSize="14sp" />
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
 
-        <TextView
-            android:id="@+id/scan_sensors"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:fontFamily="monospace"
-            android:text="@string/scan_heading_wait"
-            android:textColor="@color/brand_foreground"
-            android:textSize="14sp" />
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
 
-        <CheckBox
-            android:id="@+id/scan_toggle_sensors"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:checked="true"
-            android:text="@string/scan_toggle_sensors"
-            android:textColor="@color/brand_foreground"
-            android:textSize="14sp" />
+                <TextView
+                    android:id="@+id/scan_floor_chip"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_chip"
+                    android:minHeight="32dp"
+                    android:gravity="center_vertical"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:text="@string/scan_floor_waiting"
+                    android:textColor="@color/brand_foreground"
+                    android:textSize="13sp" />
 
-        <CheckBox
-            android:id="@+id/scan_toggle_location"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/scan_toggle_location"
-            android:textColor="@color/brand_foreground"
-            android:textSize="14sp" />
+                <!-- Minimap (the live preview page), small and semi-transparent; sized in code to a third of the width. -->
+                <FrameLayout
+                    android:id="@+id/scan_live"
+                    android:layout_width="120dp"
+                    android:layout_height="160dp"
+                    android:layout_marginTop="6dp"
+                    android:alpha="0.85"
+                    android:background="@drawable/bg_card"
+                    android:visibility="gone" />
+            </LinearLayout>
 
-        <TextView
-            android:id="@+id/scan_guidance"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/scan_floor_waiting"
-            android:textColor="@color/brand_foreground"
-            android:textSize="14sp"
-            android:textStyle="bold" />
+            <View
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
 
-        <Button
-            android:id="@+id/scan_resume"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/scan_resume"
-            android:visibility="gone" />
+            <LinearLayout
+                android:id="@+id/scan_info_card"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_card"
+                android:orientation="vertical"
+                android:padding="8dp"
+                android:visibility="gone">
 
-        <TextView
-            android:id="@+id/scan_hint"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/scan_hint"
-            android:textColor="@color/brand_foreground"
-            android:textSize="14sp" />
+                <TextView
+                    android:id="@+id/scan_stats"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="monospace"
+                    android:textColor="@color/brand_foreground"
+                    android:textSize="11sp" />
+
+                <TextView
+                    android:id="@+id/scan_sensors"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:fontFamily="monospace"
+                    android:text="@string/scan_heading_wait"
+                    android:textColor="@color/brand_foreground"
+                    android:textSize="11sp" />
+            </LinearLayout>
+        </LinearLayout>
     </LinearLayout>
 
+    <!-- Bottom: marking card, tracking-lost card, one guidance line, then counter, the big round button and tools. -->
     <LinearLayout
-        android:id="@+id/scan_controls"
+        android:id="@+id/scan_bottom"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:background="@color/hud_scrim"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:padding="12dp">
 
         <LinearLayout
             android:id="@+id/scan_mark_panel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="8dp"
+            android:background="@drawable/bg_card"
             android:orientation="vertical"
+            android:padding="10dp"
             android:visibility="gone">
 
             <TextView
@@ -163,14 +208,6 @@
                     android:textSize="14sp" />
 
                 <Button
-                    android:id="@+id/scan_mark_confirm"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:enabled="false"
-                    android:text="@string/mark_confirm" />
-
-                <Button
                     android:id="@+id/scan_mark_undo"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -189,37 +226,97 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/scan_resume_card"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center"
-            android:orientation="horizontal">
+            android:layout_marginBottom="8dp"
+            android:background="@drawable/bg_card"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="10dp"
+            android:visibility="gone">
 
-            <Button
-                android:id="@+id/scan_cancel"
+            <TextView
+                android:id="@+id/scan_resume_text"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginEnd="8dp"
                 android:layout_weight="1"
-                android:text="@string/scan_cancel" />
+                android:text="@string/scan_jump_held"
+                android:textColor="@color/brand_foreground"
+                android:textSize="14sp" />
 
             <Button
-                android:id="@+id/scan_mark_toggle"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="4dp"
-                android:layout_marginEnd="4dp"
-                android:layout_weight="1.3"
-                android:enabled="false"
-                android:text="@string/mark_start" />
-
-            <Button
-                android:id="@+id/scan_finish"
-                android:layout_width="0dp"
+                android:id="@+id/scan_resume"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
-                android:layout_weight="1"
-                android:enabled="false"
-                android:text="@string/scan_finish" />
+                android:text="@string/scan_resume" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/scan_guidance"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="10dp"
+            android:background="@drawable/bg_pill"
+            android:gravity="center"
+            android:maxWidth="320dp"
+            android:paddingStart="16dp"
+            android:paddingTop="8dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="8dp"
+            android:textColor="@color/brand_foreground"
+            android:textSize="14sp"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <FrameLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1">
+
+                <TextView
+                    android:id="@+id/scan_counter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="start|center_vertical"
+                    android:background="@drawable/bg_chip"
+                    android:minHeight="32dp"
+                    android:gravity="center_vertical"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:textColor="@color/brand_foreground"
+                    android:textSize="13sp"
+                    android:visibility="invisible" />
+            </FrameLayout>
+
+            <ImageButton
+                android:id="@+id/scan_primary"
+                android:layout_width="72dp"
+                android:layout_height="72dp"
+                android:background="@drawable/bg_round_primary"
+                android:contentDescription="@string/scan_record_description"
+                android:src="@drawable/ic_record" />
+
+            <FrameLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1">
+
+                <ImageButton
+                    android:id="@+id/scan_tools"
+                    style="@style/ScanIconButton"
+                    android:layout_gravity="end|center_vertical"
+                    android:background="@drawable/bg_bar"
+                    android:contentDescription="@string/scan_tools_description"
+                    android:src="@drawable/ic_more_vert" />
+            </FrameLayout>
         </LinearLayout>
     </LinearLayout>
 </FrameLayout>

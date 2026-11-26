@@ -2613,13 +2613,13 @@ msgstr "Ouverture du scanner…"
 msgid "app.scan.native.torch"
 msgstr "Utiliser la torche (expérience)"
 
-# Source-Hash: f21d72fefa946b08
+# English: "The starting choice: you can change it on the phone before recording. It is locked once recording starts. Tracking may be less reliable with the torch on."
+# Source-Hash: 430eeaba447b99e8
 # Review: required
-# English: "Set before the scan and kept on throughout. Tracking may be less reliable with the torch on."
 #: apps/editor/app/scan/native-scan.tsx
 #, fuzzy
-msgid "app.scan.native.torchHint"
-msgstr "Choisi avant le scan et maintenu tout du long. Le suivi peut être moins fiable avec la torche allumée."
+msgid "app.scan.native.torchHintStart"
+msgstr "Choix de départ : vous pouvez le modifier sur le téléphone avant l'enregistrement. Il est verrouillé une fois l'enregistrement lancé. Le suivi peut être moins fiable avec la torche allumée."
 
 # Source-Hash: 7b4c9586b0ee1fe3
 # Review: required

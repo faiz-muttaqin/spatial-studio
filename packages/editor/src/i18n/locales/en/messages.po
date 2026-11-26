@@ -1065,8 +1065,8 @@ msgid "app.scan.native.torch"
 msgstr "Use the torch (experiment)"
 
 #: apps/editor/app/scan/native-scan.tsx
-msgid "app.scan.native.torchHint"
-msgstr "Set before the scan and kept on throughout. Tracking may be less reliable with the torch on."
+msgid "app.scan.native.torchHintStart"
+msgstr "The starting choice: you can change it on the phone before recording. It is locked once recording starts. Tracking may be less reliable with the torch on."
 
 #: apps/editor/app/scan/native-scan.tsx
 msgid "app.scan.native.unknown"

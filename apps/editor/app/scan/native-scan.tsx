@@ -311,9 +311,9 @@ export function NativeScan({
           {i18n._({ id: 'app.scan.native.torch', message: 'Use the torch (experiment)' })}
           <span className="block text-muted-foreground text-xs">
             {i18n._({
-              id: 'app.scan.native.torchHint',
+              id: 'app.scan.native.torchHintStart',
               message:
-                'Set before the scan and kept on throughout. Tracking may be less reliable with the torch on.',
+                'The starting choice: you can change it on the phone before recording. It is locked once recording starts. Tracking may be less reliable with the torch on.',
             })}
           </span>
         </span>
