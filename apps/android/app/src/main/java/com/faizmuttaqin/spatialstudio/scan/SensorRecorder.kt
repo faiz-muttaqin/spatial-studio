@@ -84,7 +84,8 @@ class SensorRecorder(
 
     private val history = OrientationHistory()
     private val diagnostics = HeadingDiagnostics()
-    @Volatile private var magnetometerAccuracy = 0
+    // Null until the magnetometer reports while registered (never on a phone without one).
+    @Volatile private var magnetometerAccuracy: Int? = null
     // The frame clock is estimated continuously against the sensors' boot clock; headings pair through the offset.
     private val frameClock = FrameClockEstimator()
     private val sensorClock = ClockCalibrator()
@@ -145,6 +146,9 @@ class SensorRecorder(
 
     /** True when headings would pair correctly now: sensors off (nothing to pair) or the frame clock estimated. */
     val clockReady: Boolean get() = !sensorsOn || frameClock.ready
+
+    /** True while sensors are on and the compass is too poorly calibrated for its readings to count towards north. */
+    val compassNeedsCalibration: Boolean get() = sensorsOn && NorthEstimator.needsCalibration(magnetometerAccuracy)
 
     /** Main thread. Closes every listener and the sensor thread. */
     fun stop() {
@@ -209,7 +213,7 @@ class SensorRecorder(
             frameTimestampNs = pairingNs,
             pose = pose,
             orientation = reading,
-            magnetometerAccuracy = magnetometerAccuracy,
+            magnetometerAccuracy = magnetometerAccuracy ?: SensorManager.SENSOR_STATUS_UNRELIABLE,
             declinationDeg = null,
             maxAgeNs = MAX_PAIR_AGE_NS,
         )
@@ -311,6 +315,7 @@ class SensorRecorder(
         if (!sensorsRegistered) return
         sensorManager?.unregisterListener(sensorListener)
         sensorsRegistered = false
+        magnetometerAccuracy = null
     }
 
     // --- Location (opt-in) ---

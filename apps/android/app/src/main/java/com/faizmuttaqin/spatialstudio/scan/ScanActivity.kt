@@ -741,6 +741,8 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
         startedAtElapsed = SystemClock.elapsedRealtime()
         sensorRecorder?.beginRecording()
         ScanCoordinator.state(scan.sessionId, "scanning")
+        // A ready-only line (the compass hint) would otherwise stay until the next progress update.
+        guidanceText.visibility = View.GONE
         updateControls()
     }
 
@@ -849,6 +851,8 @@ class ScanActivity : ComponentActivity(), GLSurfaceView.Renderer {
             TrackingFailureReason.CAMERA_UNAVAILABLE -> null
             else -> R.string.guide_start
         }
+        // Ready only: a figure-8 wave during recording would blur keyframes and trip the motion guard.
+        phase == Phase.READY && sensorRecorder?.compassNeedsCalibration == true -> R.string.guide_compass
         phase != Phase.SCANNING -> null
         g.tooFast -> R.string.guide_slow
         else -> g.wallSide?.let {
