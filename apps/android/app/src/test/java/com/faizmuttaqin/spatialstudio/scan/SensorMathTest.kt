@@ -594,6 +594,20 @@ class SensorTrustTest {
     }
 
     @Test
+    fun calibrationIsAskedForOnlyWhenTheCompassWouldBeDropped() {
+        assertTrue(NorthEstimator.needsCalibration(0))
+        assertTrue(NorthEstimator.needsCalibration(1))
+        assertFalse(NorthEstimator.needsCalibration(2))
+        assertFalse(NorthEstimator.needsCalibration(3))
+        assertFalse(NorthEstimator.needsCalibration(null))
+        // The hint and the estimator agree on which readings count.
+        for (accuracy in 0..3) {
+            val usable = NorthEstimator.isUsable(run(0.0, 1, 0.0, accuracy = accuracy).first())
+            assertEquals(usable, !NorthEstimator.needsCalibration(accuracy))
+        }
+    }
+
+    @Test
     fun diagnosticsSummaryIsStable() {
         val d = HeadingDiagnostics()
         d.count("paired"); d.count("pair-age"); d.count("pair-age")

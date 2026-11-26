@@ -23,6 +23,12 @@
 
 Next actionable work: see the latest dated entry below. For each session record date / phase / branch / PR / base SHA / files / commands with actual results / device evidence / blockers / next task.
 
+### 2026-11-26: compass calibration hint in the ready state (Android)
+
+- Branch `android/compass-calibration-hint` from `1e90fb14`. Android only; no contract or bundle change.
+- Device evidence (debug build of `1e90fb14`, owner's phone): torch scan `f7122587`, 28 s, 55 keyframes, torch on for all 55. `metadata.arcore.frameClock` read `boot-clock`, offset 0, delivery delay P10/P50/P90 167/172/208 ms, so the torch problem of scans `1e730929` and `d18a52bf` did not recur with the torch set in the ready state; the offset path has still not run on a device. All 107 heading samples paired with frames, no pose jumps, no tracking loss. True north magnetic only (no location), confidence 0.098 from 44 samples: the compass reported accuracy 0 or 1 for the first 19 s, with yaw readings spread over about 60 degrees, then 2 and 3 with readings within 3 degrees. The torch stayed on while it reached 3, so the torch is not the likely cause. The previous torch-off scan `81d8957d` had accuracy 3 throughout and confidence 0.941.
+- Change: while ready and tracking, with sensors on, the guidance line asks for a figure-8 wave when the magnetometer reports accuracy below `NorthEstimator.MIN_MAGNETOMETER_ACCURACY` (the same rule that drops readings from the estimate). It never blocks Record, and it is not shown while recording, where the wave would blur keyframes and trip the motion guard. No reading yet, or no magnetometer, shows nothing. The recorder's accuracy is cleared when the sensors are unregistered.
+
 ### 2026-11-26: vertical planes on part of a wall's height as wall evidence (PR #23)
 
 - Branch `fix/angry-wright-e7d275` from `ff91ea2f`. Core only (`packages/core/src/capture`); no schema, contract or Android change.

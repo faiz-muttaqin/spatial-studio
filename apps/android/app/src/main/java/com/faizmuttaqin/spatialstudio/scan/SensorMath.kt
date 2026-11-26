@@ -225,6 +225,13 @@ object NorthEstimator {
         }
     }
 
+    /**
+     * True when the compass reports an accuracy whose readings [isUsable] would drop, so north needs a calibration
+     * first. Null (no reading yet, or no magnetometer) is not a reason to ask.
+     */
+    fun needsCalibration(magnetometerAccuracy: Int?): Boolean =
+        magnetometerAccuracy != null && magnetometerAccuracy < MIN_MAGNETOMETER_ACCURACY
+
     fun isUsable(sample: HeadingData): Boolean =
         sample.magnetometerAccuracy >= MIN_MAGNETOMETER_ACCURACY &&
             (sample.headingAccuracyDeg == null || sample.headingAccuracyDeg <= MAX_HEADING_ACCURACY_DEG)

@@ -43,6 +43,7 @@
     <string name="guide_dark">Too dark: turn on a light</string>
     <string name="guide_slow">Move the phone slower</string>
     <string name="guide_start">Move the phone slowly to start tracking</string>
+    <string name="guide_compass">Compass needs calibrating: wave the phone in a figure 8</string>
     <string name="scan_jump_held">Tracking jumped, so recording is paused. Walk back to where you were, or resume here if the view looks right.</string>
     <string name="scan_jump_stuck">Tracking is still off. Resume here, finish the scan, or cancel and start again.</string>
     <string name="tools_mark">Mark wall, glass or doorway</string>
